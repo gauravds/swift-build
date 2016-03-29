@@ -1,0 +1,598 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Values and References &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Values and References</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="values-and-references">
+<span id="valref"></span><h1>Values and References<a class="headerlink" href="#values-and-references" title="Permalink to this headline">¶</a></h1>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Author:</th><td class="field-body">Dave Abrahams</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Author:</th><td class="field-body">Joe Groff</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Date:</th><td class="field-body">2013-03-15</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Abstract:</strong> We propose a system that offers first-class support for
+both value and reference semantics.  By allowing—but not
+requiring—(instance) variables, function parameters, and generic
+constraints to be declared as <code class="docutils literal"><span class="pre">val</span></code> or <code class="docutils literal"><span class="pre">ref</span></code>, we offer users the
+ability to nail down semantics to the desired degree without
+compromising ease of use.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">We are aware of some issues with naming of these new keywords; to
+avoid chaos we discuss alternative spelling schemes in a <a class="reference internal" href="#bikeshed">Bikeshed</a>
+section at the end of this document.</p>
+</div>
+<div class="section" id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Permalink to this headline">¶</a></h2>
+<p>Until recently, Swift&#8217;s support for value semantics outside trivial
+types like scalars and immutable strings has been weak.  While the
+recent <code class="docutils literal"><span class="pre">Clonable</span></code> proposal makes new things possible in the &#8220;safe&#8221;
+zone, it leaves the language syntactically and semantically lumpy,
+keeping interactions between value and reference types firmly outside
+the &#8220;easy&#8221; zone and failing to address the issue of generic
+programming.</p>
+<p>This proposal builds on the <code class="docutils literal"><span class="pre">Clonable</span></code> proposal to create a more
+uniform, flexible, and interoperable type system while solving the
+generic programming problem and expanding the &#8220;easy&#8221; zone.</p>
+</div>
+<div class="section" id="general-description">
+<h2>General Description<a class="headerlink" href="#general-description" title="Permalink to this headline">¶</a></h2>
+<p>The general rule we propose is that most places where you can write
+<code class="docutils literal"><span class="pre">var</span></code> in today&#8217;s swift, and also on function parameters, you can
+write <code class="docutils literal"><span class="pre">val</span></code> or <code class="docutils literal"><span class="pre">ref</span></code> to request value or reference semantics,
+respectively.  Writing <code class="docutils literal"><span class="pre">var</span></code> requests the default semantics for a
+given type.  Non-<code class="docutils literal"><span class="pre">class</span></code> types (<code class="docutils literal"><span class="pre">struct</span></code>s, tuples, arrays,
+<code class="docutils literal"><span class="pre">union</span></code>s) default to <code class="docutils literal"><span class="pre">val</span></code> semantics, while <code class="docutils literal"><span class="pre">class</span></code>es
+default to <code class="docutils literal"><span class="pre">ref</span></code> semantics. The types <code class="docutils literal"><span class="pre">val</span> <span class="pre">SomeClass</span></code> and
+<code class="docutils literal"><span class="pre">ref</span> <span class="pre">SomeStruct</span></code> also become part of the type system and can
+be used as generic parameters or as parts of tuple, array, and
+function types.</p>
+<p>Because the current specification already describes the default
+behaviors, we will restrict ourselves to discussing the new
+combinations, such as <code class="docutils literal"><span class="pre">struct</span></code> variables declared with <code class="docutils literal"><span class="pre">ref</span></code> and
+<code class="docutils literal"><span class="pre">class</span></code> variables declared with <code class="docutils literal"><span class="pre">val</span></code>, and interactions between
+the two.</p>
+</div>
+<div class="section" id="terminology">
+<h2>Terminology<a class="headerlink" href="#terminology" title="Permalink to this headline">¶</a></h2>
+<p>When we use the term &#8220;copy&#8221; for non-<code class="docutils literal"><span class="pre">class</span></code> types, we are talking
+about what traditionally happens on assignment and pass-by-value.
+When applied to <code class="docutils literal"><span class="pre">class</span></code> types, &#8220;copy&#8221; means to call the <code class="docutils literal"><span class="pre">clone()</span></code>
+method, which is generated by the compiler when the user has
+explicitly declared conformance to the <code class="docutils literal"><span class="pre">Clonable</span></code> protocol.</p>
+<p>When we refer to variables being &#8220;declared <code class="docutils literal"><span class="pre">val</span></code>&#8221; or &#8220;declared
+<code class="docutils literal"><span class="pre">ref</span></code>&#8221;, we mean to include the case of equivalent declarations using
+<code class="docutils literal"><span class="pre">var</span></code> that request the default semantics for the type.</p>
+<p>Unless otherwise specified, we discuss implementation details such as
+&#8220;allocated on the heap&#8221; as a way of describing operational semantics,
+with the understanding that semantics-preserving optimizations are
+always allowed.</p>
+<p>When we refer to the &#8220;value&#8221; of a class, we mean the combination of
+values of its <code class="docutils literal"><span class="pre">val</span></code> instance variables and the identities of its
+<code class="docutils literal"><span class="pre">ref</span></code> instance variables.</p>
+</div>
+<div class="section" id="variables">
+<h2>Variables<a class="headerlink" href="#variables" title="Permalink to this headline">¶</a></h2>
+<p>Variables can be explicitly declared <code class="docutils literal"><span class="pre">val</span></code> or <code class="docutils literal"><span class="pre">ref</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>var x: Int  // x is stored by value
+val y: Int  // just like &quot;var y: Int&quot;
+ref z: Int  // z is allocated on the heap.
+
+var q: SomeClass          // a reference to SomeClass
+ref r: SomeClass          // just like &quot;var r: SomeClass&quot;
+val s: SomeClonableClass // a unique value of SomeClonableClass type
+</pre></div>
+</div>
+<p>Assignments and initializations involving at least one <code class="docutils literal"><span class="pre">val</span></code> result
+in a copy.  Creating a <code class="docutils literal"><span class="pre">ref</span></code> from a <code class="docutils literal"><span class="pre">val</span></code> copies into heap memory:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">ref</span><span class="w"> </span><span class="n">z2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span><span class="w">         </span><span class="c1">// z2 is a copy of x&#39;s value on the heap</span>
+<span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z</span><span class="w">              </span><span class="c1">// z2&#39;s value is copied into y</span>
+
+<span class="n">ref</span><span class="w"> </span><span class="n">z2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z</span><span class="w">         </span><span class="c1">// z and z2 refer to the same Int value</span>
+<span class="n">ref</span><span class="w"> </span><span class="n">z3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z</span><span class="p">.</span><span class="n">clone</span><span class="p">()</span><span class="w"> </span><span class="c1">// z3 refers to a copy of z&#39;s value</span>
+
+<span class="n">val</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">r</span><span class="w">          </span><span class="c1">// Illegal unless SomeClass is Clonable</span>
+<span class="n">ref</span><span class="w"> </span><span class="n">u</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s</span><span class="w">          </span><span class="c1">// s&#39;s value is copied into u</span>
+<span class="n">val</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s</span><span class="w">          </span><span class="c1">// s&#39;s value is copied into v</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="standalone-types">
+<h2>Standalone Types<a class="headerlink" href="#standalone-types" title="Permalink to this headline">¶</a></h2>
+<p><code class="docutils literal"><span class="pre">val</span></code>- or <code class="docutils literal"><span class="pre">ref</span></code>-ness is part of the type.  When the type
+appears without a variable name, it can be written this way:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">ref</span><span class="w"> </span><span class="n">Int</span><span class="w">                 </span><span class="c1">// an Int on the heap</span>
+<span class="n">val</span><span class="w"> </span><span class="n">SomeClonableClass</span><span class="w">  </span><span class="c1">// a value of SomeClonableClass type</span>
+</pre></div>
+</div>
+<p>Therefore, although it is not recommended style, we can also write:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>var y: val Int               // just like &quot;var y: Int&quot;
+var z: ref Int               // z is allocated on the heap.
+var s: val SomeClonableClass // a unique value of type SomeClonableClass
+</pre></div>
+</div>
+</div>
+<div class="section" id="instance-variables">
+<h2>Instance Variables<a class="headerlink" href="#instance-variables" title="Permalink to this headline">¶</a></h2>
+<p>Instance variables can be explicitly declared <code class="docutils literal"><span class="pre">val</span></code> or <code class="docutils literal"><span class="pre">ref</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct Foo {
+    var x: Int  // x is stored by-value
+    val y: Int  // just like &quot;var y: Int&quot;
+    ref z: Int  // allocate z on the heap
+
+    var q: SomeClass          // q is a reference to SomeClass
+    ref r: SomeClass          // just like &quot;var r: SomeClass&quot;
+    val s: SomeClonableClass // clone() s when Foo is copied
+}
+
+class Bar : Clonable {
+    var x: Int  // x is stored by-value
+    val y: Int  // just like &quot;var y: Int&quot;
+    ref z: Int  // allocate z on the heap
+
+    var q: SomeClass          // q is stored by-reference
+    ref r: SomeClass          // just like &quot;var r: SomeClass&quot;
+    val s: SomeClonableClass // clone() s when Bar is clone()d
+}
+</pre></div>
+</div>
+<p>When a value is copied, all of its instance variables declared <code class="docutils literal"><span class="pre">val</span></code>
+(implicitly or explicitly) are copied.  Instance variables declared
+<code class="docutils literal"><span class="pre">ref</span></code> merely have their reference counts incremented (i.e. the
+reference is copied).  Therefore, when the defaults are in play, the
+semantic rules already defined for Swift are preserved.</p>
+<p>The new rules are as follows:</p>
+<ul class="simple">
+<li>A non-<code class="docutils literal"><span class="pre">class</span></code> instance variable declared <code class="docutils literal"><span class="pre">ref</span></code> is allocated on
+the heap and can outlive its enclosing <code class="docutils literal"><span class="pre">struct</span></code>.</li>
+<li>A <code class="docutils literal"><span class="pre">class</span></code> instance variable declared <code class="docutils literal"><span class="pre">val</span></code> will be copied when
+its enclosing <code class="docutils literal"><span class="pre">struct</span></code> or <code class="docutils literal"><span class="pre">class</span></code> is copied.  We discuss <a class="reference internal" href="#standalone-types">below</a>
+what to do when the <code class="docutils literal"><span class="pre">class</span></code> is not <code class="docutils literal"><span class="pre">Clonable</span></code>.</li>
+</ul>
+</div>
+<div class="section" id="arrays">
+<h2>Arrays<a class="headerlink" href="#arrays" title="Permalink to this headline">¶</a></h2>
+<p>TODO: reconsider sugared array syntax.  Maybe val&lt;Int&gt;[42] would be better</p>
+<p>Array elements can be explicitly declared <code class="docutils literal"><span class="pre">val</span></code> or <code class="docutils literal"><span class="pre">ref</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Int</span><span class="p">[</span><span class="mi">42</span><span class="p">]</span><span class="w">         </span><span class="c1">// an array of 42 integers</span>
+<span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Int</span><span class="p">[</span><span class="n">val</span><span class="w"> </span><span class="mi">42</span><span class="p">]</span><span class="w">     </span><span class="c1">// an array of 42 integers</span>
+<span class="kd">var </span><span class="nv">z</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Int</span><span class="p">[</span><span class="n">ref</span><span class="w"> </span><span class="mi">42</span><span class="p">]</span><span class="w">     </span><span class="c1">// an array of 42 integers-on-the-heap</span>
+<span class="kd">var </span><span class="nv">z</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Int</span><span class="p">[</span><span class="n">ref</span><span class="w"> </span><span class="mi">2</span><span class="p">][</span><span class="mi">42</span><span class="p">]</span><span class="w">  </span><span class="c1">// an array of 2 references to arrays</span>
+<span class="n">ref</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">[</span><span class="mi">42</span><span class="p">]</span><span class="w">         </span><span class="c1">// a reference to an array of 42 integers</span>
+</pre></div>
+</div>
+<p>When a reference to an array appears without a variable name, it can
+be written using the <a class="reference internal" href="#non-copyable">usual syntax</a>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">var </span><span class="nv">f</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">ref</span><span class="w"> </span><span class="n">Int</span><span class="p">[</span><span class="mi">42</span><span class="p">]</span><span class="w"> </span><span class="c1">// a closure returning a reference to an array</span>
+<span class="kd">var </span><span class="nv">b</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">ref</span><span class="w"> </span><span class="n">Int</span><span class="p">[</span><span class="mi">42</span><span class="p">]</span><span class="w">       </span><span class="c1">// equivalent to &quot;ref b : Int[42]&quot;</span>
+</pre></div>
+</div>
+<p>Presumably there is also some fully-desugared syntax using angle
+brackets, that most users will never touch, e.g.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Array</span><span class="o">&lt;</span><span class="n">Int</span><span class="p">,</span><span class="mi">42</span><span class="o">&gt;</span><span class="w">               </span><span class="c1">// an array of 42 integers</span>
+<span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Array</span><span class="o">&lt;</span><span class="n">val</span><span class="w"> </span><span class="n">Int</span><span class="p">,</span><span class="mi">42</span><span class="o">&gt;</span><span class="w">           </span><span class="c1">// an array of 42 integers</span>
+<span class="kd">var </span><span class="nv">z</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Array</span><span class="o">&lt;</span><span class="n">ref</span><span class="w"> </span><span class="n">Int</span><span class="p">,</span><span class="mi">42</span><span class="o">&gt;</span><span class="w">           </span><span class="c1">// an array of 42 integers-on-the-heap</span>
+<span class="kd">var </span><span class="nv">z</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Array</span><span class="o">&lt;</span><span class="n">ref</span><span class="w"> </span><span class="n">Array</span><span class="o">&lt;</span><span class="n">Int</span><span class="p">,</span><span class="mi">42</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">&gt;</span><span class="w"> </span><span class="c1">// an array of 2 references to arrays</span>
+<span class="n">ref</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">Array</span><span class="o">&lt;</span><span class="n">Int</span><span class="p">,</span><span class="mi">42</span><span class="o">&gt;</span><span class="w">               </span><span class="c1">// a reference to an array of 42 integers</span>
+<span class="kd">var </span><span class="nv">f</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">ref</span><span class="w"> </span><span class="n">Array</span><span class="o">&lt;</span><span class="n">Int</span><span class="p">,</span><span class="mi">42</span><span class="o">&gt;</span><span class="w">     </span><span class="c1">// a closure returning a reference to an array</span>
+<span class="kd">var </span><span class="nv">b</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">ref</span><span class="w"> </span><span class="n">Array</span><span class="o">&lt;</span><span class="n">Int</span><span class="p">,</span><span class="mi">42</span><span class="o">&gt;</span><span class="w">           </span><span class="c1">// equivalent to &quot;ref b : Int[42]&quot;</span>
+</pre></div>
+</div>
+<p>Rules for copying array elements follow those of instance variables.</p>
+</div>
+<div class="section" id="unions">
+<h2><code class="docutils literal"><span class="pre">union</span></code>s<a class="headerlink" href="#unions" title="Permalink to this headline">¶</a></h2>
+<p>Union types, like structs, have default value semantics. Constructors for the
+union can declare the <code class="docutils literal"><span class="pre">val</span></code>- or <code class="docutils literal"><span class="pre">ref</span></code>-ness of their associated values, using
+the same syntax as function parameters, described below:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">union</span><span class="w"> </span><span class="n">Foo</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Bar</span><span class="p">(</span><span class="n">ref</span><span class="w"> </span><span class="n">bar</span><span class="p">:</span><span class="n">Int</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Bas</span><span class="p">(</span><span class="n">val</span><span class="w"> </span><span class="n">bas</span><span class="p">:</span><span class="n">SomeClass</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Unions allow the definition of recursive types. A constructor for a union
+may recursively reference the union as a member; the necessary
+indirection and heap allocation of the recursive data structure is implicit
+and has value semantics:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// A list with value semantics--copying the list recursively copies the</span>
+<span class="c1">// entire list</span>
+<span class="n">union</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Nil</span><span class="p">()</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Cons</span><span class="p">(</span><span class="n">car</span><span class="p">:</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">cdr</span><span class="p">:</span><span class="n">List</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="c1">// A list node with reference semantics—copying the node creates a node</span>
+<span class="c1">// that shares structure with the tail of the list</span>
+<span class="n">union</span><span class="w"> </span><span class="n">Node</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Nil</span><span class="p">()</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Cons</span><span class="p">(</span><span class="n">car</span><span class="p">:</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">ref</span><span class="w"> </span><span class="n">cdr</span><span class="p">:</span><span class="n">Node</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>A special <code class="docutils literal"><span class="pre">union</span></code> type is the nullable type <code class="docutils literal"><span class="pre">T?</span></code>, which is
+sugar syntax for a generic union type <code class="docutils literal"><span class="pre">Nullable&lt;T&gt;</span></code>. Since both nullable
+refs and refs-that-are-nullable are useful, we could provide sugar syntax for
+both to avoid requiring parens:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">ref?</span><span class="w"> </span><span class="n">Int</span><span class="w"> </span><span class="c1">// Nullable reference to Int: Nullable&lt;ref T&gt;</span>
+<span class="n">ref</span><span class="w"> </span><span class="n">Int?</span><span class="w"> </span><span class="c1">// Reference to nullable Int: ref Nullable&lt;T&gt;</span>
+<span class="n">val?</span><span class="w"> </span><span class="n">SomeClass</span><span class="w"> </span><span class="c1">// Nullable SomeClass value: Nullable&lt;val T&gt;</span>
+<span class="n">val</span><span class="w"> </span><span class="n">Int?</span><span class="w"> </span><span class="c1">// nullable Int: val Nullable&lt;T&gt; -- the default for Nullable&lt;T&gt;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="function-parameters">
+<h2>Function Parameters<a class="headerlink" href="#function-parameters" title="Permalink to this headline">¶</a></h2>
+<p>Function parameters can be explicitly declared <code class="docutils literal"><span class="pre">val</span></code>, or <code class="docutils literal"><span class="pre">ref</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>func baz(
+    x: Int      // x is passed by-value
+  , val y: Int  // just like &quot;y: Int&quot;
+  , ref z: Int  // allocate z on the heap
+
+  , q: SomeClass               // passing a reference
+  , ref r: SomeClass           // just like &quot;var r: SomeClass&quot;
+  , val s: SomeClonableClass) // Passing a copy of the argument
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">We suggest allowing explicit <code class="docutils literal"><span class="pre">var</span></code> function parameters for
+uniformity.</p>
+</div>
+<p>Semantics of passing arguments to functions follow those of
+assignments and initializations: when a <code class="docutils literal"><span class="pre">val</span></code> is involved, the
+argument value is copied.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">We believe that <code class="docutils literal"><span class="pre">[inout]</span></code> is an independent concept and still very
+much needed, even with an explicit <code class="docutils literal"><span class="pre">ref</span></code> keyword.  See also the
+<a class="reference internal" href="#bikeshed">Bikeshed</a> discussion at the end of this document.</p>
+</div>
+</div>
+<div class="section" id="generics">
+<h2>Generics<a class="headerlink" href="#generics" title="Permalink to this headline">¶</a></h2>
+<p>TODO: Why do we need these constraints?
+TODO: Consider generic classes/structs</p>
+<p>As with an array&#8217;s element type, a generic type parameter can also be bound to
+a <code class="docutils literal"><span class="pre">ref</span></code> or a <code class="docutils literal"><span class="pre">val</span></code> type.</p>
+<blockquote>
+<div>var rv = new Array&lt;ref Int&gt;       // Create a vector of Ints-on-the-heap
+var vv = new Array&lt;val SomeClass&gt; // Create a vector that owns its SomeClasses</div></blockquote>
+<p>The rules for declarations in terms of <code class="docutils literal"><span class="pre">ref</span></code> or <code class="docutils literal"><span class="pre">val</span></code> types are that
+an explicit <code class="docutils literal"><span class="pre">val</span></code> or <code class="docutils literal"><span class="pre">ref</span></code> overrides any <code class="docutils literal"><span class="pre">val</span></code>- or <code class="docutils literal"><span class="pre">ref</span></code>-ness of the
+type parameter, as follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">ref</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="c1">// always declares a ref</span>
+<span class="n">val</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="c1">// always declares a val</span>
+<span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">T</span><span class="w"> </span><span class="c1">// declares a val iff T is a val</span>
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">ref</span></code> and <code class="docutils literal"><span class="pre">val</span></code> can be specified as protocol constraints for type
+parameters:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// Fill an array with independent copies of x</span>
+<span class="kd">func </span><span class="nf">fill</span><span class="p">&lt;</span><span class="no">T</span><span class="p">:</span><span class="n">val</span><span class="p">&gt;(</span><span class="n">array</span><span class="p">:[</span><span class="n">T</span><span class="p">], </span><span class="n">x</span><span class="p">:</span><span class="n">T</span><span class="p">) {</span>
+<span class="w">  </span><span class="kr">for </span><span class="n">i</span><span class="kr"> in </span><span class="mi">0</span><span class="o">..</span><span class="p">.</span><span class="n">array</span><span class="p">.</span><span class="n">length</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">array</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Protocols similarly can inherit from <code class="docutils literal"><span class="pre">val</span></code> or <code class="docutils literal"><span class="pre">ref</span></code> constraints, to require
+conforming types to have the specified semantics:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>protocol Disposable : ref {
+  func dispose()
+}
+</pre></div>
+</div>
+<p>The ability to explicitly declare <code class="docutils literal"><span class="pre">val</span></code> and <code class="docutils literal"><span class="pre">ref</span></code> allow us to
+smooth out behavioral differences between value and reference types
+where they could affect the correctness of algorithms.  The continued
+existence of <code class="docutils literal"><span class="pre">var</span></code> allows value-agnostic generic algorithms, such as
+<code class="docutils literal"><span class="pre">swap</span></code>, to go on working as before.</p>
+</div>
+<div class="section" id="non-copyability">
+<span id="non-copyable"></span><h2>Non-Copyability<a class="headerlink" href="#non-copyability" title="Permalink to this headline">¶</a></h2>
+<p>A non-<code class="docutils literal"><span class="pre">Clonable</span></code> <code class="docutils literal"><span class="pre">class</span></code> is not copyable.  That leaves us with
+several options:</p>
+<ol class="arabic simple">
+<li>Make it illegal to declare a non-copyable <code class="docutils literal"><span class="pre">val</span></code></li>
+<li>Make non-copyable <code class="docutils literal"><span class="pre">val</span></code>s legal, but not copyable, thus
+infecting their enclosing object with non-copyability.</li>
+<li>Like #2, but also formalize move semantics.  All <code class="docutils literal"><span class="pre">val</span></code>s,
+including non-copyable ones, would be explicitly movable.  Generic
+<code class="docutils literal"><span class="pre">var</span></code> parameters would probably be treated as movable but
+non-copyable.</li>
+</ol>
+<p>We favor taking all three steps, but it&#8217;s useful to know that there
+are valid stopping points along the way.</p>
+</div>
+<div class="section" id="default-initialization-of-ref">
+<h2>Default Initialization of ref<a class="headerlink" href="#default-initialization-of-ref" title="Permalink to this headline">¶</a></h2>
+<p>TODO</p>
+</div>
+<div class="section" id="array">
+<h2>Array<a class="headerlink" href="#array" title="Permalink to this headline">¶</a></h2>
+<p>TODO: Int[...], etc.</p>
+</div>
+<div class="section" id="equality-and-identity">
+<h2>Equality and Identity<a class="headerlink" href="#equality-and-identity" title="Permalink to this headline">¶</a></h2>
+<p>TODO</p>
+</div>
+<div class="section" id="why-expand-the-type-system">
+<h2>Why Expand the Type System?<a class="headerlink" href="#why-expand-the-type-system" title="Permalink to this headline">¶</a></h2>
+<p>TODO</p>
+</div>
+<div class="section" id="why-do-we-need-inout-if-we-have-ref">
+<h2>Why do We Need <code class="docutils literal"><span class="pre">[inout]</span></code> if we have <code class="docutils literal"><span class="pre">ref</span></code>?<a class="headerlink" href="#why-do-we-need-inout-if-we-have-ref" title="Permalink to this headline">¶</a></h2>
+<p>TODO</p>
+</div>
+<div class="section" id="why-does-the-outer-qualifier-win">
+<h2>Why Does the Outer Qualifier Win?<a class="headerlink" href="#why-does-the-outer-qualifier-win" title="Permalink to this headline">¶</a></h2>
+<p>TODO</p>
+</div>
+<div class="section" id="objective-c-interoperability">
+<h2>Objective-C Interoperability<a class="headerlink" href="#objective-c-interoperability" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="clonable-objective-c-classes">
+<h3>Clonable Objective-C classes<a class="headerlink" href="#clonable-objective-c-classes" title="Permalink to this headline">¶</a></h3>
+<p>In Cocoa, a notion similar to cloneability is captured in the <code class="docutils literal"><span class="pre">NSCopying</span></code> and
+<code class="docutils literal"><span class="pre">NSMutableCopying</span></code> protocols, and a notion similar to <code class="docutils literal"><span class="pre">val</span></code> instance
+variables is captured by the behavior of <code class="docutils literal"><span class="pre">(copy)</span></code> properties. However, there
+are some behavioral and semantic differences that need to be taken into account.
+<code class="docutils literal"><span class="pre">NSCopying</span></code> and <code class="docutils literal"><span class="pre">NSMutableCopying</span></code> are entangled with Foundation&#8217;s
+idiosyncratic management of container mutability: <code class="docutils literal"><span class="pre">-[NSMutableThing</span> <span class="pre">copy]</span></code>
+produces a freshly copied immutable <code class="docutils literal"><span class="pre">NSThing</span></code>, whereas <code class="docutils literal"><span class="pre">-[NSThing</span> <span class="pre">copy]</span></code>
+returns the same object back if the receiver is already immutable.
+<code class="docutils literal"><span class="pre">-[NSMutableThing</span> <span class="pre">mutableCopy]</span></code> and <code class="docutils literal"><span class="pre">-[NSThing</span> <span class="pre">mutableCopy]</span></code> both return
+a freshly copied <code class="docutils literal"><span class="pre">NSMutableThing</span></code>. In order to avoid requiring special case
+Foundation-specific knowledge of whether class types are notionally immutable
+or mutable, we propose this first-draft approach to mapping the Cocoa concepts
+to <code class="docutils literal"><span class="pre">Clonable</span></code>:</p>
+<ul class="simple">
+<li>If an Objective-C class conforms to <code class="docutils literal"><span class="pre">NSMutableCopying</span></code>, use the
+<code class="docutils literal"><span class="pre">-mutableCopyWithZone:</span></code> method to fulfill the Swift <code class="docutils literal"><span class="pre">Clonable</span></code> concept,
+casting the result of <code class="docutils literal"><span class="pre">-mutableCopyWithZone:</span></code> back to the original type.</li>
+<li>If an Objective-C class conforms to <code class="docutils literal"><span class="pre">NSCopying</span></code> but not <code class="docutils literal"><span class="pre">NSMutableCopying</span></code>,
+use <code class="docutils literal"><span class="pre">-copyWithZone:</span></code>, also casting the result back to the original type.</li>
+</ul>
+<p>This is suboptimal for immutable types, but should work for any Cocoa class
+that fulfills the <code class="docutils literal"><span class="pre">NSMutableCopying</span></code> or <code class="docutils literal"><span class="pre">NSCopying</span></code> contracts without
+requiring knowledge of the intended semantics of the class beyond what the
+compiler can see.</p>
+<p>Objective-C <code class="docutils literal"><span class="pre">(copy)</span></code> properties should behave closely enough to Swift <code class="docutils literal"><span class="pre">val</span></code>
+properties to be able to vend Objective-C <code class="docutils literal"><span class="pre">(copy)</span></code> properties to Swift as
+<code class="docutils literal"><span class="pre">val</span></code> properties, and vice versa.</p>
+</div>
+<div class="section" id="objective-c-protocols">
+<h3>Objective-C protocols<a class="headerlink" href="#objective-c-protocols" title="Permalink to this headline">¶</a></h3>
+<p>In Objective-C, only classes can conform to protocols, and the <code class="docutils literal"><span class="pre">This</span></code> type
+is thus presumed to have references semantics. Swift protocols
+imported from Objective-C or declared as <code class="docutils literal"><span class="pre">[objc]</span></code> could be conformed to by
+<code class="docutils literal"><span class="pre">val</span></code> types, but doing so would need to incur an implicit copy to the heap
+to create a <code class="docutils literal"><span class="pre">ref</span></code> value to conform to the protocol.</p>
+</div>
+</div>
+<div class="section" id="how-this-design-improves-swift">
+<h2>How This Design Improves Swift<a class="headerlink" href="#how-this-design-improves-swift" title="Permalink to this headline">¶</a></h2>
+<ol class="arabic simple">
+<li>You can choose semantics at the point of use.  The designer of a
+type doesn&#8217;t know whether you will want to use it via a reference;
+she can only guess.  You might <em>want</em> to share a reference to a
+struct, tuple, etc.  You might <em>want</em> some class type to be a
+component of the value of some other type.  We allow that, without
+requiring awkward explicit wrapping, and without discarding the
+obvious defaults for types that have them.</li>
+<li>We provide a continuum of strictness in which to program.  If
+you&#8217;re writing a script, you can go with <code class="docutils literal"><span class="pre">var</span></code> everywhere: don&#8217;t
+worry; be happy.  If you&#8217;re writing a large-scale program and want
+to be very sure of what you&#8217;re getting, you can forbid <code class="docutils literal"><span class="pre">var</span></code>
+except in carefully-vetted generic functions.  The choice is yours.</li>
+<li>We allow generic programmers to avoid subtle semantic errors by
+explicitly specifying value or reference semantics where it
+matters.</li>
+<li>We move the cases where values and references interact much closer
+to, and arguably into, the &#8220;easy&#8221; zone.</li>
+</ol>
+</div>
+<div class="section" id="how-this-design-beats-rust-c-c-etc">
+<h2>How This Design Beats Rust/C++/C#/etc.<a class="headerlink" href="#how-this-design-beats-rust-c-c-etc" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>Simple programs stay simple.  Rust has a great low-level memory safety
+story, but it comes at the expense of ease-of-use.  You can&#8217;t learn
+to use that system effectively without confronting three <a class="reference external" href="http://static.rust-lang.org/doc/tutorial.html#boxes-and-pointers">kinds</a>
+of pointer, <a class="reference external" href="http://static.rust-lang.org/doc/tutorial-borrowed-ptr.html#named-lifetimes">named lifetimes</a>, <a class="reference external" href="http://static.rust-lang.org/doc/tutorial-borrowed-ptr.html#borrowing-managed-boxes-and-rooting">borrowing managed boxes and
+rooting</a>, etc.  By contrast, there&#8217;s a path to learning swift that
+postpones the <code class="docutils literal"><span class="pre">val</span></code>/<code class="docutils literal"><span class="pre">ref</span></code> distinction, and that&#8217;s pretty much
+<em>all</em> one must learn to have a complete understanding of the object
+model in the &#8220;easy&#8221; and &#8220;safe&#8221; zones.</li>
+</ul>
+<ul class="simple">
+<li>Simple programs stay safe.  C++ offers great control over
+everything, but the sharp edges are always exposed.  This design
+allows programmers to accomplish most of what people want to with
+C++, but to do it safely and expressively.  As with the rest of Swift,
+the sharp edges are still available as an opt-in feature, and
+without harming the rest of the language.</li>
+<li>Unlike C++, types meant to be reference types, supporting
+inheritance, aren&#8217;t copyable by default.  This prevents inadvertent
+slicing and wrong semantics.</li>
+<li>By retaining the <code class="docutils literal"><span class="pre">class</span></code> vs. <code class="docutils literal"><span class="pre">struct</span></code> distinction, we give type
+authors the ability to provide a default semantics for their types
+and avoid confronting their users with a constant <code class="docutils literal"><span class="pre">T*</span></code> vs. <code class="docutils literal"><span class="pre">T</span></code>
+choice like C/C++.</li>
+<li>C# also provides a <code class="docutils literal"><span class="pre">class</span></code> vs. <code class="docutils literal"><span class="pre">struct</span></code> distinction with a
+generics system, but it provides no facilities for nontrivial value semantics
+on struct types, and the only means for writing generic
+algorithms that rely on value or reference semantics is to apply a
+blunt <code class="docutils literal"><span class="pre">struct</span></code> or <code class="docutils literal"><span class="pre">class</span></code> constraint to type parameters and limit the
+type domain of the generic. By generalizing both value and reference semantics
+to all types, we allow both for structs with interesting value semantics and
+for generics that can reliably specify and use value or reference semantics
+without limiting the types they can be used with.</li>
+</ul>
+</div>
+<div class="section" id="structs-really-should-have-value-semantics">
+<h2><code class="docutils literal"><span class="pre">structs</span></code> Really Should Have Value Semantics<a class="headerlink" href="#structs-really-should-have-value-semantics" title="Permalink to this headline">¶</a></h2>
+<p>It is <em>possible</em> to build a struct with reference semantics. For
+example,</p>
+<p>..parsed-literal:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">struct </span><span class="nc">XPair</span><span class="w"></span>
+<span class="p">{</span>
+<span class="w">   </span><span class="n">constructor</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">       </span><span class="c1">// These Xs are notionally **part of my value**</span>
+<span class="w">       </span><span class="n">first</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kr">new </span><span class="no">X</span>
+<span class="w">       </span><span class="n">second</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kr">new </span><span class="no">X</span>
+<span class="w">   </span><span class="p">}</span>
+<span class="w">   </span><span class="o">**</span><span class="n">ref</span><span class="o">**</span><span class="w"> </span><span class="n">first</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">X</span>
+<span class="w">   </span><span class="o">**</span><span class="n">ref</span><span class="o">**</span><span class="w"> </span><span class="n">second</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">X</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>However, the results can be surprising:</p>
+<pre class="literal-block">
+<strong>val</strong> a : XPair  // I want an <strong>independent value</strong>, please!
+val b = a          // and a copy of that value
+a.first.mutate()   // Oops, changes b.first!
+</pre>
+<p>If <code class="docutils literal"><span class="pre">XPair</span></code> had been declared a class,</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">val</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">XPair</span><span class="w">      </span><span class="c1">// I want an independent value, please!</span>
+</pre></div>
+</div>
+<p>would only compile if <code class="docutils literal"><span class="pre">XPair</span></code> was also <code class="docutils literal"><span class="pre">Clonable</span></code>, thereby
+protecting the user&#8217;s intention to create an independent value</p>
+</div>
+<div class="section" id="getting-the-ref-out-of-a-class-instance-declared-val">
+<h2>Getting the <code class="docutils literal"><span class="pre">ref</span></code> out of a <code class="docutils literal"><span class="pre">class</span></code> instance declared <code class="docutils literal"><span class="pre">val</span></code><a class="headerlink" href="#getting-the-ref-out-of-a-class-instance-declared-val" title="Permalink to this headline">¶</a></h2>
+<p>A <code class="docutils literal"><span class="pre">class</span></code> instance is always accessed through a reference, but when
+an instance is declared <code class="docutils literal"><span class="pre">val</span></code>, that reference is effectively hidden
+behind the <code class="docutils literal"><span class="pre">val</span></code> wrapper.  However, because <code class="docutils literal"><span class="pre">this</span></code> is passed to
+<code class="docutils literal"><span class="pre">class</span></code> methods as a reference, we can unwrap the underlying <code class="docutils literal"><span class="pre">ref</span></code>
+as follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">val</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">SomeClass</span>
+
+<span class="kd">extension </span><span class="nc">SomeClass</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">func </span><span class="nf">get_ref</span><span class="p">() {</span><span class="w"> </span><span class="kr">return</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">ref</span><span class="w"> </span><span class="n">y</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">x</span><span class="p">.</span><span class="n">get_ref</span><span class="p">()</span>
+<span class="n">y</span><span class="p">.</span><span class="n">mutate</span><span class="p">()</span><span class="w">          </span><span class="c1">// mutates x</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="teachability">
+<h2>Teachability<a class="headerlink" href="#teachability" title="Permalink to this headline">¶</a></h2>
+<p>By expanding the type system we have added complexity to the language.
+To what degree will these changes make Swift harder to learn?</p>
+<p>We believe the costs can be mitigated by teaching plain <code class="docutils literal"><span class="pre">var</span></code>
+programming first.  The need to confront <code class="docutils literal"><span class="pre">val</span></code> and <code class="docutils literal"><span class="pre">ref</span></code> can be
+postponed until the point where students must see them in the
+interfaces of library functions.  All the same standard library
+interfaces that could be expressed before the introduction of <code class="docutils literal"><span class="pre">val</span></code>
+and <code class="docutils literal"><span class="pre">ref</span></code> can still be expressed without them, so this discovery can
+happen arbitrarily late in the game.  However, it&#8217;s important to
+realize that having <code class="docutils literal"><span class="pre">val</span></code> and <code class="docutils literal"><span class="pre">ref</span></code> available will probably change
+the optimal way to express the standard library APIs, and choosing
+where to use the new capabilities may be an interesting balancing act.</p>
+</div>
+<div class="section" id="im-mutability">
+<h2>(Im)Mutability<a class="headerlink" href="#im-mutability" title="Permalink to this headline">¶</a></h2>
+<p>We have looked, but so far, we don&#8217;t think this proposal closes (or,
+for that matter, opens) the door to anything fundamentally new with
+respect to declared (im)mutability.  The issues that arise with
+explicit <code class="docutils literal"><span class="pre">val</span></code> and <code class="docutils literal"><span class="pre">ref</span></code> also arise without them.</p>
+</div>
+<div class="section" id="bikeshed">
+<h2>Bikeshed<a class="headerlink" href="#bikeshed" title="Permalink to this headline">¶</a></h2>
+<p>There are a number of naming issues we might want to discuss.  For
+example:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">var</span></code> is only one character different from <code class="docutils literal"><span class="pre">val</span></code>.  Is that too
+confusable?  Syntax highlighting can help, but it might not be enough.<ul>
+<li>What about <code class="docutils literal"><span class="pre">let</span></code> as a replacement for <code class="docutils literal"><span class="pre">var</span></code>?
+There&#8217;s always the dreaded <code class="docutils literal"><span class="pre">auto</span></code>.</li>
+<li>Should we drop <code class="docutils literal"><span class="pre">let</span></code>/<code class="docutils literal"><span class="pre">var</span></code>/<code class="docutils literal"><span class="pre">auto</span></code> for ivars, because it
+&#8220;just feels wrong&#8221; there?</li>
+</ul>
+</li>
+<li><code class="docutils literal"><span class="pre">ref</span></code> is spelled like <code class="docutils literal"><span class="pre">[inout]</span></code>, but they mean very different things<ul>
+<li>We don&#8217;t think they can be collapsed into one keyword: <code class="docutils literal"><span class="pre">ref</span></code>
+requires shared ownership and is escapable and aliasable, unlike
+<code class="docutils literal"><span class="pre">[inout]</span></code>.</li>
+<li>Should we spell <code class="docutils literal"><span class="pre">[inout]</span></code> differently?  I think at a high level
+it means something like &#8220;<code class="docutils literal"><span class="pre">[rebind]</span></code> the name to a new value.&#8221;</li>
+</ul>
+</li>
+<li>Do we want to consider replacing <code class="docutils literal"><span class="pre">struct</span></code> and/or <code class="docutils literal"><span class="pre">class</span></code> with
+new names such as <code class="docutils literal"><span class="pre">valtype</span></code> and <code class="docutils literal"><span class="pre">reftype</span></code>?  We don&#8217;t love those
+particular suggestions.  One argument in favor of a change:
+<code class="docutils literal"><span class="pre">struct</span></code> comes with a strong connotation of weakness or
+second-class-ness for some people.</li>
+</ul>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

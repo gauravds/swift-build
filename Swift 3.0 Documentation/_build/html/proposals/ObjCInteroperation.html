@@ -1,0 +1,555 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Interaction with Objective-C &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Interaction with Objective-C</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="interaction-with-objective-c">
+<h1>Interaction with Objective-C<a class="headerlink" href="#interaction-with-objective-c" title="Permalink to this headline">¶</a></h1>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Authors:</th><td class="field-body">John McCall</td>
+</tr>
+</tbody>
+</table>
+<p>I propose some elementary semantics and limitations when exposing
+Swift code to Objective C and vice-versa.</p>
+<div class="section" id="dynamism-in-objective-c">
+<h2>Dynamism in Objective-C<a class="headerlink" href="#dynamism-in-objective-c" title="Permalink to this headline">¶</a></h2>
+<p>Objective C intentionally defines its semantics almost entirely around
+its implementation model.  The implementation supports two basic
+operations that you can perform on any object:</p>
+<div class="section" id="instance-variable-access">
+<h3>Instance variable access<a class="headerlink" href="#instance-variable-access" title="Permalink to this headline">¶</a></h3>
+<p>An access to an ivar <code class="docutils literal"><span class="pre">foo</span></code> is type-checked by looking for a declared
+ivar with the name <code class="docutils literal"><span class="pre">foo</span></code> in the static type of the base object.  To
+succeed, that search must find an ivar from some class <code class="docutils literal"><span class="pre">C</span></code>.</p>
+<p>It is undefined behavior if, at runtime, the base expression does not
+evaluate to a valid object of type <code class="docutils literal"><span class="pre">C</span></code> or some subclass thereof.
+This restriction is necessary to allow the compiler to compute the
+address of the ivar at (relatively) minimal expense.</p>
+<p>Because of that restriction, ivar accesses are generally seen by users
+as &#8220;primitive&#8221;, and we probably have some additional flexibility about
+optimizing them.  For example, we could probably impose a rule
+insisting that the entire static type of the base be accurate, thus
+forbidding a user from accessing an ivar using a pointer to an
+incorrect subclass of <code class="docutils literal"><span class="pre">C</span></code>.  This would theoretically allow stronger
+alias analysis: for example, if we have <code class="docutils literal"><span class="pre">D</span> <span class="pre">*d;</span></code> and <code class="docutils literal"><span class="pre">E*</span> <span class="pre">e;</span></code> where
+those types are subclasses of <code class="docutils literal"><span class="pre">C</span></code>, we would be able to prove that
+<code class="docutils literal"><span class="pre">d-&gt;foo</span></code> does not alias <code class="docutils literal"><span class="pre">e-&gt;foo</span></code>.  However, in practice, ObjC
+ivars tend to be directly accessed only within the implementation of
+the class which defines them, which means that the stronger rule would
+basically never kick in.</p>
+</div>
+<div class="section" id="message-sends">
+<h3>Message sends<a class="headerlink" href="#message-sends" title="Permalink to this headline">¶</a></h3>
+<p>A message send is type-checked by looking for a declared method with
+that selector in the static type of the receiver, or, if the receiver
+has type <code class="docutils literal"><span class="pre">id</span></code> or <code class="docutils literal"><span class="pre">Class</span></code>, in any known class in the translation
+unit.  The arguments and expression result are then determined by that
+method declaration.</p>
+<p>At runtime, if the receiver is actually <code class="docutils literal"><span class="pre">nil</span></code>, the message send
+returns immediately with a zero-initialized result; otherwise the
+runtime searches for a method implementation (and, sometimes, an
+alternate receiver) via a somewhat elaborate algorithm:</p>
+<blockquote>
+<div><ul class="simple">
+<li>The runtime first searches the method tables of the object for a
+method with that selector, starting from the object&#8217;s dynamic
+class and proceeding up the hierarchy.</li>
+<li>If that search fails, the runtime gives the class an opportunity
+to dynamically resolve the method by adding it to the method lists
+of one of the classes in the hierarchy.</li>
+<li>If dynamic resolution fails, the runtime invokes the forwarding
+handler; the standard handler installed by CoreFoundation follows
+a complex rule that needn&#8217;t be described here other than to note
+that it can involve actually sending the message to a completely
+different object if the receiver agrees.</li>
+</ul>
+</div></blockquote>
+<p>It is undefined behavior if the signature of the method implementation
+actually found is not compatible with the signature of the method
+against which the message send was type-checked.  This restriction is
+necessary in order to avoid the need to perform dynamic signature
+checking and automatic implicit conversion on arguments, which would
+substantially slow down the method-call mechanism.</p>
+<p>Note that common practice requires this sense of &#8220;compatible&#8221; to be
+much looser than C&#8217;s.  For example, <code class="docutils literal"><span class="pre">performSelector</span></code> is documented
+as expecting the target method to return an object reference, but it
+is regularly used to invoke methods that actually return <code class="docutils literal"><span class="pre">void</span></code>.</p>
+<p>Otherwise, the language provides no guarantees which would allow the
+compiler to reason accurately about what the invoked method will
+actually do.  Moreover, this is not just a formal oversight; there is
+quite a bit of code relying on the ability to break each of these
+non-guarantees.  We can classify them into five categories:</p>
+<blockquote>
+<div><ul>
+<li><p class="first">The language does not guarantee that the static type of an object
+reference will be accurate.  Just because a value is typed <code class="docutils literal"><span class="pre">C*</span></code>
+does not mean it is dynamically a reference to a <code class="docutils literal"><span class="pre">C</span></code> object.
+Proxy objects are frequently passed around as if they were values
+of their target class.  (Some people would argue that users
+should only proxy protocols, not entire concrete classes; but
+that&#8217;s not universally followed.)</p>
+</li>
+<li><p class="first">The language does not guarantee that the complete class hierarchy
+is statically knowable.  Even ignoring the limitations of the C
+compilation model, it is possible to dynamically construct classes
+with new methods that may override the declared behavior of the
+class.  Core Data relies on this kind of dynamic class generation.</p>
+</li>
+<li><p class="first">The language does not guarantee that an object&#8217;s dynamic class
+will be the type that a user actually appeared to allocate.  Even
+ignoring proxies, it is relatively common for a factory method on
+a class to return an instance of a subclass.</p>
+</li>
+<li><p class="first">The language does not guarantee that an object&#8217;s dynamic class
+will not change.  KVO works by changing an object&#8217;s dynamic class
+to a dynamically-generated subclass with new methods that replace
+the observed accessors.</p>
+<p>However, it is probably reasonable to call it undefined behavior
+to change a dynamic class in a way that would add or remove ivars.</p>
+</li>
+<li><p class="first">The language does not guarantee that a class will remain constant.
+Loading a new dynamic library may introduce categories that add
+and replace methods on existing classes, and the runtime provides
+public functions to do the same.  These features are often used to
+introduce dynamic instrumentation, for example when debugging.</p>
+</li>
+</ul>
+</div></blockquote>
+<p>All of these constraints combined &#8212; actually, many of them
+individually &#8212; make devirtualization completely impossible in
+Objective-C <a class="footnote-reference" href="#id2" id="id1">[1]</a>.</p>
+<table class="docutils footnote" frame="void" id="id2" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>Not completely.  We could optimistically apply techniques
+typically used in dynamic language implementations.  For
+example, we could directly call an expected method body, then
+guard that call with a check of the actual dispatched
+implementation against the expected method pointer.  But since
+the inlined code would necessarily be one side of a &#8220;diamond&#8221;
+in the CFG, and the branches in that diamond would
+overwhelmingly be unthreadable, it is not clear that the
+optimization would gain much, and it would significantly bloat
+the call.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="section" id="devirtualization-in-swift">
+<h2>Devirtualization in Swift<a class="headerlink" href="#devirtualization-in-swift" title="Permalink to this headline">¶</a></h2>
+<p>Method devirtualization <a class="footnote-reference" href="#id4" id="id3">[2]</a> is likely to be a critically important
+optimization in Swift.</p>
+<table class="docutils footnote" frame="void" id="id4" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id3">[2]</a></td><td>In contrast to generic or existential devirtualization, which
+are also important, but which aren&#8217;t affected by the Objective C
+interoperation model.</td></tr>
+</tbody>
+</table>
+<div class="section" id="a-missing-optimization">
+<h3>A Missing Optimization<a class="headerlink" href="#a-missing-optimization" title="Permalink to this headline">¶</a></h3>
+<p>For one, it is an important missing optimization even in Objective C.
+Any program that tries to separate its concerns will usually introduce
+some extra abstraction in its formal model.  For example:</p>
+<blockquote>
+<div><ul class="simple">
+<li>A class might provide multiple convenience initializers that all
+delegate to each other so that all initialization will flow
+through a single point.</li>
+<li>A large operation might be simpler to reason about when split into
+several smaller methods.</li>
+<li>A property might be abstracted behind a getter/setter to make it
+easier to change the representation (or do additional work on set)
+later.</li>
+</ul>
+</div></blockquote>
+<p>In each of the examples, the user has made a totally reasonable
+decision about code organization and reserved flexibility, and
+Objective C proceeds to introduce unnecessary runtime costs which
+might force a performance-sensitive programmer to choose a different
+path.</p>
+</div>
+<div class="section" id="swift-specific-concerns">
+<h3>Swift-Specific Concerns<a class="headerlink" href="#swift-specific-concerns" title="Permalink to this headline">¶</a></h3>
+<p>The lack of devirtualization would hit Swift much harder because of
+its property model.  With a synthesized property, Objective C provides
+a way to either call the getter/setter (with dot syntax) or directly
+access the underlying ivar (with arrow syntax).  By design, Swift
+hides that difference, and the abstract language model is that all
+accesses go through a getter or setter.</p>
+<p>Using a getter or setter instead of a direct access is a major
+regression for several reasons.  The first is the direct one: the
+generated code must call a function, which prevents the compiler from
+keep values live in the most efficient way, and which inhibits most
+compiler analyses.  The second is a by-product of value types: if a
+value is read, modified, and then written back, the modification will
+take place on the temporary copy, forcing a copy-on-write.  Any
+proposal to improve on that relies on having a richer API for the
+access than merely a getter/setter pair, which cannot be guaranteed.</p>
+<p>For properties of a value type, this isn&#8217;t a performance problem,
+because we can simply look at the implementation (ignoring resilience
+for now) and determine whether we can access the property directly.
+But for properties of a class type, polymorphism requires us to
+defensively handle the possibility that a subclass might add arbitrary
+logic to either the getter or setter.  If our implementation model
+is as unrestricted as Objective C&#8217;s, that&#8217;s a serious problem.</p>
+<p>I think that this is such a massive regression from Objective C that
+we have to address it.</p>
+</div>
+<div class="section" id="requirements-for-devirtualization">
+<h3>Requirements for Devirtualization<a class="headerlink" href="#requirements-for-devirtualization" title="Permalink to this headline">¶</a></h3>
+<p>There are several different ways to achieve devirtualization, each
+with its own specific requirements.  But they all rely on a common
+guarantee: we must remove or constrain the ability to dynamically
+add and replace method implementations.</p>
+<div class="section" id="restricting-method-replacement">
+<h4>Restricting Method Replacement<a class="headerlink" href="#restricting-method-replacement" title="Permalink to this headline">¶</a></h4>
+<p>There are two supported ways to add or replace methods in Objective C.</p>
+<p>The first is via the runtime API.  If we do have to support doing this
+to replace Swift methods &#8212; and we should try to avoid that &#8212; then
+I think restricting it to require a <code class="docutils literal"><span class="pre">&#64;dynamic</span></code> annotation on the
+replaceable method (or its lexical context) is reasonable.  We should
+try to get the Objective C runtime to complain about attempts to
+replace non-dynamic methods.</p>
+<p>The second is via categories.  It&#8217;s generally understood that a
+category replacing an existing method implementation is &#8220;rude&#8221;</p>
+</div>
+<div class="section" id="point-of-allocation">
+<h4>Point of Allocation<a class="headerlink" href="#point-of-allocation" title="Permalink to this headline">¶</a></h4>
+<p>If we can see the true point of allocation of an object, then we know
+its dynamic class at that point.  However:</p>
+<p>Note that the true point of allocation is not the point at which we
+call some factory method on a specific type; it has to be an actual
+allocation: an <code class="docutils literal"><span class="pre">alloc_ref</span></code> SIL instruction.  And it&#8217;s questionable
+whether an ObjC allocation counts, because those sometimes don&#8217;t
+return what you might expect.</p>
+<p>Once you know the dynamic class at a particular point, you can
+devirtualize calls if:</p>
+<blockquote>
+<div><blockquote>
+<div><ul class="simple">
+<li>There is no supported way to replace a function implementation.</li>
+</ul>
+</div></blockquote>
+<p><code class="docutils literal"><span class="pre">+[NSManagedObject</span> <span class="pre">alloc]</span></code> does this).</p>
+</div></blockquote>
+<p>We can reason forward from the point of allocation.</p>
+<blockquote>
+<div><blockquote>
+<div><p>If we can see that an object was allocated with <code class="docutils literal"><span class="pre">alloc_object</span></code>,
+then we know the dynamic class at that point.  That&#8217;s relatively
+easy to deal with.</p>
+<ul class="simple">
+<li></li>
+</ul>
+</div></blockquote>
+<dl class="docutils">
+<dt>If we can restrict the ability to</dt>
+<dd>change the dynamic class, or at least restrict</dd>
+</dl>
+</div></blockquote>
+</div>
+</div>
+<div class="section" id="access-control">
+<h3>Access Control<a class="headerlink" href="#access-control" title="Permalink to this headline">¶</a></h3>
+<p>Swift does give us one big tool for devirtualization that Objective C
+lacks: access control.  In Swift, access control determines
+visibility, and it doesn&#8217;t make sense to override something that you
+can&#8217;t see.  Therefore:</p>
+<blockquote>
+<div><ul class="simple">
+<li>A declaration which is private to a file can only be overridden
+within that file.</li>
+<li>A declaration which is private to a module can only be overridden
+with that module.</li>
+<li>A public declaration can be overridden anywhere <a class="footnote-reference" href="#id6" id="id5">[3]</a>.</li>
+</ul>
+</div></blockquote>
+<table class="docutils footnote" frame="void" id="id6" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id5">[3]</a></td><td>We&#8217;ve talked about having two levels of public access control
+for classes, so that you have to opt in to subclassability.  I
+still think this is a good idea.</td></tr>
+</tbody>
+</table>
+<p>This means that a private stored property can always be
+&#8220;devirtualized&#8221; into a direct access <a class="footnote-reference" href="#id8" id="id7">[4]</a>.  Unfortunately, <code class="docutils literal"><span class="pre">private</span></code>
+is not the default access control: module-private is.  And if the
+current module can contain Objective C code, then even that raises the
+question of what ObjC interop actually means.</p>
+<table class="docutils footnote" frame="void" id="id8" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id7">[4]</a></td><td>Assuming we don&#8217;t introduce a supported way of dynamically
+replacing the implementation of a private Swift method!</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="section" id="using-swift-classes-from-objective-c">
+<h2>Using Swift Classes from Objective C<a class="headerlink" href="#using-swift-classes-from-objective-c" title="Permalink to this headline">¶</a></h2>
+<p>open the question of</p>
+<p>Because we intentionally hide the
+difference between a stored property and its underlying storage,</p>
+<p>For another example, code
+class might access</p>
+<p>In both cases, t makes sense to organize the code that way,
+but Objective C punishes the performance of that code in order to
+reserve the language&#8217;s</p>
+<p>provide some abstractions which are unnecessary in the current
+implementation.  For example, a class might have multiple
+initializers, each chaining to another, so that it can be conveniently
+constructed with any set of arguments but any special initialization
+logic can go in one place.</p>
+<p>Reserving that
+flexibility in the code is often good sense, and reserving it across
+API boundaries is good language design, but it&#8217;s silly
+not actually</p>
+<p>Well-factored object-oriented code often contains a large number of
+abstractions that improve the organization of the code or make it
+easier to later extend or maintain, but serve no current purpose.</p>
+<p>In
+typical object-oriented code, many operations are split into several
+small methods in order to improve code organization and reserve the
+ability to</p>
+<p>Conscientious developers</p>
+<p>runtime calls
+cached-offset calculation for the ivar location.</p>
+<p>restriction, there&#8217;s general acceptance that the</p>
+<p>is necessary to make ivar
+accesses not ridiculously expensive.  Because of that, there&#8217;s general
+acceptance that</p>
+<p>If the compiler team cared, we could <em>probably</em> convince people to
+accept a language rule that requires the entire static type to be
+accurate, so that e.g.</p>
+<p>Otherwise Objective-C provides no restrictions beyond those imposed by
+the source language.</p>
+<p>ivar is accessed on an object reference which is <code class="docutils literal"><span class="pre">nil</span></code> or otherwise
+not a valid object of the class</p>
+<ul>
+<li><p class="first">You can send an object reference a message.</p>
+<ul class="simple">
+<li>If the reference is actually <code class="docutils literal"><span class="pre">nil</span></code>, the message send returns
+immediately with a zero-initialized result.</li>
+<li>Otherwise, the runtime searches the class hierarchy of the object,
+starting from the object&#8217;s dynamic class and proceeding to
+superclasses, looking for a concrete method matching the selector
+of the message.  If a concrete method is found, it is called.</li>
+<li>If the class hierarchy contains no such method, a different method
+is invoked on the class to give it an opportunity to dynamically
+resolve the method; if taken, the process repeats, but skipping
+this step the second time.</li>
+<li>Otherwise, the global forwarding handler is invoked.  On Darwin,
+this is set up by CoreFoundation, and it follows a complicated
+protocol which relies on NSInvocation.</li>
+</ul>
+<p>It is undefined behavior if the type signature of the method
+implementation ultimately found is not compatible with the type
+signature of the method that was used to statically type-check the
+message send.  This includes semantic annotations like ARC ownership
+conventions and the <code class="docutils literal"><span class="pre">noreturn</span></code> attribute.  Otherwise, there are no
+semantic restrictions on what any particular method can do.</p>
+</li>
+</ul>
+<blockquote>
+<div><dl class="docutils">
+<dt>signature of the method implementation&#8217;s</dt>
+<dd>pr signature is not compatible with the signature at which the
+method was invoked.</dd>
+</dl>
+</div></blockquote>
+<dl class="docutils">
+<dt>, in which case the runtime searches</dt>
+<dd>the class hierarchy of the object, from most to least derived,
+and calls the method</dd>
+</dl>
+<p>In Objective-C, every object has a class and every class has a
+collection of methods.  The high-level semantics are essentially
+those</p>
+</div>
+<div class="section" id="basic-semantics">
+<h2>Basic Semantics<a class="headerlink" href="#basic-semantics" title="Permalink to this headline">¶</a></h2>
+<p><code class="docutils literal"><span class="pre">&#64;public</span></code> makes a declaration visible in code where the enclosing
+module is imported.  So, given this declaration in the <code class="docutils literal"><span class="pre">Satchel</span></code>
+module:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>@public struct Bag&lt;T&gt; : ... {
+ ...
+}
+</pre></div>
+</div>
+<p>We could write, in any other module,</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kn">import </span><span class="nn">Satchel</span>
+<span class="n">typealias</span><span class="w"> </span><span class="n">SwingMe</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Bag</span><span class="o">&lt;</span><span class="n">Cat</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>The difference from the status quo being that without <code class="docutils literal"><span class="pre">&#64;public</span></code> on
+the declaration of <code class="docutils literal"><span class="pre">Bag</span></code>, the use of <code class="docutils literal"><span class="pre">Bag</span></code> above would be
+ill-formed.</p>
+</div>
+<div class="section" id="type-checking">
+<h2>Type-Checking<a class="headerlink" href="#type-checking" title="Permalink to this headline">¶</a></h2>
+<p>The types of all parameters and the return type of a func marked
+<code class="docutils literal"><span class="pre">&#64;public</span></code> (including the implicit <code class="docutils literal"><span class="pre">self</span></code> of methods) must also be
+<code class="docutils literal"><span class="pre">&#64;public</span></code>.</p>
+<p>All parameters to a <code class="docutils literal"><span class="pre">func</span></code> marked <code class="docutils literal"><span class="pre">&#64;public</span></code> (including the
+implicit <code class="docutils literal"><span class="pre">self</span></code> of methods) must also be <code class="docutils literal"><span class="pre">&#64;public</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct X {}                   // not @public
+@public struct Y {}
+func f(_: X) {}               // OK; also not @public
+@public func g(_: Y) {}       // OK; uses only @public types
+@public func h(_: X, _: Y) {} // Ill-formed; non-public X in public signature
+</pre></div>
+</div>
+<p>A <code class="docutils literal"><span class="pre">typealias</span></code> marked <code class="docutils literal"><span class="pre">&#64;public</span></code> must refer to a type marked
+<code class="docutils literal"><span class="pre">&#64;public</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>typealias XX = X              // OK; not @public
+@public typealias YY = Y      // OK; Y is @public
+@public typealias XXX = X     // Ill-formed; public typealias refers to non-public type
+</pre></div>
+</div>
+<p>There is a straightforward and obvious rule for composing the
+<code class="docutils literal"><span class="pre">&#64;public</span></code>-ness of any compound type, including function types,
+tuple types and instances of generic types: The compound type is
+public if and only if all of the component types, are <code class="docutils literal"><span class="pre">&#64;public</span></code> and
+either defined in this module or re-exported from this module.</p>
+</div>
+<div class="section" id="enums">
+<h2>Enums<a class="headerlink" href="#enums" title="Permalink to this headline">¶</a></h2>
+<p>The cases of an <code class="docutils literal"><span class="pre">enum</span></code> are <code class="docutils literal"><span class="pre">&#64;public</span></code> if and only if the <code class="docutils literal"><span class="pre">enum</span></code>
+is declared <code class="docutils literal"><span class="pre">&#64;public</span></code>.</p>
+</div>
+<div class="section" id="derived-classes">
+<h2>Derived Classes<a class="headerlink" href="#derived-classes" title="Permalink to this headline">¶</a></h2>
+<p>A method that overrides an <code class="docutils literal"><span class="pre">&#64;public</span></code> method must be declared
+<code class="docutils literal"><span class="pre">&#64;public</span></code>, even if the enclosing class is non-<code class="docutils literal"><span class="pre">&#64;public</span></code>.</p>
+</div>
+<div class="section" id="protocols">
+<h2>Protocols<a class="headerlink" href="#protocols" title="Permalink to this headline">¶</a></h2>
+<p>A <code class="docutils literal"><span class="pre">&#64;public</span></code> protocol can have <code class="docutils literal"><span class="pre">&#64;public</span></code> and non-<code class="docutils literal"><span class="pre">&#64;public</span></code>
+requirements.  <code class="docutils literal"><span class="pre">&#64;public</span></code> requirements can only be satisfied by
+<code class="docutils literal"><span class="pre">&#64;public</span></code> declarations. Non-<code class="docutils literal"><span class="pre">&#64;public</span></code> requirements can be
+satisfied by <code class="docutils literal"><span class="pre">&#64;public</span></code> or non-<code class="docutils literal"><span class="pre">&#64;public</span></code> declarations.</p>
+</div>
+<div class="section" id="conformances">
+<h2>Conformances<a class="headerlink" href="#conformances" title="Permalink to this headline">¶</a></h2>
+<p>The conformance of a type to a protocol is <code class="docutils literal"><span class="pre">&#64;public</span></code> if that
+conformance is part of an <code class="docutils literal"><span class="pre">&#64;public</span></code> declaration.  The program is
+ill-formed if any declaration required to satisfy a <code class="docutils literal"><span class="pre">&#64;public</span></code>
+conformance is not also declared <code class="docutils literal"><span class="pre">&#64;public</span></code>.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>@public protocol P {
+  @public func f() { g() }
+  func g()
+}
+
+struct X : P { // OK, X is not @public, so neither is its
+  func f() {}  // conformance to P, and therefore f
+  func g() {}  // can be non-@public
+}
+
+protocol P1 {}
+
+@public struct Y : P1 {} // Y is @public so its
+                         // conformance to P1 is, too.
+
+@public
+extension Y : P {     // This extension is @public, so
+  @public func f() {} // Y&#39;s conformance to P is also, and
+  func g() {}         // thus f must be @public too
+}
+
+protocol P2 {}
+
+extension Y : P2 {}   // Y&#39;s conformance to P2 is non-@public
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">It&#8217;s our expectation that in the near term, and probably for
+v1.0, non-<code class="docutils literal"><span class="pre">&#64;public</span></code> conformances on <code class="docutils literal"><span class="pre">&#64;public</span></code> types will be
+diagnosed as ill-formed/unsupported.</p>
+</div>
+</div>
+<div class="section" id="a-related-naming-change">
+<h2>A Related Naming Change<a class="headerlink" href="#a-related-naming-change" title="Permalink to this headline">¶</a></h2>
+<p>The existing <code class="docutils literal"><span class="pre">&#64;exported</span></code> attribute for imports should be renamed
+<code class="docutils literal"><span class="pre">&#64;public</span></code> with no change in functionality.</p>
+</div>
+<div class="section" id="future-directions">
+<h2>Future Directions<a class="headerlink" href="#future-directions" title="Permalink to this headline">¶</a></h2>
+<p>Some obvious directions to go in this feature space, which we are not
+proposing today, but with which we tried to make this proposal
+compatible:</p>
+<ul class="simple">
+<li>non-<code class="docutils literal"><span class="pre">&#64;public</span></code> conformances</li>
+<li>file-private accessibility</li>
+<li>explicit non-<code class="docutils literal"><span class="pre">&#64;public</span></code> overrides, e.g. <code class="docutils literal"><span class="pre">&#64;!public</span></code></li>
+</ul>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

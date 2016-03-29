@@ -1,0 +1,433 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Value Semantics in Swift &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Value Semantics in Swift</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="value-semantics-in-swift">
+<span id="valuesemantics"></span><h1>Value Semantics in Swift<a class="headerlink" href="#value-semantics-in-swift" title="Permalink to this headline">¶</a></h1>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Abstract:</th><td class="field-body">Swift is the first language to take Generic Programming
+seriously that also has both value and reference types.  The
+(sometimes subtle) differences between the behaviors of value and
+reference types create unique challenges for generic programs that we
+have not yet addressed.  This paper surveys related problems
+and explores some possible solutions.</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="definitions">
+<h2>Definitions<a class="headerlink" href="#definitions" title="Permalink to this headline">¶</a></h2>
+<p>I propose the following definitions of &#8220;value semantics&#8221; and
+&#8220;reference semantics.&#8221;</p>
+<div class="section" id="value-semantics">
+<h3>Value Semantics<a class="headerlink" href="#value-semantics" title="Permalink to this headline">¶</a></h3>
+<p>For a type with value semantics, variable initialization, assignment,
+and argument-passing (hereafter, &#8220;the big three operations&#8221;) each
+create an <em>independently modifiable copy</em> of the source value that is
+<em>interchangeable with the source</em>. <a class="footnote-reference" href="#interchange" id="id1">[1]</a></p>
+<p>If <code class="docutils literal"><span class="pre">T</span></code> has value semantics, the <code class="docutils literal"><span class="pre">f</span></code>s below are all equivalent:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">f1</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">T</span><span class="p"> {</span>
+<span class="w">   </span><span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">T</span>
+<span class="w">   </span><span class="kr">return</span><span class="w"> </span><span class="n">x</span>
+<span class="p">}</span>
+
+<span class="kd">func </span><span class="nf">f2</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">T</span><span class="p"> {</span>
+<span class="w">   </span><span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">T</span>
+<span class="w">   </span><span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span>
+<span class="w">   </span><span class="kr">return</span><span class="w"> </span><span class="n">y</span><span class="w">  </span><span class="c1">// a copy of x is equivalent to x</span>
+<span class="p">}</span>
+
+<span class="kd">func </span><span class="nf">f2a</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">T</span><span class="p"> {</span>
+<span class="w">   </span><span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">T</span>
+<span class="w">   </span><span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">T</span>
+<span class="w">   </span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span>
+<span class="w">   </span><span class="kr">return</span><span class="w"> </span><span class="n">y</span><span class="w">  </span><span class="c1">// a copy of x is equivalent to x</span>
+<span class="p">}</span>
+
+<span class="kd">func </span><span class="nf">f3</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">T</span><span class="p"> {</span>
+<span class="w">   </span><span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">T</span>
+<span class="w">   </span><span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span>
+<span class="w">   </span><span class="n">y</span><span class="p">.</span><span class="n">mutate</span><span class="p">()</span><span class="w"> </span><span class="c1">// a copy of x is modifiable</span>
+<span class="w">   </span><span class="kr">return</span><span class="w"> </span><span class="n">x</span><span class="w">   </span><span class="c1">// without affecting x</span>
+<span class="p">}</span>
+
+<span class="kd">func </span><span class="nf">f3a</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">T</span><span class="p"> {</span>
+<span class="w">   </span><span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">T</span>
+<span class="w">   </span><span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">T</span>
+<span class="w">   </span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span><span class="p">;</span>
+<span class="w">   </span><span class="n">y</span><span class="p">.</span><span class="n">mutate</span><span class="p">()</span><span class="w"> </span><span class="c1">// a copy of x is modifiable</span>
+<span class="w">   </span><span class="kr">return</span><span class="w"> </span><span class="n">x</span><span class="w">   </span><span class="c1">// without affecting x</span>
+<span class="p">}</span>
+
+<span class="kd">func </span><span class="nf">g</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">T</span><span class="p">) {</span><span class="w"> </span><span class="n">x</span><span class="p">.</span><span class="n">mutate</span><span class="p">()</span><span class="w"> </span><span class="p">}</span>
+
+<span class="kd">func </span><span class="nf">f4</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">T</span><span class="p"> {</span>
+<span class="w">   </span><span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">T</span>
+<span class="w">   </span><span class="n">g</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="w">         </span><span class="c1">// when x is passed by-value the copy</span>
+<span class="w">   </span><span class="kr">return</span><span class="w"> </span><span class="n">x</span><span class="w">     </span><span class="c1">// is modifiable without affecting x</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="reference-semantics">
+<h3>Reference Semantics<a class="headerlink" href="#reference-semantics" title="Permalink to this headline">¶</a></h3>
+<p>Values of a type with reference semantics are only accessible
+indirectly, via a reference.  Although swift tries to hide this fact
+for simplicity, for the purpose of this discussion it is important to
+note that there are always <em>two</em> values in play: the value of the
+reference itself and that of the object being referred to (a.k.a. the
+target).</p>
+<p>The programmer thinks of the target&#8217;s value as primary, but it is
+never used as a variable initializer, assigned, or passed as a
+function argument.  Conversely, the reference itself has full value
+semantics, but the user never sees or names its type.  The programmer
+expects that copies of a reference share a target object, so
+modifications made via one copy are visible as side-effects through
+the others.</p>
+<p>If <code class="docutils literal"><span class="pre">T</span></code> has reference semantics, the <code class="docutils literal"><span class="pre">f</span></code>s below are all
+equivalent:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">f1</span><span class="p">(</span><span class="n">T</span><span class="w"> </span><span class="n">x</span><span class="p">) {</span>
+<span class="w">   </span><span class="n">x</span><span class="p">.</span><span class="n">mutate</span><span class="p">()</span>
+<span class="w">   </span><span class="kr">return</span><span class="w"> </span><span class="n">x</span>
+<span class="p">}</span>
+
+<span class="kd">func </span><span class="nf">f2</span><span class="p">(</span><span class="n">T</span><span class="w"> </span><span class="n">x</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">T</span><span class="p"> {</span>
+<span class="w">   </span><span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span>
+<span class="w">   </span><span class="n">y</span><span class="p">.</span><span class="n">mutate</span><span class="p">()</span><span class="w">  </span><span class="c1">// mutation through a copy of x</span>
+<span class="w">   </span><span class="kr">return</span><span class="w"> </span><span class="n">x</span><span class="w">    </span><span class="c1">// is visible through x</span>
+<span class="p">}</span>
+
+<span class="kd">func </span><span class="nf">f2a</span><span class="p">(</span><span class="n">T</span><span class="w"> </span><span class="n">x</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">T</span><span class="p"> {</span>
+<span class="w">   </span><span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">T</span>
+<span class="w">   </span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span>
+<span class="w">   </span><span class="n">y</span><span class="p">.</span><span class="n">mutate</span><span class="p">()</span><span class="w">  </span><span class="c1">// mutation through a copy of x</span>
+<span class="w">   </span><span class="kr">return</span><span class="w"> </span><span class="n">x</span><span class="w">    </span><span class="c1">// is visible through x</span>
+<span class="p">}</span>
+
+<span class="kd">func </span><span class="nf">g</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">T</span><span class="p">) {</span><span class="w"> </span><span class="n">x</span><span class="p">.</span><span class="n">mutate</span><span class="p">()</span><span class="w"> </span><span class="p">}</span>
+
+<span class="kd">func </span><span class="nf">f3</span><span class="p">(</span><span class="n">T</span><span class="w"> </span><span class="n">x</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">T</span><span class="p"> {</span>
+<span class="w">   </span><span class="n">g</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="w">        </span><span class="c1">// when x is passed to a function, mutation</span>
+<span class="w">   </span><span class="kr">return</span><span class="w"> </span><span class="n">x</span><span class="w">    </span><span class="c1">// through the parameter is visible through x</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="the-role-of-mutation">
+<h3>The Role of Mutation<a class="headerlink" href="#the-role-of-mutation" title="Permalink to this headline">¶</a></h3>
+<p>It&#8217;s worth noting that in the absence of mutation, value semantics and
+reference semantics are indistinguishable.  You can easily prove that
+to yourself by striking the calls to <code class="docutils literal"><span class="pre">mutate()</span></code> in each of the
+previous examples, and seeing that the equivalences hold for any type.
+In fact, the fundamental difference between reference and value
+semantics is that <strong>value semantics never creates multiple paths to
+the same mutable state</strong>. <a class="footnote-reference" href="#cow" id="id2">[2]</a></p>
+<div class="admonition-struct-vs-class admonition">
+<p class="first admonition-title"><code class="docutils literal"><span class="pre">struct</span></code> vs <code class="docutils literal"><span class="pre">class</span></code></p>
+<p>Although <code class="docutils literal"><span class="pre">struct</span></code>s were designed to support value semantics and
+<code class="docutils literal"><span class="pre">class</span></code>es were designed to support reference semantics, it would
+be wrong to assume that they are always used that way.  As noted
+earlier, in the absence of mutation, value semantics and reference
+semantics are indistinguishable.  Therefore, any immutable <code class="docutils literal"><span class="pre">class</span></code>
+trivially has value semantics (<em>and</em> reference semantics).</p>
+<p class="last">Second, it&#8217;s easy to implement a <code class="docutils literal"><span class="pre">struct</span></code> with reference semantics:
+simply keep the primary value in a <code class="docutils literal"><span class="pre">class</span></code> and refer to it through
+an instance variable.  So, one cannot assume that a <code class="docutils literal"><span class="pre">struct</span></code> type
+has value semantics.  <code class="docutils literal"><span class="pre">Array</span></code> could be seen (depending on how you
+view its value) as an example of a reference-semantics <code class="docutils literal"><span class="pre">struct</span></code>
+from the standard library.</p>
+</div>
+</div>
+</div>
+<div class="section" id="the-problem-with-generics">
+<h2>The Problem With Generics<a class="headerlink" href="#the-problem-with-generics" title="Permalink to this headline">¶</a></h2>
+<p>The classic Liskov principle says the semantics of operations on
+<code class="docutils literal"><span class="pre">Duck</span></code>&#8216;s subtypes need to be consistent with those on <code class="docutils literal"><span class="pre">Duck</span></code> itself,
+so that functions operating on <code class="docutils literal"><span class="pre">Duck</span></code>s still &#8220;work&#8221; when passed a
+<code class="docutils literal"><span class="pre">Mallard</span></code>.  More generally, for a function to make meaningful
+guarantees, the semantics of its sub-operations need to be consistent
+regardless of the actual argument types passed.</p>
+<p>The type of an argument passed by-value to an ordinary function is
+fully constrained, so the &#8220;big three&#8221; have knowable semantics.  The
+type of an ordinary argument passed by-reference is constrained by
+subtype polymorphism, where a (usually implicit) contract between
+base- and sub-types can dictate consistency.</p>
+<p>However, the situation is different for functions with arguments of
+protocol or parameterized type.  In the absence of specific
+constraints to the contrary, the semantics of the big three can vary.</p>
+<div class="section" id="example">
+<h3>Example<a class="headerlink" href="#example" title="Permalink to this headline">¶</a></h3>
+<p>For example, there&#8217;s an algorithm called <code class="docutils literal"><span class="pre">cycle_length</span></code> that
+measures the length of a cycle of states (e.g. the states of a
+pseudo-random number generator).  It needs to make one copy and do
+in-place mutation of the state, rather than wholesale value
+replacement via assignment, which might be expensive.</p>
+<p>Here&#8217;s a version of cycle_length that works when state is a mutable
+value type:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>func cycle_length&lt;State&gt;(
+  s : State, mutate : ( [inout] State ) -&gt; ()
+) -&gt; Int
+  requires State : EqualityComparable
+{
+    State x = s     // one copy                // 1
+    mutate(&amp;x)      // in-place mutation
+    Int n = 1
+    while x != s {                            // 2
+         mutate(&amp;x) // in-place mutation
+         ++n
+    }
+    return n
+}
+</pre></div>
+</div>
+<p>The reason the above breaks when the state is in a class instance is
+that the intended copy in line 1 instead creates a new reference to
+the same state, and the comparison in line 2 (regardless of whether we
+decide <code class="docutils literal"><span class="pre">!=</span></code> does &#8220;identity&#8221; or &#8220;value&#8221; comparison) always succeeds.</p>
+<p>You can write a different implementation that only works on clonable
+classes:</p>
+<pre class="literal-block">
+// Various random number generators will implement this interface
+abstract class RandomNumberGenerator
+  : Clonable, Equalable
+{
+  func nextValue() -&gt; Int
+}
+
+func cycle_length&lt;State&gt;(
+  s : State, mutate : ( [inout] State ) -&gt; ()
+) -&gt; Int
+  requires State : EqualityComparable, <strong>Clonable</strong>
+{
+    State x = s<strong>.clone()</strong>
+    Int n = 1
+    while <strong>! x.equal(s)</strong> {
+        <em>etc.</em>
+}
+
+RandomNumberGenerator x = new MersenneTwister()
+print(
+   cycle_length(x, (x : [inout] RandomNumberGenerator) { x.nextValue() })
+)
+</pre>
+<p>You could also redefine the interface so that it works on both values and
+clonable classes:</p>
+<pre class="literal-block">
+func cycle_length&lt;State&gt;(
+  s : State,
+  <strong>next : (x : State) -&gt; State,</strong>
+  <strong>equal : ([inout] x : State, [inout] y : State) -&gt; Bool</strong>
+) -&gt; Int
+  requires State : EqualityComparable
+{
+    State <strong>x = next(s)</strong>
+    Int n = 1
+    while <strong>!equal(x, s)</strong> {
+         <strong>x = next(x)</strong>
+         ++n
+    }
+    return n
+}
+</pre>
+<p>However, this implementation makes O(N) separate copies of the state.
+I don&#8217;t believe there&#8217;s a reasonable way write this so it works on
+clonable classes, non-classes, and avoids the O(N)
+copies. <a class="footnote-reference" href="#extension" id="id3">[3]</a></p>
+</div>
+<div class="section" id="class-identities-are-values">
+<h3>Class Identities are Values<a class="headerlink" href="#class-identities-are-values" title="Permalink to this headline">¶</a></h3>
+<p>It&#8217;s important to note that the first implementation of
+<code class="docutils literal"><span class="pre">cycle_length</span></code> works when the state is the <em>identity</em>, rather than
+the <em>contents</em> of a class instance.  For example, imagine a circular
+linked list:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>class Node {
+    constructor(Int) { next = this; prev = this }
+
+    // link two circular lists into one big cycle.
+    func join(otherNode : Node) -&gt; () { ... }
+
+    var next : WeakRef&lt;Node&gt; // identity of next node
+    var prev : WeakRef&lt;Node&gt; // identity of previous node
+}
+</pre></div>
+</div>
+<p>We can measure the length of a cycle in these nodes as follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">cycle_length</span><span class="p">(</span><span class="w"> </span><span class="n">someNode</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="n">inout</span><span class="p">]</span><span class="w"> </span><span class="n">Node</span><span class="p">){</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span><span class="p">.</span><span class="n">next</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This is why so many generic algorithms seem to work on both
+<code class="docutils literal"><span class="pre">class</span></code>es and non-<code class="docutils literal"><span class="pre">class</span></code>es: <code class="docutils literal"><span class="pre">class</span></code> <em>identities</em>
+work just fine as values.</p>
+</div>
+</div>
+<div class="section" id="the-role-of-moves">
+<h2>The Role of Moves<a class="headerlink" href="#the-role-of-moves" title="Permalink to this headline">¶</a></h2>
+<p>Further complicating matters is the fact that the big three operations
+can be—and often are—combined in ways that mask the value/reference
+distinction.  In fact both of the following must be present in order
+to observe a difference in behavior:</p>
+<ol class="arabic simple">
+<li>Use of (one of) the big three operations on an object <code class="docutils literal"><span class="pre">x</span></code>,
+creating shared mutable state iff <code class="docutils literal"><span class="pre">x</span></code> is a reference</li>
+<li>In-place mutation of <code class="docutils literal"><span class="pre">x</span></code> <em>while a (reference) copy is extant</em> and
+thus can be observed through the copy iff <code class="docutils literal"><span class="pre">x</span></code> is a reference.</li>
+</ol>
+<p>Take, for example, <code class="docutils literal"><span class="pre">swap</span></code>, which uses variable initialization and
+assignment to exchange two values:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">swap</span><span class="p">&lt;</span><span class="no">T</span><span class="p">&gt;(</span><span class="n">lhs</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="n">inout</span><span class="p">]</span><span class="w"> </span><span class="n">T</span><span class="p">, </span><span class="n">rhs</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="n">inout</span><span class="p">]</span><span class="w"> </span><span class="n">T</span><span class="p">)</span>
+<span class="p">{</span>
+<span class="w">    </span><span class="kd">var </span><span class="nv">tmp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lhs</span><span class="w">   </span><span class="c1">// big 3: initialization - ref copy in tmp</span>
+<span class="w">    </span><span class="n">lhs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rhs</span><span class="w">       </span><span class="c1">// big 3: assignment     - ref copy in lhs</span>
+<span class="w">    </span><span class="n">rhs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tmp</span><span class="w">       </span><span class="c1">// big 3: assignment     - no ref copies remain</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Whether <code class="docutils literal"><span class="pre">T</span></code> is a reference type makes no observable difference in
+the behavior of <code class="docutils literal"><span class="pre">swap</span></code>.  Why?  Because although <code class="docutils literal"><span class="pre">swap</span></code> makes
+reference copies to mutable state, the existence of those copies is
+encapsulated within the algorithm, and it makes no in-place mutations.</p>
+<p>Any such algorithm can be implemented such that copy operations are
+replaced by destructive <em>moves</em>, where the source value is not
+(necessarily) preserved.  Because movability is a weaker requirement
+than copyability, it&#8217;s reasonable to say that <code class="docutils literal"><span class="pre">swap</span></code> is built on
+<em>moves</em>, rather than copies, in the same way that C++&#8217;s <code class="docutils literal"><span class="pre">std::find</span></code>
+is built on input iterators rather than on forward iterators.</p>
+<p>We could imagine a hypothetical syntax for moving in swift, where
+(unlike assignment) the value of the right-hand-side of the <code class="docutils literal"><span class="pre">&lt;-</span></code> is
+not necessarily preserved:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">var </span><span class="nv">tmp</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">lhs</span>
+<span class="n">lhs</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">rhs</span>
+<span class="n">rhs</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">tmp</span>
+</pre></div>
+</div>
+<p>Such operations are safe to use in generic code without regard to the
+differences between value- and reference- semantics.  If this syntax
+were extended to handle function arguments, it would cover the &#8220;big
+three&#8221; operations:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">f</span><span class="p">(</span><span class="o">&lt;-</span><span class="n">x</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="how-to-build-an-interesting-type-with-value-semantics">
+<h2>How to Build an Interesting Type with Value Semantics<a class="headerlink" href="#how-to-build-an-interesting-type-with-value-semantics" title="Permalink to this headline">¶</a></h2>
+<p>Suppose we want to build a variable-sized data structure <code class="docutils literal"><span class="pre">X</span></code> with
+(mutable) value semantics?  How do we do it?</p>
+<p>If we make <code class="docutils literal"><span class="pre">X`</span> <span class="pre">a</span> <span class="pre">``class</span></code>, we automatically get reference semantics, so
+its value must be copied before each mutation, which is tedious and
+error-prone.  Its public mutating interface must be in terms of free
+functions (not methods), so that the original reference value can be
+passed <code class="docutils literal"><span class="pre">[inout]</span></code> and overwritten.  Since there&#8217;s no user access to the
+reference count, we can&#8217;t determine that we hold the only reference to
+the value, so we can&#8217;t optimize copy-on-write, even in single-threaded
+programs.  In multi-threaded programs, where each mutation implies
+synchronization on the reference count, the costs are even higher.</p>
+<p>If we make the type a <code class="docutils literal"><span class="pre">struct</span></code>, you have only two ways to create
+variable-sized data:</p>
+<ol class="arabic simple">
+<li>Hold a type with reference semantics as an instance variable.
+Unfortunately, this is really nothing new; we must still implement
+copy-on-write.  We can, however, use methods for mutation in lieu
+of free functions.</li>
+<li>Use discriminated unions (<code class="docutils literal"><span class="pre">union</span></code>).  Interestingly, a datatype
+built with <code class="docutils literal"><span class="pre">union</span></code> automatically has value semantics.  However,
+there vocabulary of efficient data structures that can be built
+this way is extremely limited.  For example, while a singly-linked
+list is trivial to implement, an efficient doubly-linked list is
+effectively impossible.</li>
+</ol>
+<hr class="docutils" />
+<table class="docutils footnote" frame="void" id="interchange" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>Technically, copies of objects with value semantics
+are interchangeable until they&#8217;re mutated.
+Thereafter, the copies are interchangeable except
+insofar as it matters what value type they are
+<em>aggregated into</em>.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="cow" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id2">[2]</a></td><td>Note that this definition <em>does</em> allow for value semantics
+using copy-on-write</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="extension" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id3">[3]</a></td><td>I can think of a language extension that would allow
+this, but it requires creating a protocol for generic
+copying, adding compiler magic to get both classes and
+structs to conform to it, and telling generic
+algorithm and container authors to use that protocol
+instead of <code class="docutils literal"><span class="pre">=</span></code>, which IMO is really ugly and
+probably not worth the cost.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,217 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Integrating Swift Constructors with Objective-C &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../../_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="../../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../../index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Integrating Swift Constructors with Objective-C</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="integrating-swift-constructors-with-objective-c">
+<h1>Integrating Swift Constructors with Objective-C<a class="headerlink" href="#integrating-swift-constructors-with-objective-c" title="Permalink to this headline">¶</a></h1>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This proposal was rejected, though it helped in the design of the
+final Swift 1 initialization model.</p>
+</div>
+<p>Objective-C&#8217;s &#8220;designated initializers pattern seems at first to
+create a great deal of complication.  However, designated initializers
+are simply the only sane response to Objective-C&#8217;s initialization rules,
+which are the root cause of the complication.</p>
+<p>This proposal suggests an approach to initialization that avoids the
+problems inherent in Objective-C while still <em>allowing</em> Objective-C
+programmers to pursue the designated initializer pattern on subclasses
+of Swift classes.</p>
+<div class="section" id="the-root-of-the-problem">
+<h2>The Root of the Problem<a class="headerlink" href="#the-root-of-the-problem" title="Permalink to this headline">¶</a></h2>
+<p>The root problem with Objective-C&#8217;s initialization rules is that the
+<code class="docutils literal"><span class="pre">init</span></code> methods of a superclass automatically become public members
+of its subclasses.  This leads to a soundness problem:</p>
+<pre class="literal-block">
+&#64;interface SuperClass
+- initSuperClass
+&#64;end
+
+&#64;interface Subclass : Superclass
+- (void)subclassMethod
+&#64;end
+
+&#64;implementation Subclass : Superclass
+char* <strong>name</strong>;                      // never initialized
+
+- (void)print { printf(<strong>name</strong>); } // oops
+&#64;end
+
+mySubclassInstance = [ [Subclass alloc] initSuperClass ]
+</pre>
+<p>Because there is no way to hide a superclass&#8217; <code class="docutils literal"><span class="pre">init</span></code> method from
+clients, ensuring that subclass instances are properly initialized
+requires overriding <em>every</em> superclass initializer in <em>every</em>
+subclass:</p>
+<pre class="literal-block">
+&#64;implementation Subclass : Superclass
+char* name;
+- initSuperClass {
+  [super initSuperClass];       // Don't forget the superclass
+  <strong>name = &quot;Tino&quot;;</strong>
+}
+- (void)print { printf(name); } // OK
+&#64;end
+</pre>
+<p>Following this rule is obviously tedious and error-prone for users.
+Initialization is crucial to correctness, because it is where
+invariants are established.  It therefore should be no more complex
+than everything else to reason about.</p>
+<p>Also, it means adding an <code class="docutils literal"><span class="pre">init</span></code> method in a base class can be
+API-breaking.</p>
+<p>Furthermore, as John McCall pointed out recently, it forces
+inappropriate interfaces on subclasses.  For example, every subclass
+of <code class="docutils literal"><span class="pre">NSObject</span></code> has a parameter-less <code class="docutils literal"><span class="pre">init</span></code> function, whether or not
+there&#8217;s an appropriate way to construct instances of that subclass
+without parameters.  As a result, class designers may be forced to
+expose weaker invariants than the ones they could otherwise establish.</p>
+</div>
+<div class="section" id="exceptions-to-the-rule">
+<h2>Exceptions to the Rule<a class="headerlink" href="#exceptions-to-the-rule" title="Permalink to this headline">¶</a></h2>
+<p>I exaggerated a little in the previous section: because overriding
+<em>every</em> superclass initializer in <em>every</em> subclass is so tedious, the
+Objective C community has identified some situations where you don&#8217;t
+really need to override every <code class="docutils literal"><span class="pre">init</span></code> method:</p>
+<ol class="arabic simple">
+<li>When you know the default zero-initialization of a class&#8217; instance
+variables is good enough, you don&#8217;t need to override any <code class="docutils literal"><span class="pre">init</span></code>
+methods from your superclass.</li>
+<li>If a given superclass&#8217; <code class="docutils literal"><span class="pre">init</span></code> method always calls another
+<code class="docutils literal"><span class="pre">init</span></code> method, you don&#8217;t need to override the first <code class="docutils literal"><span class="pre">init</span></code>
+method because your instance variables will be initialized by your
+override of the second <code class="docutils literal"><span class="pre">init</span></code> method.  In this case, the first
+(outer) <code class="docutils literal"><span class="pre">init</span></code> method is called a <strong>secondary initializer</strong>.  Any
+<code class="docutils literal"><span class="pre">init</span></code> method that&#8217;s not secondary is called a <strong>designated
+initializer</strong>.</li>
+</ol>
+</div>
+<div class="section" id="how-to-think-about-this">
+<h2>How to Think About This<a class="headerlink" href="#how-to-think-about-this" title="Permalink to this headline">¶</a></h2>
+<p>At this point I&#8217;ll make a few assertions that I hope will be
+self-evident, given the foregoing context:</p>
+<ol class="arabic simple">
+<li>If the programmer follows all the rules correctly, one initializer
+is as good as another: every <code class="docutils literal"><span class="pre">init</span></code> method, whether designated or
+secondary, fully initializes all the instance variables.  This is
+true for all clients of the class, including subclassers.</li>
+<li>Distinguishing designated from secondary initializers does nothing
+to provide soundness.  It&#8217;s <em>merely</em> a technique for limiting the
+tedious <code class="docutils literal"><span class="pre">init</span></code> method overrides required of users.</li>
+<li>Swift users would not be well-served by a construction model that
+exposes superclass <code class="docutils literal"><span class="pre">init</span></code> methods to clients of subclasses by
+default.</li>
+</ol>
+</div>
+<div class="section" id="proposal">
+<h2>Proposal<a class="headerlink" href="#proposal" title="Permalink to this headline">¶</a></h2>
+<p>I suggest we define Swift initialization to be as simple and
+easily-understood as possible, and avoid &#8220;interesting&#8221; interactions
+with the more complicated Objective-C initialization process.  If we
+do this, we can treat Objective-C base classes as &#8220;sealed and safe&#8221;
+for the purpose of initialization, and help programmers reason
+effectively about initialization and their class invariants.</p>
+<p>Here are the proposed rules:</p>
+<ul>
+<li><p class="first"><code class="docutils literal"><span class="pre">init</span></code> methods of base classes defined in Objective-C are not, by
+default, part of the public interface of a subclass defined in
+Swift.</p>
+</li>
+<li><p class="first"><code class="docutils literal"><span class="pre">init</span></code> methods of base classes defined in Swift are not, by
+default, part of the public interface of a subclass defined in
+Objective-C.</p>
+</li>
+<li><p class="first"><code class="docutils literal"><span class="pre">self.init(…)</span></code> calls in Swift never dispatch virtually.  We have a
+safe model for &#8220;virtual initialization:&#8221; <code class="docutils literal"><span class="pre">init</span></code> methods can call
+overridable methods after all instance variables and superclasses
+are initialized.  Allowing <em>virtual</em> constructor delegation would
+undermine that safety.</p>
+</li>
+<li><p class="first">As a convenience, when a subclass&#8217; instance variables all have
+initializers, it should be possible to explicitly expose superclass
+init methods in a Swift subclass without writing out complete
+forwarding functions.  For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>@inherit init(x:y:z) // one possible syntax
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>Allowing <code class="docutils literal"><span class="pre">&#64;inherit</span> <span class="pre">init(*)</span></code> is a terrible idea</p>
+<p class="last">It allows superclasses to break their subclasses by adding
+<code class="docutils literal"><span class="pre">init</span></code> methods.</p>
+</div>
+</li>
+</ul>
+</div>
+<div class="section" id="summary">
+<h2>Summary<a class="headerlink" href="#summary" title="Permalink to this headline">¶</a></h2>
+<p>By eliminating by-default <code class="docutils literal"><span class="pre">init</span></code>method inheritance and disabling
+virtual dispatch in constructor delegation, we give class designers
+full control over the state of their constructed instances.  By
+preserving virtual dispatch for non-<code class="docutils literal"><span class="pre">self</span></code>, non-<code class="docutils literal"><span class="pre">super</span></code> calls to
+<code class="docutils literal"><span class="pre">init</span></code> methods, we allow Objective-C programmers to keep using the
+patterns that depend on virtual dispatch, including designated
+initializers and <code class="docutils literal"><span class="pre">initWithCoder</span></code> methods.</p>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,491 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>In-Place Operations &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>In-Place Operations</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="in-place-operations">
+<h1>In-Place Operations<a class="headerlink" href="#in-place-operations" title="Permalink to this headline">¶</a></h1>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Author:</th><td class="field-body">Dave Abrahams</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Author:</th><td class="field-body">Joe Groff</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Abstract:</th><td class="field-body">The goal of efficiently processing complex data structures
+leads naturally to pairs of related operations such as <code class="docutils literal"><span class="pre">+</span></code> and
+<code class="docutils literal"><span class="pre">+=</span></code>: one that produces a new value, and another that mutates on
+the data structure in-place.  By formalizing the relationship and
+adding syntactic affordances, we can make these pairs easier to work
+with and accelerate the evaluation of some common expressions.</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Permalink to this headline">¶</a></h2>
+<p>In recent standard library design meetings about the proper API for
+sets, it was decided that the canonical <code class="docutils literal"><span class="pre">Set</span></code> interface should be
+written in terms of methods: <a class="footnote-reference" href="#operators" id="id1">[1]</a></p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct Set&lt;Element&gt; {
+  public func contains(x: Element) -&gt; Bool                // x ∈ A, A ∋ x
+  public func isSubsetOf(b: Set&lt;Element&gt;) -&gt; Bool         // A ⊆ B
+  public func isStrictSubsetOf(b: Set&lt;Element&gt;) -&gt; Bool   // A ⊂ B
+  public func isSupersetOf(b: Set&lt;Element&gt;) -&gt; Bool       // A ⊇ B
+  public func isStrictSupersetOf(b: Set&lt;Element&gt;) -&gt; Bool // A ⊃ B
+  ...
+}
+</pre></div>
+</div>
+<p>When we started to look at the specifics, however, we ran into a
+familiar pattern:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>...
+  public func union(b: Set&lt;Element&gt;) -&gt; Set&lt;Element&gt;        // A ∪ B
+  public mutating func unionInPlace(b: Set&lt;Element&gt;)        // A ∪= B
+
+  public func intersect(b: Set&lt;Element&gt;) -&gt; Set&lt;Element&gt;    // A ∩ B
+  public mutating func intersectInPlace(b: Set&lt;Element&gt;)    // A ∩= B
+
+  public func subtract(b: Set&lt;Element&gt;) -&gt; Set&lt;Element&gt;     // A - B
+  public mutating func subtractInPlace(b: Set&lt;Element&gt;)     // A -= B
+
+  public func exclusiveOr(b: Set&lt;Element&gt;) -&gt; Set&lt;Element&gt;  // A ⊕ B
+  public mutating func exclusiveOrInPlace(b: Set&lt;Element&gt;)  // A ⊕= B
+</pre></div>
+</div>
+<p>We had seen the same pattern when considering the API for
+<code class="docutils literal"><span class="pre">String</span></code>, but in that case, there are no obvious operator
+spellings in all of Unicode.  For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">struct </span><span class="nc">String</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">public</span><span class="w"> </span><span class="kd">func </span><span class="nf">uppercase</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">String</span>
+<span class="w">  </span><span class="n">public</span><span class="w"> </span><span class="n">mutating</span><span class="w"> </span><span class="kd">func </span><span class="nf">uppercaseInPlace</span><span class="p">()</span>
+
+<span class="w">  </span><span class="n">public</span><span class="w"> </span><span class="kd">func </span><span class="nf">lowercase</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">String</span>
+<span class="w">  </span><span class="n">public</span><span class="w"> </span><span class="n">mutating</span><span class="w"> </span><span class="kd">func </span><span class="nf">lowercaseInPlace</span><span class="p">()</span>
+
+<span class="w">  </span><span class="n">public</span><span class="w"> </span><span class="kd">func </span><span class="nf">replace</span><span class="p">(</span>
+<span class="w">    </span><span class="n">pattern</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">, </span><span class="n">with</span><span class="w"> </span><span class="n">replacement</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">String</span>
+<span class="w">  </span><span class="n">public</span><span class="w"> </span><span class="n">mutating</span><span class="w"> </span><span class="kd">func </span><span class="nf">replaceInPlace</span><span class="p">(</span>
+<span class="w">    </span><span class="n">pattern</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">, </span><span class="n">with</span><span class="w"> </span><span class="n">replacement</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">)</span>
+
+<span class="w">  </span><span class="n">public</span><span class="w"> </span><span class="kd">func </span><span class="nf">trim</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">String</span>
+<span class="w">  </span><span class="n">public</span><span class="w"> </span><span class="n">mutating</span><span class="w"> </span><span class="kd">func </span><span class="nf">trimInPlace</span><span class="p">()</span>
+<span class="w">  </span><span class="o">..</span><span class="p">.</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>It also comes up with generic algorithms such as <code class="docutils literal"><span class="pre">sort()</span></code> (which is
+mutating) and <code class="docutils literal"><span class="pre">sorted()</span></code>, the corresponding non-mutating version.</p>
+<p>We see at least four problems with this kind of API:</p>
+<ol class="arabic">
+<li><p class="first">The lack of a uniform naming convention is problematic.  People
+have already complained about the asymmetry between mutating
+<code class="docutils literal"><span class="pre">sort()</span></code>, and non-mutating <code class="docutils literal"><span class="pre">reverse()</span></code>.  The pattern used by
+<code class="docutils literal"><span class="pre">sort()</span></code> and <code class="docutils literal"><span class="pre">sorted()</span></code> doesn&#8217;t apply everywhere, and penalizes
+the non-mutating form, which should be the more economical of the two.</p>
+</li>
+<li><p class="first">Naming conventions that work everywhere and penalize the mutating
+form are awkward.  In the case of <code class="docutils literal"><span class="pre">String</span></code> it was considered bad
+enough that we didn&#8217;t bother with the mutating versions of any
+operations other than concatenation (which we spelled using <code class="docutils literal"><span class="pre">+</span></code>
+and <code class="docutils literal"><span class="pre">+=</span></code>).</p>
+</li>
+<li><p class="first">Producing a complete interface that defines both variants of each
+operation is needlessly tedious.  A working (if non-optimal)
+mutating version of <code class="docutils literal"><span class="pre">op(x:</span> <span class="pre">T,</span> <span class="pre">y:</span> <span class="pre">U)</span> <span class="pre">-&gt;</span> <span class="pre">T</span></code> can always be defined
+as</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">opInPlace</span><span class="p">(</span><span class="n">inout</span><span class="w"> </span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">T</span><span class="p">, </span><span class="n">y</span><span class="p">:</span><span class="w"> </span><span class="n">U</span><span class="p">) {</span>
+<span class="w">  </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">op</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Default implementations in protocols could do a lot to relieve
+tedium here, but cranking out the same <code class="docutils literal"><span class="pre">xxxInPlace</span></code> pattern for
+each <code class="docutils literal"><span class="pre">xxx</span></code> still amounts to a lot of boilerplate.</p>
+</li>
+<li><p class="first">Without formalizing the relationship between the mutating and
+non-mutating functions, we lose optimization opportunities.  For
+example, it should be possible for the compiler to rewrite</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">let </span><span class="nv">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">intersect</span><span class="p">(</span><span class="n">b</span><span class="p">).</span><span class="n">intersect</span><span class="p">(</span><span class="n">c</span><span class="p">).</span><span class="n">intersect</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>as</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">var </span><span class="nv">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">intersect</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+<span class="n">t</span><span class="p">.</span><span class="n">intersectInPlace</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+<span class="n">t</span><span class="p">.</span><span class="n">intersectInPlace</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+<span class="kd">let </span><span class="nv">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t</span>
+</pre></div>
+</div>
+<p>for efficiency, without forcing the user to sacrifice expressivity.
+This optimization would generalize naturally to more common idioms
+such as:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">let </span><span class="nv">newString</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">s2</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">s3</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">s4</span>
+</pre></div>
+</div>
+<p>Given all the right conditions, it is true that a similar
+optimization can be made at runtime for COW data structures using a
+uniqueness check on the left-hand operand.  However, that approach
+only applies to COW data structures, and penalizes other cases.</p>
+</li>
+</ol>
+</div>
+<div class="section" id="the-proposal">
+<h2>The Proposal<a class="headerlink" href="#the-proposal" title="Permalink to this headline">¶</a></h2>
+<p>Our proposal has four basic components:</p>
+<ol class="arabic simple">
+<li>Solve the naming convention problem by giving the mutating and
+non-mutating functions the same name.</li>
+<li>Establish clarity at the point of use by extending the language to
+support a concise yet distinctive syntax for invoking the mutating
+operation.</li>
+<li>Eliminate tedium by allowing mutating functions to be automatically
+generated from non-mutating ones, and, for value types, vice-versa
+(doing this for reference types is problematic due to the lack of a
+standard syntax for copying the referent).</li>
+<li>Support optimization by placing semantic requirements on mutating
+and non-mutating versions of the same operation, and allowing the
+compiler to make substitutions.</li>
+</ol>
+<div class="section" id="use-one-simple-name">
+<h3>Use One Simple Name<a class="headerlink" href="#use-one-simple-name" title="Permalink to this headline">¶</a></h3>
+<p>There should be one simple name for both in-place and non-mutating
+sorting: <code class="docutils literal"><span class="pre">sort</span></code>.  Set union should be spelled <code class="docutils literal"><span class="pre">union</span></code>.  This
+unification bypasses the knotty problem of naming conventions and
+makes code cleaner and more readable.</p>
+<p>When these paired operations are free functions, we can easily
+distinguish the mutating versions by the presence of the address-of
+operator on the left-hand side:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">let </span><span class="nv">z</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">union</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">)</span><span class="w">  </span><span class="c1">// non-mutating</span>
+<span class="n">union</span><span class="p">(</span><span class="o">&amp;</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">)</span><span class="w">         </span><span class="c1">// mutating</span>
+</pre></div>
+</div>
+<p>Methods are a more interesting case, since on mutating methods,
+<code class="docutils literal"><span class="pre">self</span></code> is <em>implicitly</em> <code class="docutils literal"><span class="pre">inout</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">x</span><span class="p">.</span><span class="n">union</span><span class="p">(</span><span class="n">y</span><span class="p">)</span><span class="w"> </span><span class="c1">// mutating or non-mutating?</span>
+</pre></div>
+</div>
+<p>We propose to allow method pairs of the form:</p>
+<pre class="literal-block">
+extension <strong>X</strong> {
+  func <em>f</em>(p₀: T₀, p₁: T₁, p₂: T₂, …p<em>n</em>: T<em>n</em>) -&gt; <strong>X</strong>
+
+  func <strong>=</strong><em>f</em>(p₀: T₀, p₁: T₁, p₂: T₂, …p<em>n</em>: T<em>n</em>) -&gt; <strong>Void</strong>
+}
+</pre>
+<p>The second <code class="docutils literal"><span class="pre">=f</span></code> method is known as an <strong>assignment method</strong> <a class="footnote-reference" href="#getset" id="id2">[2]</a>.
+Assignment methods are implicitly <code class="docutils literal"><span class="pre">mutating</span></code>.
+Together these two methods, <code class="docutils literal"><span class="pre">f</span></code> and <code class="docutils literal"><span class="pre">=f</span></code>, are known as an
+<strong>assignment method pair</strong>.  This concept generalizes in obvious ways
+to pairs of generic methods, details open for discussion.</p>
+<p>An assignment method is only accessible via a special syntax, for
+example:</p>
+<pre class="literal-block">
+x<strong>.=</strong>union(y)
+</pre>
+<p>The target of an assignment method is always required, even when the
+target is <code class="docutils literal"><span class="pre">self</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">extension </span><span class="nc">Set</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">mutating</span><span class="w"> </span><span class="kd">func </span><span class="nf">frob</span><span class="p">(</span><span class="n">other</span><span class="p">:</span><span class="w"> </span><span class="n">Set</span><span class="p">) {</span>
+<span class="w">    </span><span class="kd">let </span><span class="nv">brick</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">union</span><span class="p">(</span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="c1">// self.union(other) implied</span>
+<span class="w">    </span><span class="bp">self</span><span class="p">.</span><span class="o">=</span><span class="n">union</span><span class="p">(</span><span class="n">other</span><span class="p">)</span><span class="w">       </span><span class="c1">// calls the assignment method</span>
+<span class="w">    </span><span class="n">union</span><span class="p">(</span><span class="n">other</span><span class="p">)</span><span class="w">             </span><span class="c1">// warning: result ignored</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="assignment-operator-pairs">
+<h3>Assignment Operator Pairs<a class="headerlink" href="#assignment-operator-pairs" title="Permalink to this headline">¶</a></h3>
+<p>Many operators have assignment forms, for instance, <code class="docutils literal"><span class="pre">+</span></code> has <code class="docutils literal"><span class="pre">+=</span></code>, <code class="docutils literal"><span class="pre">-</span></code>
+has <code class="docutils literal"><span class="pre">-=</span></code>, and so on. However, not all operators do; <code class="docutils literal"><span class="pre">!=</span></code> is not the
+assignment form of <code class="docutils literal"><span class="pre">!</span></code>, nor is <code class="docutils literal"><span class="pre">&lt;=</span></code> the assignment form of <code class="docutils literal"><span class="pre">&lt;</span></code>. Operators
+with assignment forms can declare this fact in their <code class="docutils literal"><span class="pre">operator</span></code> declaration:</p>
+<pre class="literal-block">
+infix operator + {
+  <strong>has_assignment</strong>
+}
+</pre>
+<p>For an operator <em>op</em> which <code class="docutils literal"><span class="pre">has_assignment</span></code>, a pair of operator definitions
+of the form:</p>
+<pre class="literal-block">
+func <em>op</em>(<strong>X</strong>, Y) -&gt; <strong>X</strong>
+
+func <em>op</em>=(<strong>inout X</strong>, Y) -&gt; <strong>Void</strong>
+</pre>
+<p>is known as an <strong>assignment operator pair</strong>, and similar
+generalization to pairs of generic operators is possible.</p>
+<p>To avoid confusion, the existing <code class="docutils literal"><span class="pre">assignment</span></code> operator modifier, which
+indicates that an operator receives one of its operands implicitly <code class="docutils literal"><span class="pre">inout</span></code>,
+shall be renamed <code class="docutils literal"><span class="pre">mutating</span></code>, since it can also be applied to non-assignment
+operators:</p>
+<pre class="literal-block">
+postfix operator ++ {
+  <strong>mutating</strong> // formerly &quot;assignment&quot;
+}
+</pre>
+<p>If an operator <code class="docutils literal"><span class="pre">op</span></code> which <code class="docutils literal"><span class="pre">has_assignment</span></code> is in scope, it is an error to
+declare <code class="docutils literal"><span class="pre">op=</span></code> as an independent operator:</p>
+<pre class="literal-block">
+operator <em>☃</em> { has_assignment }
+
+// Error: '☃=' is the assignment form of existing operator '☃'
+operator <em>☃=</em> { has_assignment }
+</pre>
+</div>
+</div>
+<div class="section" id="eliminating-tedious-boilerplate">
+<h2>Eliminating Tedious Boilerplate<a class="headerlink" href="#eliminating-tedious-boilerplate" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="generating-the-in-place-form">
+<h3>Generating the In-Place Form<a class="headerlink" href="#generating-the-in-place-form" title="Permalink to this headline">¶</a></h3>
+<p>Given an ordinary method of a type <code class="docutils literal"><span class="pre">X</span></code>:</p>
+<pre class="literal-block">
+extension <strong>X</strong> {
+  func <em>f</em>(p₀: T₀, p₁: T₁, p₂: T₂, …p<em>n</em>: T<em>n</em>) -&gt; <strong>X</strong>
+}
+</pre>
+<p>if there is no corresponding <em>assignment method</em> in <code class="docutils literal"><span class="pre">X</span></code> with the signature</p>
+<pre class="literal-block">
+extension <strong>X</strong> {
+  func <em>=f</em>(p₀: T₀, p₁: T₁, p₂: T₂, …p<em>n</em>: T<em>n</em>) -&gt; <strong>Void</strong>
+}
+</pre>
+<p>we can compile the statement</p>
+<pre class="literal-block">
+x<strong>.=</strong><em>f</em>(a₀, p₁: a₁, p₂: a₂, …p<em>n</em>: a<em>n</em>)
+</pre>
+<p>as though it were written:</p>
+<pre class="literal-block">
+x <strong>= x.</strong><em>f</em>(a₀, p₁: a₁, p₂: a₂, …p<em>n</em>: a<em>n</em>)
+</pre>
+</div>
+<div class="section" id="generating-the-non-mutating-form">
+<h3>Generating the Non-Mutating Form<a class="headerlink" href="#generating-the-non-mutating-form" title="Permalink to this headline">¶</a></h3>
+<p>Given an <em>assignment method</em> of a value type <code class="docutils literal"><span class="pre">X</span></code>:</p>
+<pre class="literal-block">
+extension <strong>X</strong> {
+  func <em>=f</em>(p₀: T₀, p₁: T₁, p₂: T₂, …p<em>n</em>: T<em>n</em>) -&gt; <strong>Void</strong>
+}
+</pre>
+<p>if there is no method in <code class="docutils literal"><span class="pre">X</span></code> with the signature</p>
+<pre class="literal-block">
+extension <strong>X</strong> {
+  func <em>f</em>(p₀: T₀, p₁: T₁, p₂: T₂, …p<em>n</em>: T<em>n</em>) -&gt; <strong>X</strong>
+}
+</pre>
+<p>we can compile the expression</p>
+<pre class="literal-block">
+<strong>x.</strong><em>f</em>(a₀, p₁: a₁, p₂: a₂, …p<em>n</em>: a<em>n</em>)
+</pre>
+<p>as though it were written:</p>
+<pre class="literal-block">
+{
+  (var y: X) -&gt; X in
+  y<strong>.=</strong><em>f</em>(a₀, p₁: a₁, p₂: a₂, …p<em>n</em>: a<em>n</em>)
+  return y
+}(x)
+</pre>
+</div>
+<div class="section" id="generating-operator-forms">
+<h3>Generating Operator Forms<a class="headerlink" href="#generating-operator-forms" title="Permalink to this headline">¶</a></h3>
+<p>If only one member of an <em>assignment operator pair</em> is defined, similar
+rules allow the generation of code using the other member.  E.g.</p>
+<p>we can compile</p>
+<pre class="literal-block">
+x <em>op</em><strong>=</strong> <em>expression</em>
+</pre>
+<p>as though it were written:</p>
+<pre class="literal-block">
+x <strong>=</strong> x <em>op</em> (<em>expression</em>)
+</pre>
+<p>or</p>
+<pre class="literal-block">
+x <em>op</em> <em>expression</em>
+</pre>
+<p>as though it were written:</p>
+<pre class="literal-block">
+{
+  (var y: X) -&gt; X in
+  y <em>op</em><strong>=</strong><em>expression</em>
+  return y
+}(x)
+</pre>
+</div>
+</div>
+<div class="section" id="class-types">
+<h2>Class Types<a class="headerlink" href="#class-types" title="Permalink to this headline">¶</a></h2>
+<p>Assignment and operators are generally applied to value types, but
+it&#8217;s reasonable to ask how to apply them to class types.  The first
+and most obvious requirement, in our opinion, is that immutable class
+types, which are fundamentally values, should work properly.</p>
+<p>An assignment operator for an immutable class <code class="docutils literal"><span class="pre">X</span></code> always has the form:</p>
+<pre class="literal-block">
+func <em>op</em><strong>=</strong> (<strong>inout</strong> lhs: X, rhs: Y) {
+  lhs = <em>expression creating a new X object</em>
+}
+</pre>
+<p>or, with COW optimization:</p>
+<pre class="literal-block">
+func <em>op</em><strong>=</strong> (<strong>inout</strong> lhs: X, rhs: Y) {
+  if isUniquelyReferenced(&amp;lhs) {
+    lhs.<em>mutateInPlace</em>(rhs)
+  }
+  else {
+    lhs = <em>expression creating a new X object</em>
+  }
+}
+</pre>
+<p>Notice that compiling either form depends on an assignment to <code class="docutils literal"><span class="pre">lhs</span></code>.</p>
+<p>A method of a class, however, cannot assign to <code class="docutils literal"><span class="pre">self</span></code>, so no
+explicitly-written assignment method can work properly for an
+immutable class. Therefore, at <em>least</em> until there is a way to reseat <code class="docutils literal"><span class="pre">self</span></code>
+in a method, explicitly-written assignment methods must be banned for
+class types:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>// Invalid code:
+class Foo {
+  let x: Int
+  required init(x: Int) { self.x = x }
+
+  func advanced(amount: Int) -&gt; Self {
+    return Self(x: self.x + amount)
+  }
+
+  // Error, because we can&#39;t reseat self in a class method
+  func =advanced(amount: Int) {
+    self = Self(x: self.x + amount)
+    // This would also be inappropriate, since it would violate value
+    // semantics:
+    // self.x += amount
+  }
+}
+</pre></div>
+</div>
+<p>That said, given an explicitly-written
+non-assignment method that produces a new instance, the rules given
+above for implicitly-generated assignment method semantics work just
+fine:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>// Valid code:
+class Foo {
+  let x: Int
+  required init(x: Int) { self.x = x }
+
+  func advanced(amount: Int) -&gt; Self {
+    return Self(x: self.x + amount)
+  }
+}
+
+var foo = Foo(x: 5)
+// Still OK; exactly the same as foo = foo.advanced(10)
+foo.=advanced(10)
+</pre></div>
+</div>
+<p>The alternative would be to say that explicitly-written assignment methods
+cannot work properly for immutable classes and &#8220;work&#8221; with reference
+semantics on other classes.  We consider this approach indefensible,
+especially when one considers that operators encourage writing
+algorithms that can only work properly with value semantics and will
+show up in protocols.</p>
+</div>
+<div class="section" id="assignment-methods-and-operators-in-protocols">
+<h2>Assignment Methods and Operators In Protocols<a class="headerlink" href="#assignment-methods-and-operators-in-protocols" title="Permalink to this headline">¶</a></h2>
+<p>The presence of a <code class="docutils literal"><span class="pre">=method</span></code> signature in the protocol implies that
+the corresponding non-assignment signature is available.  Declaring
+<code class="docutils literal"><span class="pre">=method</span></code> in a protocol generates two witness table
+slots, one for each method of the implied pair.  If the
+<code class="docutils literal"><span class="pre">=method</span></code> signature is provided in the protocol, any
+corresponding non-assignment <code class="docutils literal"><span class="pre">method</span></code> signature is ignored.  A type can
+satisfy the protocol requirement by providing either or both members
+of the pair; a thunk for the missing member of the pair is generated
+as needed.</p>
+<p>When only the non-assignment <code class="docutils literal"><span class="pre">method</span></code> member of a pair appears in the
+protocol, it generates only one witness table slot.  The assignment
+signature is implicitly available on existentials and archetypes, with
+the usual implicitly-generated semantics.</p>
+<hr class="docutils" />
+<table class="docutils footnote" frame="void" id="operators" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td><p class="first">Unicode operators, which dispatch to those methods,
+would also be supported.  For example,</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>public func ⊃ &lt;T&gt;(a: Set&lt;T&gt;, b: Set&lt;T&gt;) -&gt; Bool {
+  return a.isStrictSupersetOf(b)
+}
+</pre></div>
+</div>
+<p class="last">however we decided that these operators were sufficiently esoteric,
+and also inaccessible using current programming tools, that they
+had to remain a secondary interface.</p>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="getset" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id2">[2]</a></td><td>the similarity to getter/setter pairs is by no means lost on
+the authors.  However, omitting one form in this case has a
+very different meaning than in the case of getter/setter
+pairs.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

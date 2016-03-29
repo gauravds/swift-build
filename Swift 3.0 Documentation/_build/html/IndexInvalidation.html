@@ -1,0 +1,239 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Index Invalidation Rules in the Swift Standard Library &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="contents.html" />
+    <link rel="next" title="Access Control" href="AccessControl.html" />
+    <link rel="prev" title="Contents" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Index Invalidation Rules in the Swift Standard Library</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        «&#160;&#160;<a href="contents.html">Contents</a>
+        &#160;&#160;::&#160;&#160;
+        <a class="uplink" href="contents.html">Contents</a>
+        &#160;&#160;::&#160;&#160;
+        <a href="AccessControl.html">Access Control</a>&#160;&#160;»
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="index-invalidation-rules-in-the-swift-standard-library">
+<h1>Index Invalidation Rules in the Swift Standard Library<a class="headerlink" href="#index-invalidation-rules-in-the-swift-standard-library" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="points-to-consider">
+<h2>Points to consider<a class="headerlink" href="#points-to-consider" title="Permalink to this headline">¶</a></h2>
+<ol class="arabic">
+<li><p class="first">Collections can be implemented as value types or a reference types.</p>
+</li>
+<li><p class="first">Copying an instance of a value type, or copying a reference has
+well-defined semantics built into the language and is not controllable by the
+user code.</p>
+<p>Consequence: value-typed collections in Swift have to use copy-on-write for
+data stored out-of-line in reference-typed buffers.</p>
+</li>
+<li><p class="first">We want to be able to pass/return a Collection along with its indices in a
+safe manner.</p>
+<p>In Swift, unlike C++, indices are not sufficient to access collection data;
+one needs an index and a collection.  Thus, merely passing a collection by
+value to a function should not invalidate indices.</p>
+</li>
+</ol>
+</div>
+<div class="section" id="general-principles">
+<h2>General principles<a class="headerlink" href="#general-principles" title="Permalink to this headline">¶</a></h2>
+<p>In C++, validity of an iterator is a property of the iterator itself, since
+iterators can be dereferenced to access collection elements.</p>
+<p>In Swift, in order to access a collection element designated by an index,
+subscript operator is applied to the collection, <code class="docutils literal"><span class="pre">C[I]</span></code>.  Thus, index is
+valid or not only in context of a certain collection instance at a certain
+point of program execution.  A given index can be valid for zero, one or more
+than one collection instance at the same time.</p>
+<p>An index that is valid for a certain collection designates an element of that
+collection or represents a one-past-end index.</p>
+<p>Operations that access collection elements require valid indexes (this includes
+accessing using the subscript operator, slicing, swapping elements, removing
+elements etc.)</p>
+<p>Using an invalid index to access elements of a collection leads to unspecified
+memory-safe behavior.  (Possibilities include trapping, performing the
+operation on an arbitrary element of this or any other collection etc.)
+Concrete collection types can specify behavior; implementations are advised to
+perform a trap.</p>
+<p>An arbitrary index instance is not valid for an arbitrary collection instance.</p>
+<p>The following points apply to all collections, defined in the library or by the
+user:</p>
+<ol class="arabic">
+<li><p class="first">Indices obtained from a collection <code class="docutils literal"><span class="pre">C</span></code> via <code class="docutils literal"><span class="pre">C.startIndex</span></code>,
+<code class="docutils literal"><span class="pre">C.endIndex</span></code> and other collection-specific APIs returning indices, are
+valid for <code class="docutils literal"><span class="pre">C</span></code>.</p>
+</li>
+<li><p class="first">If an index <code class="docutils literal"><span class="pre">I</span></code> is valid for a collection <code class="docutils literal"><span class="pre">C</span></code>, a copy of <code class="docutils literal"><span class="pre">I</span></code> is valid
+for <code class="docutils literal"><span class="pre">C</span></code>.</p>
+</li>
+<li><p class="first">If an index <code class="docutils literal"><span class="pre">I</span></code> is valid for a collection <code class="docutils literal"><span class="pre">C</span></code>, indices obtained from
+<code class="docutils literal"><span class="pre">I</span></code> via <code class="docutils literal"><span class="pre">I.successor()</span></code>, <code class="docutils literal"><span class="pre">I.predecessor()</span></code>, and other index-specific
+APIs, are valid for <code class="docutils literal"><span class="pre">C</span></code>.
+FIXME: disallow startIndex.predecessor(), endIndex.successor()</p>
+</li>
+<li><p class="first"><strong>Indices of collections and slices freely interoperate.</strong></p>
+<p>If an index <code class="docutils literal"><span class="pre">I</span></code> is valid for a collection <code class="docutils literal"><span class="pre">C</span></code>, it is also valid for
+slices of <code class="docutils literal"><span class="pre">C</span></code>, provided that <code class="docutils literal"><span class="pre">I</span></code> was in the bounds that were passed to
+the slicing subscript.</p>
+<p>If an index <code class="docutils literal"><span class="pre">I</span></code> is valid for a slice obtained from a collection <code class="docutils literal"><span class="pre">C</span></code>, it
+is also valid for <code class="docutils literal"><span class="pre">C</span></code> itself.</p>
+</li>
+<li><p class="first">If an index <code class="docutils literal"><span class="pre">I</span></code> is valid for a collection <code class="docutils literal"><span class="pre">C</span></code>, it is also valid for
+a copy of <code class="docutils literal"><span class="pre">C</span></code>.</p>
+</li>
+<li><p class="first">If an index <code class="docutils literal"><span class="pre">I</span></code> is valid for a collection <code class="docutils literal"><span class="pre">C</span></code>, it continues to be valid
+after a call to a non-mutating method on <code class="docutils literal"><span class="pre">C</span></code>.</p>
+</li>
+<li><p class="first">Calling a non-mutating method on a collection instance does not invalidate
+any indexes.</p>
+</li>
+<li><p class="first">Indices behave as if they are composites of offsets in the underlying data
+structure.  For example:</p>
+<ul class="simple">
+<li>an index into a set backed by a hash table with open addressing is the
+number of the bucket where the element is stored;</li>
+<li>an index into a collection backed by a tree is a sequence of integers
+that describe the path from the root of the tree to the leaf node;</li>
+<li>an index into a lazy flatMap collection consists of a pair of indices, an
+index into the base collection that is being mapped, and the index into
+the result of mapping the element designated by the first index.</li>
+</ul>
+<p>This rule does not imply that indices should be cheap to convert to actual
+integers.  The offsets for consecutive elements could be non-consecutive
+(e.g., in a hash table with open addressing), or consist of multiple
+offsets so that the conversion to an integer is non-trivial (e.g., in a
+tree).</p>
+<p>Note that this rule, like all other rules, is an &#8220;as if&#8221; rule.  As long as
+the resulting semantics match what the rules dictate, the actual
+implementation can be anything.</p>
+<p>Rationale and discussion:</p>
+<ul class="simple">
+<li>This rule is mostly motivated by its consequences, in particular, being
+able to mutate an element of a collection without changing the
+collection&#8217;s structure, and, thus, without invalidating indices.</li>
+<li>Replacing a collection element has runtime complexity O(1) and is not
+considered a structural mutation.  Therefore, there seems to be no reason
+for a collection model would need to invalidate indices from the
+implementation point of view.</li>
+<li>Iterating over a collection and performing mutations in place is a common
+pattern that Swift&#8217;s collection library needs to support.  If replacing
+individual collection elements would invalidate indices, many common
+algorithms (like sorting) wouldn&#8217;t be implementable directly with
+indices; the code would need to maintain its own shadow indices, for
+example, plain integers, that are not invalidated by mutations.</li>
+</ul>
+</li>
+</ol>
+<p>Consequences:</p>
+<ul>
+<li><p class="first">The setter of <code class="docutils literal"><span class="pre">MutableCollection.subscript(_:</span> <span class="pre">Index)</span></code> does not invalidate
+any indices.  Indices are composites of offsets, so replacing the value does
+not change the shape of the data structure and preserves offsets.</p>
+</li>
+<li><p class="first">A value type mutable linked list cannot conform to
+<code class="docutils literal"><span class="pre">MutableCollectionType</span></code>.  An index for a linked list has to be implemented
+as a pointer to the list node to provide O(1) element access.  Mutating an
+element of a non-uniquely referenced linked list will create a copy of the
+nodes that comprise the list.  Indices obtained before the copy was made
+would point to the old nodes and wouldn&#8217;t be valid for the copy of the list.</p>
+<p>It is still valid to have a value type linked list conform to
+<code class="docutils literal"><span class="pre">CollectionType</span></code>, or to have a reference type mutable linked list conform
+to <code class="docutils literal"><span class="pre">MutableCollection</span></code>.</p>
+</li>
+</ul>
+<p>The following points apply to all collections by default, but specific
+collection implementations can be less strict:</p>
+<ol class="arabic simple">
+<li>A call to a mutating method on a collection instance, except the setter of
+<code class="docutils literal"><span class="pre">MutableCollection.subscript(_:</span> <span class="pre">Index)</span></code>, invalidates all indices for that
+collection instance.</li>
+</ol>
+<p>Consequences:</p>
+<ul class="simple">
+<li>Passing a collection as an <code class="docutils literal"><span class="pre">inout</span></code> argument invalidates all indexes for
+that collection instance, unless the function explicitly documents stronger
+guarantees.  (The function can call mutating methods on an <code class="docutils literal"><span class="pre">inout</span></code> argument
+or completely replace it.)<ul>
+<li><code class="docutils literal"><span class="pre">Swift.swap()</span></code> does not invalidate any indexes.</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="additional-guarantees-for-swift-array-swift-contiguousarray-swift-arrayslice">
+<h2>Additional guarantees for <code class="docutils literal"><span class="pre">Swift.Array</span></code>, <code class="docutils literal"><span class="pre">Swift.ContiguousArray</span></code>, <code class="docutils literal"><span class="pre">Swift.ArraySlice</span></code><a class="headerlink" href="#additional-guarantees-for-swift-array-swift-contiguousarray-swift-arrayslice" title="Permalink to this headline">¶</a></h2>
+<p><strong>Valid array indexes can be created without using Array APIs.</strong>  Array indexes
+are plain integers.  Integers that are dynamically in the range <code class="docutils literal"><span class="pre">0..&lt;A.count</span></code>
+are valid indexes for the array or slice <code class="docutils literal"><span class="pre">A</span></code>.  It does not matter if an index
+was obtained from the collection instance, or derived from input or unrelated
+data.</p>
+<p><strong>Traps are guaranteed.</strong>  Using an invalid index to designate elements of an
+array or an array slice is guaranteed to perform a trap.</p>
+</div>
+<div class="section" id="additional-guarantees-for-swift-dictionary">
+<h2>Additional guarantees for <code class="docutils literal"><span class="pre">Swift.Dictionary</span></code><a class="headerlink" href="#additional-guarantees-for-swift-dictionary" title="Permalink to this headline">¶</a></h2>
+<p><strong>Insertion into a Dictionary invalidates indexes only on a rehash.</strong>  If a
+<code class="docutils literal"><span class="pre">Dictionary</span></code> has enough free buckets (guaranteed by calling an initializer or
+reserving space), then inserting elements does not invalidate indexes.</p>
+<p>Note: unlike C++&#8217;s <code class="docutils literal"><span class="pre">std::unordered_map</span></code>, removing elements from a
+<code class="docutils literal"><span class="pre">Dictionary</span></code> invalidates indexes.</p>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        «&#160;&#160;<a href="contents.html">Contents</a>
+        &#160;&#160;::&#160;&#160;
+        <a class="uplink" href="contents.html">Contents</a>
+        &#160;&#160;::&#160;&#160;
+        <a href="AccessControl.html">Access Control</a>&#160;&#160;»
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

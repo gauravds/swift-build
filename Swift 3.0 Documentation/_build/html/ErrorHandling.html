@@ -1,0 +1,744 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Error Handling in Swift 2.0 &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="contents.html" />
+    <link rel="next" title="Error Handling Rationale and Proposal" href="ErrorHandlingRationale.html" />
+    <link rel="prev" title="Parseable Driver Output" href="DriverParseableOutput.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Error Handling in Swift 2.0</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        «&#160;&#160;<a href="DriverParseableOutput.html">Parseable Driver Output</a>
+        &#160;&#160;::&#160;&#160;
+        <a class="uplink" href="contents.html">Contents</a>
+        &#160;&#160;::&#160;&#160;
+        <a href="ErrorHandlingRationale.html">Error Handling Rationale and Proposal</a>&#160;&#160;»
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="error-handling-in-swift-2-0">
+<h1>Error Handling in Swift 2.0<a class="headerlink" href="#error-handling-in-swift-2-0" title="Permalink to this headline">¶</a></h1>
+<p>As a tentpole feature for Swift 2.0, we are introducing a new
+first-class error handling model.  This feature provides standardized
+syntax and language affordances for throwing, propagating, catching,
+and manipulating recoverable error conditions.</p>
+<p>Error handling is a well-trod path, with many different approaches in
+other languages, many of them problematic in various ways.  We believe
+that our approach provides an elegant solution, drawing on the lessons
+we&#8217;ve learned from other languages and fixing or avoiding some of the
+pitfalls.  The result is expressive and concise while still feeling
+explicit, safe, and familiar; and we believe it will work beautifully
+with the Cocoa APIs.</p>
+<p>We&#8217;re intentionally not using the term &#8220;exception handling&#8221;, which
+carries a lot of connotations from its use in other languages.  Our
+proposal has some similarities to the exceptions systems in those
+languages, but it also has a lot of important differences.</p>
+<div class="section" id="kinds-of-error">
+<h2>Kinds of Error<a class="headerlink" href="#kinds-of-error" title="Permalink to this headline">¶</a></h2>
+<p>What exactly is an &#8220;error&#8221;?  There are many possible error conditions,
+and they don&#8217;t all make sense to handle in exactly the same way,
+because they arise in different circumstances and programmers have to
+react to them differently.</p>
+<p>We can break errors down into four categories, in increasing order of
+severity:</p>
+<p>A <strong>simple domain error</strong> arises from an operation that can fail in
+some obvious way and which is often invoked speculatively.  Parsing an
+integer from a string is a really good example.  The client doesn&#8217;t
+need a detailed description of the error and will usually want to
+handle the error immediately.  These errors are already well-modeled
+by returning an optional value; we don&#8217;t need a more complex language
+solution for them.</p>
+<p>A <strong>recoverable error</strong> arises from an operation which can fail in
+complex ways, but whose errors can be reasonably anticipated in
+advance.  Examples including opening a file or reading from a network
+connection.  These are the kinds of errors that Apple&#8217;s APIs use
+NSError for today, but there are close analogues in many other APIs,
+such as <code class="docutils literal"><span class="pre">errno</span></code> in POSIX.</p>
+<p>Ignoring this kind of error is usually a bad idea, and it can even be
+dangerous (e.g. by introducing a security hole).  Developers should be
+strongly encouraged to write code that handles the error.  It&#8217;s common
+for developers to want to handle errors from different operations in
+the same basic way, either by reporting the error to the user or
+passing the error back to their own clients.</p>
+<p>These errors will be the focus on this proposal.</p>
+<p>The final two classes of error are outside the scope of this proposal.
+A <strong>universal error</strong> is theoretically recoverable, but by its nature
+the language can&#8217;t help the programmer anticipate where it will come
+from.  A <strong>logic failure</strong> arises from a programmer mistake and should
+not be recoverable at all.  In our system, these kinds of errors are
+reported either with Objective-C/C++ exceptions or simply by
+logging a message and calling <code class="docutils literal"><span class="pre">abort()</span></code>.  Both kinds of error are
+discussed extensively in the rationale.  Having considered them
+carefully, we believe that we can address them in a later release
+without significant harm.</p>
+</div>
+<div class="section" id="aspects-of-the-design">
+<h2>Aspects of the Design<a class="headerlink" href="#aspects-of-the-design" title="Permalink to this headline">¶</a></h2>
+<p>This approach proposed here is very similar to the error handling
+model manually implemented in Objective-C with the <code class="docutils literal"><span class="pre">NSError</span></code>
+convention.  Notably, the approach preserves these advantages of this
+convention:</p>
+<ul class="simple">
+<li>Whether a method produces an error (or not) is an explicit part of
+its API contract.</li>
+<li>Methods default to <em>not</em> producing errors unless they are explicitly
+marked.</li>
+<li>The control flow within a function is still mostly explicit: a
+maintainer can tell exactly which statements can produce an error,
+and a simple inspection reveals how the function reacts to the
+error.</li>
+<li>Throwing an error provides similar performance to allocating an
+error and returning it &#8211; it isn&#8217;t an expensive, table-based stack
+unwinding process.</li>
+<li>Cocoa APIs using standard <code class="docutils literal"><span class="pre">NSError</span></code> patterns can be imported into
+this world automatically.  Other common patterns (e.g. <code class="docutils literal"><span class="pre">CFError</span></code>,
+<code class="docutils literal"><span class="pre">errno</span></code>) can be added to the model in future versions of Swift.</li>
+</ul>
+<p>In addition, we feel that this design improves on Objective-C&#8217;s error
+handling approach in a number of ways:</p>
+<ul class="simple">
+<li>It eliminates a lot of boilerplate control-flow code for propagating
+errors.</li>
+<li>The syntax for error handling will feel familiar to people used to
+exception handling in other languages.</li>
+<li>Defining custom error types is simple and ties in elegantly with
+Swift enums.</li>
+</ul>
+<p>As to basic syntax, we decided to stick with the familiar language of
+exception handling.  We considered intentionally using different terms
+(like <code class="docutils literal"><span class="pre">raise</span></code> / <code class="docutils literal"><span class="pre">handle</span></code>) to try to distinguish our approach from
+other languages.  However, by and large, error propagation in this
+proposal works like it does in exception handling, and people are
+inevitably going to make the connection.  Given that, we couldn&#8217;t find
+a compelling reason to deviate from the <code class="docutils literal"><span class="pre">throw</span></code> / <code class="docutils literal"><span class="pre">catch</span></code> legacy.</p>
+<p>This document just contains the basic proposal and will be very
+light on rationale.  We considered many different languages and
+programming environments as part of making this proposal, and there&#8217;s
+an extensive discussion of them in the separate rationale document.
+For example, that document explains why we don&#8217;t simply allow all
+functions to throw, why we don&#8217;t propagate errors using simply an
+<code class="docutils literal"><span class="pre">ErrorOr&lt;T&gt;</span></code> return type, and why we don&#8217;t just make error propagation
+part of a general monad feature.  We encourage you to read that
+rationale if you&#8217;re interested in understanding why we made the
+decisions we did.</p>
+<p>With that out of the way, let&#8217;s get to the details of the proposal.</p>
+</div>
+<div class="section" id="typed-propagation">
+<h2>Typed propagation<a class="headerlink" href="#typed-propagation" title="Permalink to this headline">¶</a></h2>
+<p>Whether a function can throw is part of its type.  This applies to all
+functions, whether they&#8217;re global functions, methods, or closures.</p>
+<p>By default, a function cannot throw.  The compiler statically enforces
+this: anything the function does which can throw must appear in a
+context which handles all errors.</p>
+<p>A function can be declared to throw by writing <code class="docutils literal"><span class="pre">throws</span></code> on the
+function declaration or type:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>func foo() -&gt; Int {  // This function is not permitted to throw.
+func bar() throws -&gt; Int {   // This function is permitted to throw.
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">throws</span></code> is written before the arrow to give a sensible and consistent
+grammar for function types and implicit <code class="docutils literal"><span class="pre">()</span></code> result types, e.g.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">baz</span><span class="p">()</span><span class="nf"> throws</span><span class="p"> {</span>
+
+<span class="c1">// Takes a &#39;callback&#39; function that can throw.</span>
+<span class="c1">// &#39;fred&#39; itself can also throw.</span>
+<span class="kd">func </span><span class="nf">fred</span><span class="p">(</span><span class="n">callback</span><span class="p">:</span><span class="w"> </span><span class="p">(</span><span class="n">UInt8</span><span class="p">)</span><span class="nf"> throws</span><span class="o"> -&gt; </span><span class="p">())</span><span class="nf"> throws</span><span class="p"> {</span>
+
+<span class="c1">// These are distinct types.</span>
+<span class="kd">let </span><span class="nv">a</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">()</span>
+<span class="kd">let </span><span class="nv">b</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="n">throws</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">()</span>
+<span class="kd">let </span><span class="nv">c</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="n">throws</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">()</span>
+<span class="kd">let </span><span class="nv">d</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="n">throws</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="n">throws</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">()</span>
+</pre></div>
+</div>
+<p>For curried functions, <code class="docutils literal"><span class="pre">throws</span></code> only applies to the innermost
+function.  This function has type <code class="docutils literal"><span class="pre">(Int)</span> <span class="pre">-&gt;</span> <span class="pre">(Int)</span> <span class="pre">throws</span> <span class="pre">-&gt;</span> <span class="pre">Int</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">jerry</span><span class="p">(</span><span class="n">i</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)(</span><span class="n">j</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> throws</span><span class="o"> -&gt; </span><span class="no">Int</span><span class="p"> {</span>
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">throws</span></code> is tracked as part of the type system: a function value
+must also declare whether it can throw.  Functions that cannot throw
+are a subtype of functions that can, so you can use a function that
+can&#8217;t throw anywhere you could use a function that can:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>func rachel() -&gt; Int { return 12 }
+func donna(generator: () throws -&gt; Int) -&gt; Int { ... }
+
+donna(rachel)
+</pre></div>
+</div>
+<p>The reverse is not true, since the caller would not be prepared to
+handle the error.</p>
+<p>A call to a function which can throw within a context that is not
+allowed to throw is rejected by the compiler.</p>
+<p>It isn&#8217;t possible to overload functions solely based on whether the
+functions throw.  That is, this is not legal:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">foo</span><span class="p">() {</span>
+<span class="kd">func </span><span class="nf">foo</span><span class="p">()</span><span class="nf"> throws</span><span class="p"> {</span>
+</pre></div>
+</div>
+<p>A throwing method cannot override a non-throwing method or satisfy a
+non-throwing protocol requirement.  However, a non-throwing method can
+override a throwing method or satisfy a throwing protocol requirement.</p>
+<p>It is valuable to be able to overload higher-order functions based on
+whether an argument function throws, so this is allowed:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">callback</span><span class="p">:</span><span class="w"> </span><span class="p">()</span><span class="nf"> throws</span><span class="o"> -&gt; </span><span class="no">Bool</span><span class="p">) {</span>
+<span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">callback</span><span class="p">:</span><span class="w"> </span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">Bool</span><span class="p">) {</span>
+</pre></div>
+</div>
+<div class="section" id="rethrows">
+<h3><code class="docutils literal"><span class="pre">rethrows</span></code><a class="headerlink" href="#rethrows" title="Permalink to this headline">¶</a></h3>
+<p>Functions which take a throwing function argument (including as an
+autoclosure) can be marked as <code class="docutils literal"><span class="pre">rethrows</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>extension Array {
+  func map&lt;U&gt;(fn: ElementType throws -&gt; U) rethrows -&gt; [U]
+}
+</pre></div>
+</div>
+<p>It is an error if a function declared <code class="docutils literal"><span class="pre">rethrows</span></code> does not include a
+throwing function in at least one of its parameter clauses.</p>
+<p><code class="docutils literal"><span class="pre">rethrows</span></code> is identical to <code class="docutils literal"><span class="pre">throws</span></code>, except that the function
+promises to only throw if one of its argument functions throws.</p>
+<p>More formally, a function is <em>rethrowing-only</em> for a function <em>f</em> if:</p>
+<ul class="simple">
+<li>it is a throwing function parameter of <em>f</em>,</li>
+<li>it is a non-throwing function, or</li>
+<li>it is implemented within <em>f</em> (i.e. it is either <em>f</em> or a function or
+closure defined therein) and it does not throw except by either:<ul>
+<li>calling a function that is rethrowing-only for <em>f</em> or</li>
+<li>calling a function that is <code class="docutils literal"><span class="pre">rethrows</span></code>, passing only functions
+that are rethrowing-only for <em>f</em>.</li>
+</ul>
+</li>
+</ul>
+<p>It is an error if a <code class="docutils literal"><span class="pre">rethrows</span></code> function is not rethrowing-only for
+itself.</p>
+<p>A <code class="docutils literal"><span class="pre">rethrows</span></code> function is considered to be a throwing function.
+However, a direct call to a <code class="docutils literal"><span class="pre">rethrows</span></code> function is considered to not
+throw if it is fully applied and none of the function arguments can
+throw.  For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// This call to map is considered not to throw because its</span>
+<span class="c1">// argument function does not throw.</span>
+<span class="kd">let </span><span class="nv">absolutePaths</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">paths</span><span class="p">.</span><span class="n">map</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="s">&quot;/&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">$0</span><span class="w"> </span><span class="p">}</span>
+
+<span class="c1">// This call to map is considered to throw because its</span>
+<span class="c1">// argument function does throw.</span>
+<span class="kd">let </span><span class="nv">streams</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">try</span><span class="w"> </span><span class="n">absolutePaths</span><span class="p">.</span><span class="n">map</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">try</span><span class="w"> </span><span class="no">InputStream</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span><span class="w"> </span><span class="nv">$0</span><span class="p">)</span><span class="w"> </span><span class="p">}</span>
+</pre></div>
+</div>
+<p>For now, <code class="docutils literal"><span class="pre">rethrows</span></code> is a property of declared functions, not of
+function values.  Binding a variable (even a constant) to a function
+loses the information that the function was <code class="docutils literal"><span class="pre">rethrows</span></code>, and calls to
+it will use the normal rules, meaning that they will be considered to
+throw regardless of whether a non-throwing function is passed.</p>
+<p>For the purposes of override and conformance checking, <code class="docutils literal"><span class="pre">rethrows</span></code>
+lies between <code class="docutils literal"><span class="pre">throws</span></code> and non-<code class="docutils literal"><span class="pre">throws</span></code>.  That is, an ordinary
+throwing method cannot override a <code class="docutils literal"><span class="pre">rethrows</span></code> method, which cannot
+override a non-throwing method; but an ordinary throwing method can be
+overridden by a <code class="docutils literal"><span class="pre">rethrows</span></code> method, which can be overridden by a
+non-throwing method.  Equivalent rules apply for protocol conformance.</p>
+</div>
+</div>
+<div class="section" id="throwing-an-error">
+<h2>Throwing an error<a class="headerlink" href="#throwing-an-error" title="Permalink to this headline">¶</a></h2>
+<p>The <code class="docutils literal"><span class="pre">throw</span></code> statement begins the propagation of an error.  It always
+takes an argument, which can be any value that conforms to the
+<code class="docutils literal"><span class="pre">ErrorProtocol</span></code> protocol (described below).</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kr">if </span><span class="n">timeElapsed</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">timeThreshold</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">throw</span><span class="w"> </span><span class="n">HomeworkError</span><span class="p">.</span><span class="n">Overworked</span>
+<span class="p">}</span>
+
+<span class="n">throw</span><span class="w"> </span><span class="no">NSError</span><span class="p">(</span><span class="n">domain</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;whatever&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">code</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="n">userInfo</span><span class="p">:</span><span class="w"> </span><span class="n">nil</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As mentioned above, attempting to throw an error out of a function not
+marked <code class="docutils literal"><span class="pre">throws</span></code> is a static compiler error.</p>
+</div>
+<div class="section" id="catching-errors">
+<h2>Catching errors<a class="headerlink" href="#catching-errors" title="Permalink to this headline">¶</a></h2>
+<p>A <code class="docutils literal"><span class="pre">catch</span></code> clause includes an optional pattern that matches the
+error.  This pattern can use any of the standard pattern-matching
+tools provided by <code class="docutils literal"><span class="pre">switch</span></code> statements in Swift, including boolean
+<code class="docutils literal"><span class="pre">where</span></code> conditions.  The pattern can be omitted; if so, a <code class="docutils literal"><span class="pre">where</span></code>
+condition is still permitted.  If the pattern is omitted, or if it
+does not bind a different name to the error, the name <code class="docutils literal"><span class="pre">error</span></code> is
+automatically bound to the error as if with a <code class="docutils literal"><span class="pre">let</span></code> pattern.</p>
+<p>The <code class="docutils literal"><span class="pre">try</span></code> keyword is used for other purposes which it seems to fit far
+better (see below), so <code class="docutils literal"><span class="pre">catch</span></code> clauses are instead attached to a
+generalized <code class="docutils literal"><span class="pre">do</span></code> statement:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// Simple do statement (without a trailing while condition),</span>
+<span class="c1">// just provides a scope for variables defined inside of it.</span>
+<span class="n">do</span><span class="w"> </span><span class="p">{</span>
+<span class="w">   </span><span class="kd">let </span><span class="nv">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">foo</span><span class="p">()</span>
+<span class="p">}</span>
+
+<span class="c1">// do statement with two catch clauses.</span>
+<span class="n">do</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="o">..</span><span class="p">.</span>
+
+<span class="p">}</span><span class="w"> </span><span class="n">catch</span><span class="w"> </span><span class="n">HomeworkError</span><span class="p">.</span><span class="n">Overworked</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// a conditionally-executed catch clause</span>
+
+<span class="p">}</span><span class="w"> </span><span class="n">catch</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// a catch-all clause.</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>As with <code class="docutils literal"><span class="pre">switch</span></code> statements, Swift makes an effort to understand
+whether catch clauses are exhaustive.  If it can determine it is, then
+the compiler considers the error to be handled.  If not, the error
+automatically propagates out out of scope, either to a lexically
+enclosing <code class="docutils literal"><span class="pre">catch</span></code> clause or out of the containing function (which must
+be marked <code class="docutils literal"><span class="pre">throws</span></code>).</p>
+<p>We expect to refine the <code class="docutils literal"><span class="pre">catch</span></code> syntax with usage experience.</p>
+</div>
+<div class="section" id="errorprotocol">
+<h2><code class="docutils literal"><span class="pre">ErrorProtocol</span></code><a class="headerlink" href="#errorprotocol" title="Permalink to this headline">¶</a></h2>
+<p>The Swift standard library will provide <code class="docutils literal"><span class="pre">ErrorProtocol</span></code>, a protocol with
+a very small interface (which is not described in this proposal).  The
+standard pattern should be to define the conformance of an <code class="docutils literal"><span class="pre">enum</span></code> to
+the type:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">HomeworkError</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">ErrorProtocol</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">Overworked</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">Impossible</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">EatenByCat</span><span class="p">(</span><span class="n">Cat</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">StopStressingMeWithYourRules</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">enum</span></code> provides a namespace of errors, a list of possible errors
+within that namespace, and optional values to attach to each option.</p>
+<p>Note that this corresponds very cleanly to the <code class="docutils literal"><span class="pre">NSError</span></code> model of an
+error domain, an error code, and optional user data.  We expect to
+import system error domains as enums that follow this approach and
+implement <code class="docutils literal"><span class="pre">ErrorProtocol</span></code>.  <code class="docutils literal"><span class="pre">NSError</span></code> and <code class="docutils literal"><span class="pre">CFError</span></code> themselves will also
+conform to <code class="docutils literal"><span class="pre">ErrorProtocol</span></code>.</p>
+<p>The physical representation (still being nailed down) will make it
+efficient to embed an <code class="docutils literal"><span class="pre">NSError</span></code> as an <code class="docutils literal"><span class="pre">ErrorProtocol</span></code> and vice-versa.  It
+should be possible to turn an arbitrary Swift <code class="docutils literal"><span class="pre">enum</span></code> that conforms to
+<code class="docutils literal"><span class="pre">ErrorProtocol</span></code> into an <code class="docutils literal"><span class="pre">NSError</span></code> by using the qualified type name as the
+domain key, the enumerator as the error code, and turning the payload
+into user data.</p>
+</div>
+<div class="section" id="automatic-marked-propagation-of-errors">
+<h2>Automatic, marked, propagation of errors<a class="headerlink" href="#automatic-marked-propagation-of-errors" title="Permalink to this headline">¶</a></h2>
+<p>Once an error is thrown, Swift will automatically propagate it out of
+scopes (that permit it), rather than relying on the programmer to
+manually check for errors and do their own control flow.  This is just
+a lot less boilerplate for common error handling tasks.  However,
+doing this naively would introduce a lot of implicit control flow,
+which makes it difficult to reason about the function&#8217;s behavior.
+This is a serious maintenance problem and has traditionally been a
+considerable source of bugs in languages that heavily use exceptions.</p>
+<p>Therefore, while Swift automatically propagates errors, it requires
+that statements and expressions that can implicitly throw be marked
+with the <code class="docutils literal"><span class="pre">try</span></code> keyword.  For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">readStuff</span><span class="p">()</span><span class="nf"> throws</span><span class="p"> {</span>
+<span class="w">  </span><span class="c1">// loadFile can throw an error.  If so, it propagates out of readStuff.</span>
+<span class="w">  </span><span class="n">try</span><span class="w"> </span><span class="n">loadFile</span><span class="p">(</span><span class="s">&quot;mystuff.txt&quot;</span><span class="p">)</span>
+
+<span class="w">  </span><span class="c1">// This is a semantic error; the &#39;try&#39; keyword is required</span>
+<span class="w">  </span><span class="c1">// to indicate that it can throw.</span>
+<span class="w">  </span><span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stream</span><span class="p">.</span><span class="n">readFloat</span><span class="p">()</span>
+
+<span class="w">  </span><span class="c1">// This is okay; the try covers the entire statement.</span>
+<span class="w">  </span><span class="n">try</span><span class="w"> </span><span class="n">y</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">stream</span><span class="p">.</span><span class="n">readFloat</span><span class="p">()</span>
+
+<span class="w">  </span><span class="c1">// This try applies to readBool().</span>
+<span class="w">  </span><span class="kr">if </span><span class="n">try</span><span class="w"> </span><span class="n">stream</span><span class="p">.</span><span class="n">readBool</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// This try applies to both of these calls.</span>
+<span class="w">    </span><span class="kd">let </span><span class="nv">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">try</span><span class="w"> </span><span class="n">stream</span><span class="p">.</span><span class="n">readInt</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">stream</span><span class="p">.</span><span class="n">readInt</span><span class="p">()</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="kr">if </span><span class="kd">let </span><span class="nv">err</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stream</span><span class="p">.</span><span class="n">getOutOfBandError</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Of course, the programmer doesn&#39;t have to mark explicit throws.</span>
+<span class="w">    </span><span class="n">throw</span><span class="w"> </span><span class="n">err</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Developers can choose to &#8220;scope&#8221; the <code class="docutils literal"><span class="pre">try</span></code> very tightly by writing it
+within parentheses or on a specific argument or list element:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// Ok.</span>
+<span class="kd">let </span><span class="nv">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">try</span><span class="w"> </span><span class="n">stream</span><span class="p">.</span><span class="n">readInt</span><span class="p">())</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">try</span><span class="w"> </span><span class="n">stream</span><span class="p">.</span><span class="n">readInt</span><span class="p">())</span>
+
+<span class="c1">// Semantic error: the try only covers the parenthesized expression.</span>
+<span class="kd">let </span><span class="nv">x2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">try</span><span class="w"> </span><span class="n">stream</span><span class="p">.</span><span class="n">readInt</span><span class="p">())</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">stream</span><span class="p">.</span><span class="n">readInt</span><span class="p">()</span>
+
+<span class="c1">// The try applies to the first array element.  Of course, the</span>
+<span class="c1">// developer could cover the entire array by writing the try outside.</span>
+<span class="kd">let </span><span class="nv">array</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="n">try</span><span class="w"> </span><span class="n">foo</span><span class="p">(),</span><span class="w"> </span><span class="n">bar</span><span class="p">(),</span><span class="w"> </span><span class="n">baz</span><span class="p">()</span><span class="w"> </span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Some developers may wish to do this to make the specific throwing
+calls very clear.  Other developers may be content with knowing that
+something within a statement can throw. The compiler&#8217;s fixit hints will
+guide developers towards inserting a single <code class="docutils literal"><span class="pre">try</span></code> that covers the entire
+statement.  This could potentially be controlled someday by a coding
+style flag passed to the compiler.</p>
+<div class="section" id="try">
+<h3><code class="docutils literal"><span class="pre">try!</span></code><a class="headerlink" href="#try" title="Permalink to this headline">¶</a></h3>
+<p>To concisely indicate that a call is known to not actually throw at
+runtime, <code class="docutils literal"><span class="pre">try</span></code> can be decorated with <code class="docutils literal"><span class="pre">!</span></code>, turning the error check
+into a runtime assertion that the call does not throw.</p>
+<p>For the purposes of checking that all errors are handled, a <code class="docutils literal"><span class="pre">try!</span></code>
+expression is considered to handle any error originating from within
+its operand.</p>
+<p><code class="docutils literal"><span class="pre">try!</span></code> is otherwise exactly like <code class="docutils literal"><span class="pre">try</span></code>: it can appear in exactly
+the same positions and doesn&#8217;t affect the type of an expression.</p>
+</div>
+</div>
+<div class="section" id="manual-propagation-and-manipulation-of-errors">
+<h2>Manual propagation and manipulation of errors<a class="headerlink" href="#manual-propagation-and-manipulation-of-errors" title="Permalink to this headline">¶</a></h2>
+<p>Taking control over the propagation of errors is important for some
+advanced use cases (e.g. transporting an error result across threads
+when synchronizing a future) and can be more convenient or natural for
+specific use cases (e.g. handling a specific call differently within a
+context that otherwise allows propagation).</p>
+<p>As such, the Swift standard library should provide a standard
+Rust-like <code class="docutils literal"><span class="pre">Result&lt;T&gt;</span></code> enum, along with API for working with it,
+e.g.:</p>
+<ul class="simple">
+<li>A function to evaluate an error-producing closure and capture the
+result as a <code class="docutils literal"><span class="pre">Result&lt;T&gt;</span></code>.</li>
+<li>A function to unpack a <code class="docutils literal"><span class="pre">Result&lt;T&gt;</span></code> by either returning its
+value or propagating the error in the current context.</li>
+</ul>
+<p>This is something that composes on top of the basic model, but that
+has not been designed yet and details aren&#8217;t included in this
+proposal.</p>
+<p>The name <code class="docutils literal"><span class="pre">Result&lt;T&gt;</span></code> is a stand-in and needs to be designed and
+reviewed, as well as the basic operations on the type.</p>
+</div>
+<div class="section" id="defer">
+<h2><code class="docutils literal"><span class="pre">defer</span></code><a class="headerlink" href="#defer" title="Permalink to this headline">¶</a></h2>
+<p>Swift should provide a <code class="docutils literal"><span class="pre">defer</span></code> statement that sets up an <em>ad hoc</em>
+clean-up action to be run when the current scope is exited.  This
+replicates the functionality of a Java-style <code class="docutils literal"><span class="pre">finally</span></code>, but more
+cleanly and with less nesting.</p>
+<p>This is an important tool for ensuring that explicitly-managed
+resources are released on all paths.  Examples include closing a
+network connection and freeing memory that was manually allocated.  It
+is convenient for all kinds of error-handling, even manual propagation
+and simple domain errors, but is especially nice with automatic
+propagation.  It is also a crucial part of our long-term vision for
+universal errors.</p>
+<p><code class="docutils literal"><span class="pre">defer</span></code> may be followed by an arbitrary statement.  The compiler
+should reject a <code class="docutils literal"><span class="pre">defer</span></code> action that might terminate early, whether by
+throwing or with <code class="docutils literal"><span class="pre">return</span></code>, <code class="docutils literal"><span class="pre">break</span></code>, or <code class="docutils literal"><span class="pre">continue</span></code>.</p>
+<p>Example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kr">if </span><span class="n">exists</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let </span><span class="nv">file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">O_READ</span><span class="p">)</span>
+<span class="w">  </span><span class="n">defer</span><span class="w"> </span><span class="n">close</span><span class="p">(</span><span class="n">file</span><span class="p">)</span>
+
+<span class="w">  </span><span class="n">while</span><span class="w"> </span><span class="kd">let </span><span class="nv">line</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">try</span><span class="w"> </span><span class="n">file</span><span class="p">.</span><span class="n">readline</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="o">..</span><span class="p">.</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="c1">// close occurs here, at the end of the formal scope.</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>If there are multiple defer statements in a scope, they are guaranteed
+to be executed in reverse order of appearance.  That is:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">let </span><span class="nv">file1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">open</span><span class="p">(</span><span class="s">&quot;hello.txt&quot;</span><span class="p">)</span>
+<span class="n">defer</span><span class="w"> </span><span class="n">close</span><span class="p">(</span><span class="n">file1</span><span class="p">)</span>
+<span class="kd">let </span><span class="nv">file2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">open</span><span class="p">(</span><span class="s">&quot;world.txt&quot;</span><span class="p">)</span>
+<span class="n">defer</span><span class="w"> </span><span class="n">close</span><span class="p">(</span><span class="n">file2</span><span class="p">)</span>
+<span class="o">..</span><span class="p">.</span>
+<span class="c1">// file2 will be closed first.</span>
+</pre></div>
+</div>
+<p>A potential extension is to provide a convenient way to mark that a
+defer action should only be taken if an error is thrown.  This is a
+convenient shorthand for controlling the action with a flag.  We will
+evaluate whether adding complexity to handle this case is justified
+based on real-world usage experience.</p>
+</div>
+<div class="section" id="importing-cocoa">
+<h2>Importing Cocoa<a class="headerlink" href="#importing-cocoa" title="Permalink to this headline">¶</a></h2>
+<p>If possible, Swift&#8217;s error-handling model should transparently work
+with the SDK with a minimal amount of effort from framework owners.</p>
+<p>We believe that we can cover the vast majority of Objective-C APIs
+with <code class="docutils literal"><span class="pre">NSError**</span></code> out-parameters by importing them as <code class="docutils literal"><span class="pre">throws</span></code> and
+removing the error clause from their signature.  That is, a method
+like this one from <code class="docutils literal"><span class="pre">NSAttributedString</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">NSData</span><span class="w"> </span><span class="o">*</span><span class="p">)</span><span class="n">dataFromRange</span><span class="p">:(</span><span class="n">NSRange</span><span class="p">)</span><span class="n">range</span>
+<span class="w">       </span><span class="n">documentAttributes</span><span class="p">:(</span><span class="n">NSDictionary</span><span class="w"> </span><span class="o">*</span><span class="p">)</span><span class="n">dict</span>
+<span class="w">                    </span><span class="n">error</span><span class="p">:(</span><span class="n">NSError</span><span class="w"> </span><span class="o">**</span><span class="p">)</span><span class="n">error</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>would be imported as:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">dataFromRange</span><span class="p">(</span><span class="n">range</span><span class="p">:</span><span class="w"> </span><span class="n">NSRange</span><span class="p">,</span>
+<span class="w">                   </span><span class="n">documentAttributes</span><span class="w"> </span><span class="n">dict</span><span class="p">:</span><span class="w"> </span><span class="n">NSDictionary</span><span class="p">)</span><span class="nf"> throws</span><span class="o"> -&gt; </span><span class="no">NSData</span>
+</pre></div>
+</div>
+<p>There are a number of cases to consider, but we expect that most can
+be automatically imported without extra annotation in the SDK, by
+using a couple of simple heuristics:</p>
+<ul>
+<li><p class="first">The most common pattern is a <code class="docutils literal"><span class="pre">BOOL</span></code> result, where a false value
+means an error occurred.  This seems unambiguous.</p>
+</li>
+<li><p class="first">Also common is a pointer result, where a <code class="docutils literal"><span class="pre">nil</span></code> result usually
+means an error occurred.  This appears to be universal in
+Objective-C; APIs that can return <code class="docutils literal"><span class="pre">nil</span></code> results seem to do so via
+out-parameters.  So it seems to be safe to make a policy decision
+that it&#8217;s okay to assume that a <code class="docutils literal"><span class="pre">nil</span></code> result is an error by
+default.</p>
+<p>If the pattern for a method is that a <code class="docutils literal"><span class="pre">nil</span></code> result means it produced
+an error, then the result can be imported as a non-optional type.</p>
+</li>
+<li><p class="first">A few APIs return <code class="docutils literal"><span class="pre">void</span></code>.  As far as I can tell, for all of these,
+the caller is expected to check for a non-<code class="docutils literal"><span class="pre">nil</span></code> error.</p>
+</li>
+</ul>
+<p>For other sentinel cases, we can consider adding a new clang attribute
+to indicate to the compiler what the sentinel is:</p>
+<ul class="simple">
+<li>There are several APIs returning <code class="docutils literal"><span class="pre">NSInteger</span></code> or <code class="docutils literal"><span class="pre">NSUInteger</span></code>.  At
+least some of these return 0 on error, but that doesn&#8217;t seem like a
+reasonable general assumption.</li>
+<li><code class="docutils literal"><span class="pre">AVFoundation</span></code> provides a couple methods returning
+<code class="docutils literal"><span class="pre">AVKeyValueStatus</span></code>.  These produce an error if the API returned
+<code class="docutils literal"><span class="pre">AVKeyValueStatusFailed</span></code>, which, interestingly enough, is not the
+zero value.</li>
+</ul>
+<p>The clang attribute would specify how to test the return value for an
+error.  For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">NSInteger</span><span class="p">)</span><span class="n">writePropertyList</span><span class="p">:(</span><span class="nb">id</span><span class="p">)</span><span class="n">plist</span>
+<span class="w">                      </span><span class="n">toStream</span><span class="p">:(</span><span class="n">NSOutputStream</span><span class="w"> </span><span class="o">*</span><span class="p">)</span><span class="n">stream</span>
+<span class="w">                        </span><span class="n">format</span><span class="p">:(</span><span class="n">NSPropertyListFormat</span><span class="p">)</span><span class="n">format</span>
+<span class="w">                       </span><span class="n">options</span><span class="p">:(</span><span class="n">NSPropertyListWriteOptions</span><span class="p">)</span><span class="n">opt</span>
+<span class="w">                         </span><span class="n">error</span><span class="p">:(</span><span class="n">out</span><span class="w"> </span><span class="n">NSError</span><span class="w"> </span><span class="o">**</span><span class="p">)</span><span class="n">error</span>
+<span class="w">  </span><span class="no">NS_ERROR_RESULT</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+
+<span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">AVKeyValueStatus</span><span class="p">)</span><span class="n">statusOfValueForKey</span><span class="p">:(</span><span class="n">NSString</span><span class="w"> </span><span class="o">*</span><span class="p">)</span><span class="n">key</span>
+<span class="w">                                  </span><span class="n">error</span><span class="p">:(</span><span class="n">NSError</span><span class="w"> </span><span class="o">**</span><span class="p">)</span>
+<span class="w">  </span><span class="no">NS_ERROR_RESULT</span><span class="p">(</span><span class="n">AVKeyValueStatusFailed</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>We should also provide a Clang attribute which specifies that the
+correct way to test for an error is to check the out-parameter.  Both
+of these attributes could potentially be used by the static analyzer,
+not just Swift.  (For example, they could try to detect an invalid
+error check.)</p>
+<p>Cases that do not match the automatically imported patterns and that
+lack an attribute would be left unmodified (i.e., they&#8217;d keep their
+NSErrorPointer argument) and considered &#8220;not awesome&#8221; in the SDK
+auditing tool.  These will still be usable in Swift: callers will get
+the NSError back like they do today, and have to throw the result
+manually.</p>
+<p>For initializers, importing an initializer as throwing takes
+precedence over importing it as failable.  That is, an imported
+initializer with a nullable result and an error parameter would be
+imported as throwing.  Throwing initializers have very similar
+constraints to failable initializers; in a way, it&#8217;s just a new axis
+of failability.</p>
+<p>One limitation of this approach is that we need to be able to reconstruct
+the selector to use when an overload of a method is introduced.  For this
+reason, the import is likely to be limited to methods where the error
+parameter is the last one and the corresponding selector
+chunk is either <code class="docutils literal"><span class="pre">error:</span></code> or the first chunk (see below).  Empirically,
+this seems to do the right thing for all but two sets of APIs in the
+public API:</p>
+<ul>
+<li><p class="first">The <code class="docutils literal"><span class="pre">ISyncSessionDriverDelegate</span></code> category on <code class="docutils literal"><span class="pre">NSObject</span></code> declares
+half-a-dozen methods like this:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">BOOL</span><span class="p">)</span><span class="n">sessionDriver</span><span class="p">:(</span><span class="n">ISyncSessionDriver</span><span class="w"> </span><span class="o">*</span><span class="p">)</span><span class="n">sender</span>
+<span class="w">        </span><span class="n">didRegisterClientAndReturnError</span><span class="p">:(</span><span class="n">NSError</span><span class="w"> </span><span class="o">**</span><span class="p">)</span><span class="n">outError</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>Fortunately, these delegate methods were all deprecated in Lion, and
+are thus unavailable in Swift.</p>
+</li>
+<li><p class="first"><code class="docutils literal"><span class="pre">NSFileCoordinator</span></code> has half a dozen methods where the <code class="docutils literal"><span class="pre">error:</span></code>
+clause is second-to-last, followed by a block argument.  These
+methods are not deprecated as far as I know.</p>
+</li>
+</ul>
+<p>The above translation rule would import methods like this one from
+<code class="docutils literal"><span class="pre">NSDocument</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">NSDocument</span><span class="w"> </span><span class="o">*</span><span class="p">)</span><span class="n">duplicateAndReturnError</span><span class="p">:(</span><span class="n">NSError</span><span class="w"> </span><span class="o">**</span><span class="p">)</span><span class="n">outError</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>like so:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">duplicateAndReturnError</span><span class="p">()</span><span class="nf"> throws</span><span class="o"> -&gt; </span><span class="no">NSDocument</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">AndReturnError</span></code> bit is common but far from universal; consider
+this method from <code class="docutils literal"><span class="pre">NSManagedObject</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">BOOL</span><span class="p">)</span><span class="n">validateForDelete</span><span class="p">:(</span><span class="n">NSError</span><span class="w"> </span><span class="o">**</span><span class="p">)</span><span class="n">error</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>This would be imported as:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">validateForDelete</span><span class="p">()</span><span class="nf"> throws</span>
+</pre></div>
+</div>
+<p>This is a really nice import, and it&#8217;s somewhat unfortunate that we
+can&#8217;t import <code class="docutils literal"><span class="pre">duplicateAndReturnError:</span></code> as <code class="docutils literal"><span class="pre">duplicate()</span></code>.</p>
+</div>
+<div class="section" id="potential-future-extensions-to-this-model">
+<h2>Potential future extensions to this model<a class="headerlink" href="#potential-future-extensions-to-this-model" title="Permalink to this headline">¶</a></h2>
+<p>We believe that the proposal above is sufficient to provide a huge
+step forward in error handling in Swift programs, but there is always
+more to consider in the future.  Some specific things we&#8217;ve discussed
+(and may come back to in the future) but don&#8217;t consider to be core to
+the Swift 2.0 model are:</p>
+<div class="section" id="higher-order-polymorphism">
+<h3>Higher-order polymorphism<a class="headerlink" href="#higher-order-polymorphism" title="Permalink to this headline">¶</a></h3>
+<p>We should make it easy to write higher-order functions that behave
+polymorphically with respect to whether their arguments throw.  This
+can be done in a fairly simple way: a function can declare that it
+throws if any of a set of named arguments do.  As an example (using
+strawman syntax):</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>func map&lt;T,U&gt;(array: [T], fn: T -&gt; U) throwsIf(fn) -&gt; [U] {
+  ...
+}
+</pre></div>
+</div>
+<p>There&#8217;s no need for a more complex logical operator than disjunction
+for normal higher-order stuff.</p>
+<p>This feature is highly desired (e.g. it would allow many otherwise
+redundant overloads to be collapsed into a single definition), but it
+may or may not make it into Swift 2.0 based on schedule limitations.</p>
+</div>
+<div class="section" id="generic-polymorphism">
+<h3>Generic polymorphism<a class="headerlink" href="#generic-polymorphism" title="Permalink to this headline">¶</a></h3>
+<p>For similar reasons to higher-order polymorphism, we should consider
+making it easier to parameterize protocols on whether their operations
+can throw.  This would allow the writing of generic algorithms, e.g.
+over <code class="docutils literal"><span class="pre">Sequence</span></code>, that handle both conformances that cannot throw (like
+<code class="docutils literal"><span class="pre">Array</span></code>) and those that can (like a hypothetical cloud-backed
+implementation).</p>
+<p>However, this would be a very complex feature, yet to be designed, and
+it is far out-of-scope for Swift 2.0.  In the meantime, most standard
+protocols will be written to not allow throwing conformances, so as to
+not burden the use of common generic algorithms with spurious
+error-handling code.</p>
+</div>
+<div class="section" id="statement-like-functions">
+<h3>Statement-like functions<a class="headerlink" href="#statement-like-functions" title="Permalink to this headline">¶</a></h3>
+<p>Some functions are designed to take trailing closures that feel like
+sub-statements.  For example, <code class="docutils literal"><span class="pre">autoreleasepool</span></code> can be used this way:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">autoreleasepool</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">foo</span><span class="p">()</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The error-handling model doesn&#8217;t cause major problems for this.  The
+compiler can infer that the closure throws, and <code class="docutils literal"><span class="pre">autoreleasepool</span></code>
+can be overloaded on whether its argument closure throws; the
+overload that takes a throwing closures would itself throw.</p>
+<p>There is one minor usability problem here, though.  If the closure
+contains throwing expressions, those expressions must be explicitly
+marked within the closure with <code class="docutils literal"><span class="pre">try</span></code>.  However, from the compiler&#8217;s
+perspective, the call to <code class="docutils literal"><span class="pre">autoreleasepool</span></code> is also a call that
+can throw, and so it must also be marked with <code class="docutils literal"><span class="pre">try</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">try</span><span class="w"> </span><span class="n">autoreleasepool</span><span class="w"> </span><span class="p">{</span><span class="w">    </span><span class="c1">// &#39;try&#39; is required here...</span>
+<span class="w">  </span><span class="kd">let </span><span class="nv">string</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">try</span><span class="w"> </span><span class="n">parseString</span><span class="p">()</span><span class="w"> </span><span class="c1">// ...and here.</span>
+<span class="w">  </span><span class="o">..</span><span class="p">.</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>This marking feels redundant.  We want functions like
+<code class="docutils literal"><span class="pre">autoreleasepool</span></code> to feel like statements, but marks inside builtin
+statements like <code class="docutils literal"><span class="pre">if</span></code> don&#8217;t require the outer statement to be marked.
+It would be better if the compiler didn&#8217;t require the outer <code class="docutils literal"><span class="pre">try</span></code>.</p>
+<p>On the other hand, the &#8220;statement-like&#8221; story already has a number of
+other holes: for example, <code class="docutils literal"><span class="pre">break</span></code>, <code class="docutils literal"><span class="pre">continue</span></code>, and <code class="docutils literal"><span class="pre">return</span></code>
+behave differently in the argument closure than in statements.  In the
+future, we may consider fixing that; that fix will also need to
+address the error-propagation problem.</p>
+</div>
+<div class="section" id="using">
+<h3><code class="docutils literal"><span class="pre">using</span></code><a class="headerlink" href="#using" title="Permalink to this headline">¶</a></h3>
+<p>A <code class="docutils literal"><span class="pre">using</span></code> statement would acquire a resource, holds it for a fixed
+period of time, optionally binds it to a name, and then releases it
+whenever the controlled statement exits.  <code class="docutils literal"><span class="pre">using</span></code> has many
+similarities to <code class="docutils literal"><span class="pre">defer</span></code>.  It does not subsume <code class="docutils literal"><span class="pre">defer</span></code>, which is useful
+for many ad-hoc and tokenless clean-ups.  But it could be convenient
+for the common pattern of a type-directed clean-up.</p>
+</div>
+<div class="section" id="automatically-importing-corefoundation-and-c-functions">
+<h3>Automatically importing CoreFoundation and C functions<a class="headerlink" href="#automatically-importing-corefoundation-and-c-functions" title="Permalink to this headline">¶</a></h3>
+<p>CF APIs use <code class="docutils literal"><span class="pre">CFErrorRef</span></code> pretty reliably, but there are several
+problems here: 1) the memory management rules for CFErrors are unclear
+and potentially inconsistent.  2) we need to know when an error is
+raised.</p>
+<p>In principle, we could import POSIX functions into Swift as throwing
+functions, filling in the error from <code class="docutils literal"><span class="pre">errno</span></code>.  It&#8217;s nearly impossible
+to imagine doing this with an automatic import rule, however; much
+more likely, we&#8217;d need to wrap them all in an overlay.</p>
+<p>In both cases, it is possible to pull these into the Swift error
+handling model, but because this is likely to require massive SDK
+annotations it is considered out of scope for iOS 9/OSX 10.11 &amp; Swift 2.0.</p>
+</div>
+<div class="section" id="unexpected-and-universal-errors">
+<h3>Unexpected and universal errors<a class="headerlink" href="#unexpected-and-universal-errors" title="Permalink to this headline">¶</a></h3>
+<p>As discussed above, we believe that we can extend our current model to
+support untyped propagation for universal errors.  Doing this well,
+and in particular doing it without completely sacrificing code size
+and performance, will take a significant amount of planning and
+insight.  For this reason, it is considered well out of scope for
+Swift 2.0.</p>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        «&#160;&#160;<a href="DriverParseableOutput.html">Parseable Driver Output</a>
+        &#160;&#160;::&#160;&#160;
+        <a class="uplink" href="contents.html">Contents</a>
+        &#160;&#160;::&#160;&#160;
+        <a href="ErrorHandlingRationale.html">Error Handling Rationale and Proposal</a>&#160;&#160;»
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

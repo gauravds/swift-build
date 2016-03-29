@@ -1,0 +1,947 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Optimizer Effects: Summarizing and specifying function side effects &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Optimizer Effects: Summarizing and specifying function side effects</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="optimizer-effects-summarizing-and-specifying-function-side-effects">
+<h1><a class="toc-backref" href="#id1">Optimizer Effects: Summarizing and specifying function side effects</a><a class="headerlink" href="#optimizer-effects-summarizing-and-specifying-function-side-effects" title="Permalink to this headline">¶</a></h1>
+<div class="contents topic" id="contents">
+<p class="topic-title first">Contents</p>
+<ul class="simple">
+<li><a class="reference internal" href="#optimizer-effects-summarizing-and-specifying-function-side-effects" id="id1">Optimizer Effects: Summarizing and specifying function side effects</a><ul>
+<li><a class="reference internal" href="#introduction" id="id2">Introduction</a></li>
+<li><a class="reference internal" href="#effects-primitives" id="id3">Effects Primitives</a></li>
+<li><a class="reference internal" href="#cow-optimization-requirements" id="id4">CoW Optimization Requirements</a><ul>
+<li><a class="reference internal" href="#swift-level-attributes-proposal" id="id5">Swift-level attributes proposal</a></li>
+<li><a class="reference internal" href="#motivation" id="id6">Motivation</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#examples-of-optimization-using-effects-primitives" id="id7">Examples of Optimization Using Effects Primitives</a></li>
+<li><a class="reference internal" href="#user-specified-effects-syntax-and-defaults" id="id8">User-Specified Effects, Syntax and Defaults</a></li>
+<li><a class="reference internal" href="#specifying-effects-for-generic-functions" id="id9">Specifying Effects for Generic Functions</a></li>
+<li><a class="reference internal" href="#purity" id="id10">Purity</a><ul>
+<li><a class="reference internal" href="#motivation-for-pure-functions" id="id11">Motivation for Pure Functions</a></li>
+<li><a class="reference internal" href="#pure-value-types" id="id12">&#8220;Pure&#8221; Value Types</a></li>
+<li><a class="reference internal" href="#pure-value-types-and-sil-optimizations" id="id13">Pure Value Types and SIL optimizations</a></li>
+<li><a class="reference internal" href="#recognizing-value-types" id="id14">Recognizing Value Types</a></li>
+<li><a class="reference internal" href="#inferring-function-purity" id="id15">Inferring Function Purity</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#closures" id="id16">Closures</a></li>
+<li><a class="reference internal" href="#thread-safety" id="id17">Thread Safety</a></li>
+<li><a class="reference internal" href="#api-and-resilience" id="id18">API and Resilience</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This is a working document. Once we agree on the approach and
+terminology, this can move into docs/FunctionEffects.rst, and the
+codebase can be cleanup up a bit to reflect the consistent
+terminology.</p>
+</div>
+<div class="section" id="introduction">
+<h2><a class="toc-backref" href="#id2">Introduction</a><a class="headerlink" href="#introduction" title="Permalink to this headline">¶</a></h2>
+<p>This document formalizes the effects that functions have on program
+state for the purpose of facilitating compiler optimization. By
+modeling more precise function effects, the optimizer can make more
+assumptions leading to more aggressive transformation of the program.</p>
+<p>Function effects may be deduced by the compiler during program
+analysis. However, in certain situations it is helpful to directly
+communicate function effects to the compiler via function attributes
+or types. These source level annotations may or may not be statically
+enforceable.</p>
+<p>This document specifies a comprehensive set of primitives and their
+semantics. These primitives are the optimizer&#8217;s interface to function
+effects. They should be sufficient to express any analysis or
+annotation supported by the compiler that express a function&#8217;s effect
+on program state.</p>
+<p>Within the optimizer, SILEffectsAnalysis deduces function effects
+through analysis of SIL code. It&#8217;s result directly maps to effects
+primitives.</p>
+<p>Optimization of copy-on-Write data structures, such as Array, requires
+guaranteed function effects that cannot be deduced through analysis of
+SIL code. This necessitates a language for annotating functions. Some
+annotations are obviously specific to CoW semantics and cannot be
+defined in terms of general effects primitives: make_unique,
+preserve_unique, and projects_subobject. However, all other annotations
+required for CoW optimization are really guarantees regarding the
+program state that is affected by a CoW methods. These annotations
+should map precisely to a set of effects primitives.</p>
+<p>For the sake of discussion, we use of Swift-level syntax for
+specifying effects primitives. It may be debatable whether we actually
+want to expose this syntax, but as explained above, some syntax will
+need to be exposed to build optimizable CoW types.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">[Andy] There is a lot of subtlety involved in specifying or
+summarizing function effects. I want to first put forth an
+underlying model for reasoning about the effects&#8217; semantics,
+demonstrate that we can prove soundness in all the cases we care
+about for CoW and any other foreseeable purpose, then go back if
+needed and add sugary syntax and proper defaults for specifying the
+effects. I won&#8217;t get hung up on the attributes being too fine
+grained or tricky to use.</p>
+</div>
+</div>
+<div class="section" id="effects-primitives">
+<h2><a class="toc-backref" href="#id3">Effects Primitives</a><a class="headerlink" href="#effects-primitives" title="Permalink to this headline">¶</a></h2>
+<p>For the purpose of function effects, we identify program state that is
+known reachable via an argument, versus some other unknown/unspecified
+state. (Accessing a global variable is always unspecified state.)</p>
+<p>[Andy] We&#8217;ve given &#8220;global&#8221; a variety of meanings. I think we should
+avoid that term unless specifically referring to global variables.</p>
+<p>There are some function level effects that are not specific to state:</p>
+<ul class="simple">
+<li>allocs</li>
+<li>traps</li>
+</ul>
+<p>The effects on a particular state are:</p>
+<ul class="simple">
+<li>read</li>
+<li>write</li>
+<li>capture</li>
+<li>release</li>
+</ul>
+<p>These should all be interpreted as effects that &#8220;may&#8221;
+happen. e.g. maywrite, or mayretain.</p>
+<p>[TODO] Within the optimizer we sometimes refer to &#8220;retain&#8221; as an
+effect.  &#8220;capture&#8221; is really a more general term that encompasses any
+retain_value operation, so we&#8217;ll likely standardize on that term. We
+don&#8217;t have a more general term for &#8220;release&#8221;, which refers to any
+release_value operation.</p>
+<p>When referring to unspecified state, I will use the syntax
+<code class="docutils literal"><span class="pre">&#64;effects(no&lt;effectname&gt;)</span></code>. When referring to state reachable via an
+argument, <code class="docutils literal"><span class="pre">&#64;no&lt;effectname&gt;</span> <span class="pre">arg</span></code>.</p>
+<p>Naturally, we also need a syntax for associating effects with
+<code class="docutils literal"><span class="pre">self</span></code>. That could easily be done by adding a &#64;self_effects
+attribute.</p>
+<p>In order to optimize bridged types, we need to add a <code class="docutils literal"><span class="pre">nonbridged</span></code>
+predicate to the effects. The optimizer can then reason about a
+value&#8217;s bridged status within some scope and deduce more optimistic
+effects at a call site. For now, we assume the predicate only applies
+to unspecified state and that the bridged object is always self. That
+way we can denote predicated effects as &#64;nonbridged_effects.</p>
+<p>In examples, &#64;effects(argonly) means that there are no effects on
+unspecified state.</p>
+</div>
+<div class="section" id="cow-optimization-requirements">
+<h2><a class="toc-backref" href="#id4">CoW Optimization Requirements</a><a class="headerlink" href="#cow-optimization-requirements" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="swift-level-attributes-proposal">
+<h3><a class="toc-backref" href="#id5">Swift-level attributes proposal</a><a class="headerlink" href="#swift-level-attributes-proposal" title="Permalink to this headline">¶</a></h3>
+<p>A copy-on-write (COW) type is implemented in terms of a struct and a set of
+storage objects referenced by this struct. The set of storage objects can
+further provide storage for subobjects.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>class ArrayStorage&lt;T&gt; {
+  func getElement(index: Int) -&gt; T {} // Return a &#39;subobject&#39;.
+}
+
+struct Array&lt;T&gt; {
+  var storage: ArrayStorage // Storage object
+}
+</pre></div>
+</div>
+<p>In the following we will list a set of function attributes that can be used to
+describe properties of methods of such a data structure to facilitate
+optimization.</p>
+<p>A COW type implements value semantics by delaying the copy of storage of the
+type until modification.</p>
+<p>An instance of a struct is in a uniqued state if changes to the set of storage
+objects can only be observed by method calls on references to the instance of
+the struct (versus by method calls on other instances). Typically, one would
+implement this behavior by checking whether the references to the storage
+objects are uniquely referenced and copying the storage objects on modification
+if they are not. In the following we refer to the memory holding the instance
+of the struct and the set of storage objects as the self state. Non-self state
+below refers to the state of the rest of the program not including the self
+state.</p>
+<p><code class="docutils literal"><span class="pre">&#64;make_unique</span></code></p>
+<blockquote>
+<div><p>A method marked <code class="docutils literal"><span class="pre">&#64;make_unique</span></code> changes the state of the instance of the COW
+type (<code class="docutils literal"><span class="pre">self</span></code>) to the uniqued state. It must do so without changing or
+depending on non-self state or changing the self-state (other than the change
+to a uniqued state). It must be an idempotent operation.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct Array&lt;T&gt; {
+  var storage: ArrayStorage
+
+  @makeunique
+  mutating func makeUnique() {
+    if (isUniquelyReferenced(&amp;storage))
+      return
+    storage = storage.copy()
+  }
+</pre></div>
+</div>
+<p>Note: In terms of low-level SIL attributes such a method will be marked::</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>@effects(argonly)
+@selfeffects(make_unique)
+func makeUnique() {}
+</pre></div>
+</div>
+</div></blockquote>
+<p><code class="docutils literal"><span class="pre">&#64;preserve_unique</span></code></p>
+<blockquote>
+<div><p>A method marked <code class="docutils literal"><span class="pre">&#64;preserve_unique</span></code> must guarantee to not change the
+uniqueness state of <code class="docutils literal"><span class="pre">self</span></code> from a unique state to a not unique state.  An
+example of a violation of this guarantee would be to store <code class="docutils literal"><span class="pre">self</span></code> in a
+global variable.
+The method must not return a storage object or address there-of that could be
+used to change the uniqueness state of <code class="docutils literal"><span class="pre">self</span></code>. An example of a violation of
+this guarantee would be a method that returns a storage object.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct Array&lt;T&gt; {
+  var storage: ArrayStorage
+
+  @preserve_unique
+  mutating func replaceSubrange&lt;
+    C : CollectionType where C.Iterator.Element == T
+  &gt;(
+    subRange: Range&lt;Int&gt;, with newElements: C
+  ) { ... }
+
+  // We could also mark the following function as @preserve_unique
+  // but we have an attribute for this function that better describes it
+  // allowing for more optimization. (See @get_subobject)
+  @preserve_unique
+  func getElement(index: Int) -&gt; T {
+    return storage.elementAt(index)
+  }
+}
+</pre></div>
+</div>
+<p>Note: In terms of low-level SIL attributes such a method will be marked::</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>@self_effects(preserve_unique, nocapture, norelease)
+func replaceSubrange&lt;&gt; {}
+</pre></div>
+</div>
+</div></blockquote>
+<p><code class="docutils literal"><span class="pre">&#64;get_subobject</span></code></p>
+<blockquote>
+<div><p>A method marked <code class="docutils literal"><span class="pre">&#64;get_subobject</span></code> must fulfill all of <code class="docutils literal"><span class="pre">&#64;preserve_unique</span></code>&#8216;s
+guarantees. Furthermore, it must return a &#8216;subobject&#8217; that is stored by the
+set of storage objects or a value stored in the CoW struct itself. It must be
+guaranteed that the &#8216;subobject&#8217; returned is kept alive as long the current
+value of the &#8216;self&#8217; object is alive. Neither the self state nor the non-self
+state is changed and the method must not depend on non-self state.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct Array&lt;T&gt; {
+  var storage: ArrayStorage
+  var size : Int
+
+  @get_subobject
+  func getElement(index: Int) -&gt; T {
+    return storage.elementAt(index)
+  }
+
+  @get_subobject
+  func getSize() -&gt; Int {
+    return size
+  }
+</pre></div>
+</div>
+<p>Note: In terms of low-level SIL attributes such a method will be marked::</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>@effects(argonly)
+@selfeffects(preserve_unique, nowrite, nocapture, norelease,
+             projects_subobject)
+func getElement(index: Int) -&gt; T {}
+</pre></div>
+</div>
+</div></blockquote>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">For the standard library&#8217;s data types <code class="docutils literal"><span class="pre">&#64;get_subobject</span></code> guarantees are too
+strong. An array can use an NSArray as its storage (it is in a bridged state)
+in which case we can&#8217;t make assumptions on effects on non-self state. For this
+purpose we introduce a variant of the attribute above whose statement about
+global effects are predicated on the array being in a non-bridged state.</p>
+</div>
+<p><code class="docutils literal"><span class="pre">&#64;get_subobject_non_bridged</span></code></p>
+<blockquote>
+<div><p>A method marked <code class="docutils literal"><span class="pre">&#64;get_subobject</span></code> must fulfill all of <code class="docutils literal"><span class="pre">&#64;preserve_unique</span></code>&#8216;s
+guarantees. Furthermore, it must return a &#8216;subobject&#8217; that is stored by the
+set of storage objects or a value stored in the CoW struct itself. It must be
+guaranteed that the &#8216;subobject&#8217; returned is kept alive as long the current
+value of the &#8216;self&#8217; object is alive. The self state is not changed. The
+non-self state is not changed and the method must not depend on non-self state
+if the <code class="docutils literal"><span class="pre">self</span></code> is in a non-bridged state. In a bridged state the optimizer
+will assume that subsequent calls on the same &#8216;self&#8217; object to return the same
+value and that consecutive calls are idempotent however it will not assume
+anything beyond this about effects on non-self state.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct Array&lt;T&gt; {
+  var storage: BridgedArrayStorage
+  var size : Int
+
+  @get_subobject_non_bridged
+  func getElement(index: Int) -&gt; T {
+    return storage.elementAt(index)
+  }
+
+  @get_subobject
+  func getSize() -&gt; Int {
+    return size
+  }
+</pre></div>
+</div>
+<p>Note: In terms of low-level SIL attributes such a method will be marked::</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>@nonbridged_effects(argonly)
+@selfeffects(preserve_unique, nowrite, nocapture, norelease,
+             projects_subobject)
+func getElement(index: Int) -&gt; T {}
+</pre></div>
+</div>
+</div></blockquote>
+<p><code class="docutils literal"><span class="pre">&#64;get_subobject_addr</span></code></p>
+<blockquote>
+<div><p>A method marked <code class="docutils literal"><span class="pre">&#64;get_subobject_addr</span></code> must fulfill all of
+<code class="docutils literal"><span class="pre">&#64;preserve_unique</span></code>&#8216;s guarantees. Furthermore, it must return the address of
+a &#8216;subobject&#8217; that is stored by the set of storage objects. It is guaranteed
+that the &#8216;subobject&#8217; at the address returned is kept alive as long the current
+value of the &#8216;self&#8217; object is alive. Neither the self state nor the non-self
+state is changed and the method must not depend on non-self state.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct Array&lt;T&gt; {
+  var storage: ArrayStorage
+
+  @get_subobject_addr
+  func getElementAddr(index: Int) -&gt; UnsafeMutablePointer&lt;T&gt; {
+    return storage.elementAddrAt(index)
+  }
+</pre></div>
+</div>
+<p>Note: In terms of low-level SIL attributes such a method will be marked::</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>@effects(argonly)
+@selfeffects(preserve_unique, nowrite, nocapture, norelease,
+             projects_subobject_addr)
+func getElementAddr(index: Int) -&gt; T {}
+</pre></div>
+</div>
+</div></blockquote>
+<p><code class="docutils literal"><span class="pre">&#64;initialize_subobject</span></code></p>
+<blockquote>
+<div><p>A method marked <code class="docutils literal"><span class="pre">&#64;initialize_subobject</span></code> must fulfill all of
+<code class="docutils literal"><span class="pre">&#64;preserve_unique</span></code>&#8216;s guarantees. The method must only store its arguments
+into <em>uninitialized</em> storage. The only effect to non-self state is the capture
+of the method&#8217;s arguments.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct Array&lt;T&gt; {
+  var storage: ArrayStorage
+
+  @initialize_subobject
+  func appendAssumingUniqueStorage(elt: T) {
+    storage.append(elt)
+  }
+}
+</pre></div>
+</div>
+<p>Note: In terms of low-level SIL attributes such a method will be marked::</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>@effects(argonly)
+@selfeffects(preserve_unique, nocapture, norelease)
+func appendElementAssumingUnique(@norelease @nowrite elt: T) {}
+</pre></div>
+</div>
+</div></blockquote>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">[arnold] We would like to express something like <code class="docutils literal"><span class="pre">&#64;set_subobject</span></code>, too.
+However, we probably want to delay this until we have a polymorphic effects
+type system.</p>
+</div>
+<p><code class="docutils literal"><span class="pre">&#64;set_subobject</span></code></p>
+<blockquote>
+<div><p>A method marked <code class="docutils literal"><span class="pre">&#64;set_subobject</span></code> must fulfill all of
+<code class="docutils literal"><span class="pre">&#64;preserve_unique</span></code>&#8216;s guarantees. The method must only store its arguments
+into <em>initialized</em> storage. The only effect to non-self state is the capture
+of the method&#8217;s arguments and the release of objects of the method arguments&#8217;
+types.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct Array&lt;T&gt; {
+  var storage: ArrayStorage
+
+  @set_subobject
+  func setElement(elt: T, at index: Int) {
+    storage.set(elt, index)
+  }
+}
+</pre></div>
+</div>
+</div></blockquote>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<blockquote>
+<div>[arnold] As Andy points out, this would be best expressed using an effect
+type system.</div></blockquote>
+<p>Note: In terms of low-level SIL attributes such a method will be marked::</p>
+<div class="last highlight-swift"><div class="highlight"><pre><span></span>@effects(argonly, T.release)
+@selfeffects(preserve_unique, nocapture)
+func setElement(@nowrite e: T, index: Int) {
+}
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="motivation">
+<h3><a class="toc-backref" href="#id6">Motivation</a><a class="headerlink" href="#motivation" title="Permalink to this headline">¶</a></h3>
+<p>Why do we need <code class="docutils literal"><span class="pre">makeunique</span></code>, <code class="docutils literal"><span class="pre">preserveunique</span></code>?</p>
+<p>The optimizer wants to hoist functions that make a COW type instance unique out
+of loops. In order to do that it has to prove that uniqueness is preserved by
+all operations in the loop.</p>
+<p>Marking methods as <code class="docutils literal"><span class="pre">makeunique</span></code>/<code class="docutils literal"><span class="pre">preserveunique</span></code> allows the optimizer to
+reason about the behavior of the method calls.</p>
+<p>Example::</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct Array&lt;T&gt; {
+  var storage: ArrayStorage&lt;T&gt;
+
+  @makeunique
+  func makeUnique() {
+    if (isUniquelyReferenced(&amp;storage))
+     return;
+    storage = storage.copy()
+  }
+
+  @preserveunique
+  func getElementAddr(index: Int) -&gt; UnsafeMutablePointer&lt;T&gt; {
+    return storage.elementAddrAt(index)
+  }
+
+  subscript(index: Int) -&gt; UnsafeMutablePointer&lt;T&gt; {
+    mutableAddressor {
+      makeUnique()
+      return getElementAddr(index)
+    }
+  }
+}
+</pre></div>
+</div>
+<p>When the optimizer optimizes a loop::</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">memset</span><span class="p">(</span><span class="n">inout</span><span class="w"> </span><span class="n">A</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="n">Int</span><span class="p">], </span><span class="n">value</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">) {</span>
+<span class="w">  </span><span class="kr">for </span><span class="n">i</span><span class="kr"> in </span><span class="mi">0</span><span class="w"> </span><span class="o">..</span><span class="w"> </span><span class="no">A</span><span class="p">.</span><span class="n">size</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">A</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">value</span>
+<span class="w">    </span><span class="n">f</span><span class="p">()</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>It will see the following calls because methods with attributes are not inlined.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">memset</span><span class="p">(</span><span class="n">inout</span><span class="w"> </span><span class="n">A</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="n">Int</span><span class="p">], </span><span class="n">value</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">) {</span>
+<span class="w">  </span><span class="kr">for </span><span class="n">i</span><span class="kr"> in </span><span class="mi">0</span><span class="w"> </span><span class="o">..</span><span class="w"> </span><span class="no">A</span><span class="p">.</span><span class="n">size</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">makeUnique</span><span class="p">(</span><span class="o">&amp;</span><span class="n">A</span><span class="p">)</span>
+<span class="w">    </span><span class="n">addr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getElementAddr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">A</span><span class="p">)</span>
+<span class="w">    </span><span class="n">addr</span><span class="p">.</span><span class="n">pointee</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">value</span>
+<span class="w">    </span><span class="n">f</span><span class="p">()</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>In order to hoist the &#8216;makeUnique&#8217; call, the optimizer needs to be able to
+reason that neither &#8216;getElementAddr&#8217;, nor the store to the address returned can
+change the uniqueness state of &#8216;A&#8217;. Furthermore, it knows because &#8216;A&#8217; is marked
+inout that in a program without inout violations f cannot hold a reference to
+the object named by &#8216;A&#8217; and therefore cannot modify it.</p>
+<p>Why do we need <code class="docutils literal"><span class="pre">&#64;get_subobject</span></code>, <code class="docutils literal"><span class="pre">&#64;initialize_subobject</span></code>, and
+<code class="docutils literal"><span class="pre">&#64;set_subobject</span></code>?</p>
+<p>We want to be able to hoist <code class="docutils literal"><span class="pre">makeunique</span></code> calls when the array is not identified
+by a unique name.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>class AClass {
+  var array: [Int]
+}
+
+func copy(a : AClass, b : AClass) {
+  for i in min(a.size, b.size) {
+     a.array.append(b.array[i])
+  }
+}
+</pre></div>
+</div>
+<p>In such a case we would like to reason that::</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="o">=</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">array</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>cannot changed the uniqueness of the instance of array &#8216;a.array&#8217; assuming &#8216;a&#8217; !=== &#8216;b&#8217;.
+We can do so because &#8216;getElement&#8217; is marked <code class="docutils literal"><span class="pre">&#64;get_subobject</span></code> and so does not
+modify non-self state.</p>
+<p>Further we would like to reason that::</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">a</span><span class="p">.</span><span class="n">array</span><span class="p">.</span><span class="n">append</span>
+</pre></div>
+</div>
+<p>cannot change the uniqueness state of the instance of array &#8216;a.array&#8217; across
+iterations. We can conclude so because <code class="docutils literal"><span class="pre">appendAssumingUnique</span></code>&#8216;s side-effects
+guarantee that no destructor can run - it&#8217;s only side-effect is that <code class="docutils literal"><span class="pre">tmp</span></code>
+is captured and initializes storage in the array - these are the only
+side-effects according to <code class="docutils literal"><span class="pre">&#64;initialize_subobject</span></code>.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kr">for </span><span class="n">i</span><span class="kr"> in </span><span class="mi">0</span><span class="w"> </span><span class="o">..</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">size</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// @get_subobject</span>
+<span class="w">  </span><span class="n">tmp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getElement</span><span class="p">(</span><span class="n">b</span><span class="p">.</span><span class="n">array</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">)</span>
+<span class="w">  </span><span class="n">makeUnique</span><span class="p">(</span><span class="o">&amp;</span><span class="n">a</span><span class="p">.</span><span class="n">array</span><span class="p">)</span>
+<span class="w">  </span><span class="c1">// @initialize_subobject</span>
+<span class="w">  </span><span class="n">appendAssumingUnique</span><span class="p">(</span><span class="o">&amp;</span><span class="n">a</span><span class="p">.</span><span class="n">array</span><span class="p">,</span><span class="w"> </span><span class="n">tmp</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>We can construct a very similar example where we cannot hoist makeUnique. If we
+replace &#8216;getElement&#8217; with a &#8216;setElement&#8217;. &#8216;setElement&#8217; will capture its argument
+and further releases an element of type T - these are the only side-effects
+according to <code class="docutils literal"><span class="pre">&#64;set_subobject</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>@set_subobject
+func setElement(e: T, index: Int) {
+  storage-&gt;setElement(e, index)
+}
+</pre></div>
+</div>
+<p>Depending on &#8216;T&#8217;&#8217;s type a destructor can be invoked by the release of &#8216;T&#8217;. The
+destructor can have arbitrary side-effects. Therefore, it is not valid to hoist
+the makeUnique in the code without proving that &#8216;T&#8217;s destructor cannot change
+the uniqueness state. This is trivial for trivial types but requires a more
+sophisticated analysis for class types (and in general cannot be disproved). In
+following example we can only hoist makeUnique if we can prove that elt&#8217;s, and
+elt2&#8217;s destructor can&#8217;t change the uniqueness state of the arrays.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kr">for </span><span class="n">i</span><span class="kr"> in </span><span class="mi">0</span><span class="w"> </span><span class="o">..&lt;</span><span class="w"> </span><span class="n">min</span><span class="p">(</span><span class="n">a</span><span class="p">.</span><span class="n">size</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">size</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">makeUnique</span><span class="p">(</span><span class="o">&amp;</span><span class="n">b</span><span class="p">.</span><span class="n">array</span><span class="p">)</span>
+<span class="w">  </span><span class="n">setElement</span><span class="p">(</span><span class="o">&amp;</span><span class="n">b</span><span class="p">.</span><span class="n">array</span><span class="p">,</span><span class="w"> </span><span class="n">elt</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">)</span>
+<span class="w">  </span><span class="n">makeUnique</span><span class="p">(</span><span class="o">&amp;</span><span class="n">a</span><span class="p">.</span><span class="n">array</span><span class="p">)</span>
+<span class="w">  </span><span class="n">setElement</span><span class="p">(</span><span class="o">&amp;</span><span class="n">a</span><span class="p">.</span><span class="n">array</span><span class="p">,</span><span class="w"> </span><span class="n">elt2</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>In the following loop it is not safe to hoist the makeUnique(&amp;a)
+call even for trivial types. &#8216;appendAssumingUnique&#8217; captures its argument &#8216;a&#8217;
+which forces a copy on &#8216;a&#8217; on every iteration of the loop.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kr">for </span><span class="n">i</span><span class="kr"> in </span><span class="mi">0</span><span class="w"> </span><span class="o">..</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">size</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">makeUnique</span><span class="p">(</span><span class="o">&amp;</span><span class="n">a</span><span class="p">)</span>
+<span class="w">  </span><span class="n">setElement</span><span class="p">(</span><span class="o">&amp;</span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">)</span>
+<span class="w">  </span><span class="n">makeUnique</span><span class="p">(</span><span class="o">&amp;</span><span class="n">b</span><span class="p">)</span>
+<span class="w">  </span><span class="n">appendAssumingUnique</span><span class="p">(</span><span class="o">&amp;</span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>To support this reasoning we need to know when a function captures its
+arguments and when a function might release an object and of which type.</p>
+<p><code class="docutils literal"><span class="pre">&#64;get_subobject</span></code> and value-type behavior</p>
+<p>Furthermore, methods marked with <code class="docutils literal"><span class="pre">&#64;get_subobject</span></code> will allow us to remove
+redundant calls to read-only like methods on COW type instances assuming we can
+prove that the instance is not changed in between them.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>func f(a: [Int]) {
+ @get_subobject
+ count(a)
+ @get_subobject
+ count(a)
+}
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="examples-of-optimization-using-effects-primitives">
+<h2><a class="toc-backref" href="#id7">Examples of Optimization Using Effects Primitives</a><a class="headerlink" href="#examples-of-optimization-using-effects-primitives" title="Permalink to this headline">¶</a></h2>
+<p>CoW optimization: [Let&#8217;s copy over examples from Arnold&#8217;s proposal]</p>
+<p>[See the Copy-on-write proposal above]</p>
+<p>String initialization: [TBD]</p>
+</div>
+<div class="section" id="user-specified-effects-syntax-and-defaults">
+<h2><a class="toc-backref" href="#id8">User-Specified Effects, Syntax and Defaults</a><a class="headerlink" href="#user-specified-effects-syntax-and-defaults" title="Permalink to this headline">¶</a></h2>
+<p>Mostly TBD.</p>
+<p>The optimizer can only take advantage of user-specified effects before
+they have been inlined. Consequently, the optimizer initially preserves
+calls to annotated &#64;effects() functions. After optimizing for effects
+these functions can be inlined, dropping the effects information.</p>
+<p>Without special syntax, specifying a pure function would require:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>@effects(argonly)
+func foo(@noread @nowrite arg)
+</pre></div>
+</div>
+<p>A shorthand, such as &#64;effects(none) could easily be
+introduced. Typically, this shouldn&#8217;t be needed because the purity of
+a function can probably be deduced from its argument types given that
+it has no effect on unspecified state. i.e. If the function does not
+affect unspecific state, and operates on &#8220;pure value types&#8221; (see
+below), the function is pure.</p>
+</div>
+<div class="section" id="specifying-effects-for-generic-functions">
+<h2><a class="toc-backref" href="#id9">Specifying Effects for Generic Functions</a><a class="headerlink" href="#specifying-effects-for-generic-functions" title="Permalink to this headline">¶</a></h2>
+<p>Specifying literal function effects is not possible for functions with
+generic arguments:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct MyContainer&lt;T&gt; {
+  var t: T
+  func setElt(elt: T) { t = elt }
+}
+</pre></div>
+</div>
+<p>With no knowledge of T.deinit() we must assume the worst case. SIL effects
+analysis following specialization can easily handle such a trivial
+example. But there are two situations to be concerned about:</p>
+<ol class="arabic simple">
+<li>Complicated CoW implementations defeat effects analysis. That is
+the whole point of Arnold&#8217;s proposal for user-specified CoW
+effects.</li>
+<li>Eventually we will want to publish effects on generic functions
+across resilience boundaries.</li>
+</ol>
+<p>Solving this requires a system for polymorphic effects. Language
+support for polymorphic effects might look something like this:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>@effects(T.release)
+func foo&lt;T&gt;(t: T) { ... }
+</pre></div>
+</div>
+<p>This would mean that foo&#8217;s unspecified effects are bounded by the
+unspecified effects of T&#8217;s deinitializer. The reality of designing
+polymorphic effects will be much more complicated.</p>
+<p>A different approach would be to statically constrain effects on
+generic types, protocol conformance, and closures. This wouldn&#8217;t solve
+the general problem, but could be a very useful tool for static
+enforcement.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>Examples of function effects systems:</p>
+<p>[JoeG] For example, the effect type system model in Koka
+(<a class="reference external" href="https://koka.codeplex.com">https://koka.codeplex.com</a>) can handle exceptions, side
+effects on state, and heap capture in polymorphic contexts in a
+pretty elegant way. It&#8217;s my hope that &#8220;throws&#8221; can provide a seed
+toward a full effects system like theirs.</p>
+<p class="last"><a class="reference external" href="http://www.eff-lang.org">http://www.eff-lang.org</a>: A language with first-class effects.</p>
+</div>
+</div>
+<div class="section" id="purity">
+<h2><a class="toc-backref" href="#id10">Purity</a><a class="headerlink" href="#purity" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="motivation-for-pure-functions">
+<h3><a class="toc-backref" href="#id11">Motivation for Pure Functions</a><a class="headerlink" href="#motivation-for-pure-functions" title="Permalink to this headline">¶</a></h3>
+<p>An important feature of Swift structs is that they can be defined such
+that they have value semantics. The optimizer should then be able to
+reason about these types with knowledge of those value semantics. This
+in turn allows the optimizer to reason about function purity, which is
+a powerful property. In particular, calls to pure functions can be
+hoisted out of loops and combined with other calls taking the same
+arguments. Pure functions also have no detrimental effect on
+optimizing the surrounding code.</p>
+<p>For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">bar</span><span class="p">&lt;</span><span class="no">T</span><span class="p">&gt;(</span><span class="n">t</span><span class="p">:</span><span class="w"> </span><span class="n">T</span><span class="p">) {</span><span class="o">..</span><span class="p">.}</span>
+
+<span class="kd">func </span><span class="nf">foo</span><span class="p">&lt;</span><span class="no">T</span><span class="p">&gt;(</span><span class="n">t</span><span class="p">:</span><span class="w"> </span><span class="n">T</span><span class="p">, </span><span class="n">N</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">) {</span>
+<span class="w">  </span><span class="kr">for </span><span class="n">_</span><span class="kr"> in </span><span class="mi">1</span><span class="o">..</span><span class="p">.</span><span class="n">N</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">bar</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="w">    </span><span class="n">bar</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>With some knowledge of bar() and T can become:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">foo</span><span class="p">&lt;</span><span class="no">T</span><span class="p">&gt;(</span><span class="n">t</span><span class="p">:</span><span class="w"> </span><span class="n">T</span><span class="p">, </span><span class="n">N</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">) {</span>
+<span class="w">  </span><span class="n">bar</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>If our own implementation of value types, like Array, Set, and String
+where annotated as know &#8220;pure values&#8221; and if their common operations
+are known to comply with some low-level effects, then the optimizer
+could infer more general purity of operations on those types. The
+optimizer could then also reason about purity of operations on user
+defined types composed from Arrays, Sets, and Strings.</p>
+</div>
+<div class="section" id="pure-value-types">
+<h3><a class="toc-backref" href="#id12">&#8220;Pure&#8221; Value Types</a><a class="headerlink" href="#pure-value-types" title="Permalink to this headline">¶</a></h3>
+<p>Conceptually, a pure value does not share state with another
+value. Any trivial struct is automatically pure. Other structs can be
+declared pure by the author. It then becomes the author&#8217;s
+responsibility to guarantee value semantics. For instance, any stored
+reference into the heap must either be to immutable data or protected
+by CoW.</p>
+<p>Since a pure value type can in practice share implementation state, we
+need an enforceable definition of such types. More formally:</p>
+<ul class="simple">
+<li>Copying or destroying a pure value cannot affect other program
+state.</li>
+<li>Reading memory referenced from a pure value does not depend on other
+program state. Writing memory referenced from a pure value cannot
+affect other program state.</li>
+</ul>
+<p>The purity of functions that operate on these values, including their
+own methods, must be deduced independently.</p>
+<p>From the optimizer perspective, there are two aspects of type purity
+that fall out of the definition:</p>
+<ol class="arabic">
+<li><p class="first">Side Effects of Copies</p>
+<p>Incrementing a reference count is not considered a side effect at
+the level of value semantics.  Destroying a pure value only
+destroys objects that are part of the value&#8217;s storage. This could
+be enforced by prohibiting arbitrary code inside the storage deinitializer.</p>
+</li>
+<li><p class="first">Aliasing</p>
+<p>Mutation of the pure value cannot affect program state apart from that value,
+AND writing program state outside the value cannot affect the pure value.</p>
+</li>
+</ol>
+<p>[Note] Reference counts are exposed through the isUniquelyReferenced
+API. Since copying a pure value can increase the reference of the
+storage, strictly speaking, a pure function can have user-visible side
+effects. We side step this issue by placing the burden on the user of
+the isUniquelyReferenced API. The compiler only guarantees that the
+API returns a non-unique reference count if there does happen to be an
+aliasing reference after optimization, which the user cannot
+control. The user must ensure that the program behaves identically in
+either case apart from its performance characteristics.</p>
+</div>
+<div class="section" id="pure-value-types-and-sil-optimizations">
+<h3><a class="toc-backref" href="#id13">Pure Value Types and SIL optimizations</a><a class="headerlink" href="#pure-value-types-and-sil-optimizations" title="Permalink to this headline">¶</a></h3>
+<p>The benefit of having pure value types is that optimizations can treat such
+types as if they were Swift value types, like struct. Member functions of pure
+value types can be annotated with effects, like <code class="docutils literal"><span class="pre">readnone</span></code> for <code class="docutils literal"><span class="pre">getElement</span></code>,
+even if the underlying implementation of <code class="docutils literal"><span class="pre">getElement</span></code> reads memory from the
+type&#8217;s storage.</p>
+<p>The compiler can do more optimistic optimizations for pure value types without
+the need of sophisticated alias or escape analysis.</p>
+<p>Consider this example.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">add</span><span class="p">(</span><span class="n">arr</span><span class="p">:</span><span class="w"> </span><span class="n">Array</span><span class="o">&lt;</span><span class="n">Int</span><span class="o">&gt;</span><span class="p">, </span><span class="n">i</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">Int</span><span class="p"> {</span>
+<span class="w">  </span><span class="kd">let </span><span class="nv">e1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">arr</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<span class="w">  </span><span class="n">unknownFunction</span><span class="p">()</span>
+<span class="w">  </span><span class="kd">let </span><span class="nv">e2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">arr</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>This code is generated to something like:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">add</span><span class="p">(</span><span class="n">arr</span><span class="p">:</span><span class="w"> </span><span class="n">Array</span><span class="o">&lt;</span><span class="n">Int</span><span class="o">&gt;</span><span class="p">, </span><span class="n">i</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">Int</span><span class="p"> {</span>
+<span class="w">  </span><span class="kd">let </span><span class="nv">e1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getElement</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">arr</span><span class="p">)</span>
+<span class="w">  </span><span class="n">unknownFunction</span><span class="p">()</span>
+<span class="w">  </span><span class="kd">let </span><span class="nv">e2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getElement</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">arr</span><span class="p">)</span>
+<span class="w">  </span><span class="kr">return</span><span class="w"> </span><span class="n">e1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">e2</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Now if the compiler can assume that Array is a pure value type and <code class="docutils literal"><span class="pre">getElement</span></code>
+has a defined effect of <code class="docutils literal"><span class="pre">readnone</span></code>, it can CSE the two calls. This is because
+the arguments, including the <code class="docutils literal"><span class="pre">arr</span></code> itself, are the same for both calls.</p>
+<p>Even if <code class="docutils literal"><span class="pre">unknownFunction</span></code> modifies an array which references the same storage
+as <code class="docutils literal"><span class="pre">arr</span></code>, CoW semantics will force <code class="docutils literal"><span class="pre">unknownFunction</span></code> to make a copy of the
+storage and the storage of <code class="docutils literal"><span class="pre">arr</span></code> will not be modified.</p>
+<p>Pure value types can only considered pure on high-level SIL, before effects
+and semantics functions are inlined. For an example see below.</p>
+<p>[TBD] Effects like <code class="docutils literal"><span class="pre">readnone</span></code> would have another impact on high-level SIL
+than on low-level SIL. We have to decide how we want to handle this.</p>
+</div>
+<div class="section" id="recognizing-value-types">
+<h3><a class="toc-backref" href="#id14">Recognizing Value Types</a><a class="headerlink" href="#recognizing-value-types" title="Permalink to this headline">¶</a></h3>
+<p>A major difficulty in recognizing value types arises when those types
+are implemented in terms of unsafe code with arbitrary side
+effects. This is the crux of the difficulty in defining the CoW
+effects. Consequently, communicating purity to the compiler will
+require some function annotations and/or type constraints.</p>
+<p>A CoW type consists of a top-level value type, most likely a struct, and a
+referenced storage, which may be shared between multiple instances of the CoW
+type.</p>
+<p>[TBD] Is there any difference between a &#8216;CoW type&#8217; and a &#8216;pure value type&#8217;?
+E.g. can there be CoW types which are not pure value types or vice versa?</p>
+<p>The important thing for a pure value type is that all functions which change
+the state are defined as mutating, even if they don&#8217;t mutate the top-level
+struct but only the referenced storage.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">For CoW data types this is required anyway, because any state-changing
+function will have to unique the storage and thus be able to replace the
+storage reference in the top-level struct.</p>
+</div>
+<p>Let&#8217;s assume we have a setElement function in Array.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">mutating</span><span class="w"> </span><span class="kd">func </span><span class="nf">setElement</span><span class="p">(</span><span class="n">i</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">, </span><span class="n">e</span><span class="p">:</span><span class="w"> </span><span class="n">Element</span><span class="p">) {</span>
+<span class="w">  </span><span class="n">storage</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Let&#8217;s replace the call to <code class="docutils literal"><span class="pre">unknownFunction</span></code> with a set of the i&#8217;th element
+in our example.
+The mutating function forces the array to be placed onto the stack and reloaded
+after the mutating function. This lets the second <code class="docutils literal"><span class="pre">getElement</span></code> function get
+another array parameter which prevents CSE of the two <code class="docutils literal"><span class="pre">getElement</span></code> calls.
+Shown in this swift-SIL pseudo code:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>func add(var arr: Array&lt;Int&gt;, i: Int) -&gt; Int {
+  let e1 = getElement(i, arr)
+  store arr to stack_array
+  setElement(i, 0, &amp;stack_array)
+  let arr2 = load from stack_array
+  let e2 = getElement(i, arr2)     // arr2 is another value than arr
+  return e1 + e2
+}
+</pre></div>
+</div>
+<p>Another important requirement for pure value types is that all functions,
+which directly access the storage, are not inlined during high-level SIL.
+Optimizations like code motion could move a store to the storage over a
+<code class="docutils literal"><span class="pre">readnone</span> <span class="pre">getElement</span></code>.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>func add(var arr: Array&lt;Int&gt;, i: Int) -&gt; Int {
+  let e1 = getElement(i, arr)
+  store arr to stack_array
+  stack_array.storage[i] = 0          // (1)
+  let arr2 = load from stack_array    // (2)
+  let e2 = getElement(i, arr2)        // (3)
+  return e1 + e2
+}
+</pre></div>
+</div>
+<p>Store (1) and load (2) do not alias and (3) is defined as <code class="docutils literal"><span class="pre">readnone</span></code>. So (1)
+could be moved over (3).</p>
+<p>Currently inlining is prevented in high-level SIL for all functions which
+have a semantics or effect attribute. Therefore we could say that the
+implementor of a pure value type has to define effects on all member functions
+which eventually can access or modify the storage.</p>
+<p>To help the user to fulfill this contract, the compiler can check if some
+effects annotations are missing.
+For this, the storage properties of a pure value type should be annotated.
+The compiler can check if all call graph paths
+from the type&#8217;s member functions to storage accessing functions contain at
+least one function with defined effects.
+Example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct Array {
+
+  @cow_storage var storage
+
+  @effect(...)
+  func getElement() { return storage.get() }
+
+  @effect(...)
+  func checkSubscript() { ... }
+
+  subscript { get {          // OK
+    checkSubscript()
+    return getElement()
+  } }
+
+  func getSize() {
+      return storage.size()  // Error!
+  }
+}
+</pre></div>
+</div>
+<p>[TBD] What if a storage property is public. What if a non member function
+accesses the storage.</p>
+<p>As discussed above, CoW types will often be generic, making the
+effects of an operation on the CoW type dependent on the effects of
+destroying an object of the element type.</p>
+<p>[erik] This is not the case if CoW types are always passed as guaranteed
+to the effects functions.</p>
+</div>
+<div class="section" id="inferring-function-purity">
+<h3><a class="toc-backref" href="#id15">Inferring Function Purity</a><a class="headerlink" href="#inferring-function-purity" title="Permalink to this headline">¶</a></h3>
+<p>The optimizer can infer function purity by knowing that (1) the
+function does not access unspecified state, (2) all arguments are pure
+values, and (3) no calls are made into non-pure code.</p>
+<ol class="arabic simple">
+<li>The effects system described above already tells the optimizer via
+analysis or annotation that the function does not access
+unspecified state.</li>
+<li>Copying or destroying a pure value by definition has no impact on
+other program state. The optimizer may either deduce this from the
+type definition, or it may rely on a type constraint.</li>
+<li>Naturally, any calls within the function body must be transitively
+pure. There is no need to check calls to the storage
+deinitializer, which should already be guaranteed pure by virtue
+of (2).</li>
+</ol>
+<p>Mutability of a pure value should not affect the purity of functions
+that operate on the value. An inout argument is semantically nothing
+more than a copy of the value.</p>
+<p>[Note] Pure functions do not depend on or imply anything about the
+reference counting effects: capture and release. Optimizations that
+depend on reference count stability, like uniqueness hoisting, cannot
+treat pure functions as side-effect free.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">[Andy] It may be possible to make some assumptions about
+immutability of <code class="docutils literal"><span class="pre">let</span></code> variables, which could lead to similar
+optimization.</p>
+</div>
+<p>TODO: Need more clarity and examples</p>
+</div>
+</div>
+<div class="section" id="closures">
+<h2><a class="toc-backref" href="#id16">Closures</a><a class="headerlink" href="#closures" title="Permalink to this headline">¶</a></h2>
+<p>Mostly TBD.</p>
+<p>The optimizer does not currently have a way of statically determining
+or enforcing effects of a function that takes a closure. We could
+introduce attributes that statically enforce constraints. For example,
+and &#64;pure closure would only be permitted to close over pure values.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">[Andy] That is a fairly strict requirement, but not one that I know
+how to overcome.</p>
+</div>
+</div>
+<div class="section" id="thread-safety">
+<h2><a class="toc-backref" href="#id17">Thread Safety</a><a class="headerlink" href="#thread-safety" title="Permalink to this headline">¶</a></h2>
+<p>The Swift concurrency proposal refers to a <code class="docutils literal"><span class="pre">Copyable</span></code> type. A type
+must be Copyable in order to pass it across threads via a
+<code class="docutils literal"><span class="pre">gateway</span></code>. The definition of a Copyable type is equivalent to a
+&#8220;pure value&#8221;. However, it was also proposed that the programmer be
+able to annotate arbitrary data types as Copyable even if they contain
+shared state as long as it is protected via a mutex. However, such
+data types cannot be considered pure by the optimizer. I instead
+propose that a separate constraint, Synchronized, be attributed to
+shareable types that are not pure. An object could be passed through a
+gateway either if it is a PureValue or is Synchronized.</p>
+<p>Annotations for thread safety run into the same problems with generics
+and closures.</p>
+</div>
+<div class="section" id="api-and-resilience">
+<h2><a class="toc-backref" href="#id18">API and Resilience</a><a class="headerlink" href="#api-and-resilience" title="Permalink to this headline">¶</a></h2>
+<p>Any type constraints, function effects, or closure attributes that we
+introduce on public functions become part of the API.</p>
+<p>Naturally, there are resilience implications to user-specified
+effects. Moving to a weaker set of declared effects is not resilient.</p>
+<p>Generally, a default-safe policy provides a much better user model
+from some effects. For example, we could decide that functions cannot
+affect unspecified state by default. If the user accesses globals,
+they then need to annotate their function. However, default safety
+dictates that any necessary annotations should be introduced before
+declaring API stability.</p>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

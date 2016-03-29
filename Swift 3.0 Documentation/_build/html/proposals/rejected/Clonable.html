@@ -1,0 +1,211 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Clonable &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../../_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="../../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../../index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Clonable</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="clonable">
+<h1>Clonable<a class="headerlink" href="#clonable" title="Permalink to this headline">¶</a></h1>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Author:</th><td class="field-body">Dave Abrahams</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Author:</th><td class="field-body">Joe Groff</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Date:</th><td class="field-body">2013-03-21</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Edition:</th><td class="field-body">2</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This proposal was rejected. We decided not to introduce a
+language-level copying mechanism for classes.</p>
+</div>
+<p><strong>Abstract:</strong> to better support the creation of value types, we
+propose a &#8220;magic&#8221; <code class="docutils literal"><span class="pre">Clonable</span></code> protocol and an annotation for describing
+which instance variables should be cloned when a type is copied.  This
+proposal <strong>augments revision 1</strong> of the Clonable proposal with our
+rationale for dropping our support for <code class="docutils literal"><span class="pre">val</span></code> and <code class="docutils literal"><span class="pre">ref</span></code>, a
+description of the programming model for generics, and a brief
+discussion of equality.  It is <strong>otherwise unchanged</strong>.</p>
+<div class="section" id="rationale">
+<h2>Rationale<a class="headerlink" href="#rationale" title="Permalink to this headline">¶</a></h2>
+<p>By eliminating <code class="docutils literal"><span class="pre">val</span></code>, we lose the easy creation of
+runtime-polymorphic value types.  Instead of merely writing:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">val</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">MyClass</span>
+</pre></div>
+</div>
+<p>one has to engage in some kind of wrapping and forwarding:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">struct </span><span class="nc">MyClassVal</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">var </span><span class="p">[</span><span class="na">clone</span><span class="p">]</span><span class="w"> </span><span class="nv">value</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">MyClass</span>
+
+<span class="w">  </span><span class="n">constructor</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">B</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">     </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kr">new </span><span class="no">MyClass</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">)</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="kd">func </span><span class="nf">someFunction</span><span class="p">(</span><span class="n">z</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">C</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">D</span><span class="p"> {</span>
+<span class="w">    </span><span class="kr">return</span><span class="w"> </span><span class="n">value</span><span class="p">.</span><span class="n">someFunction</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="c1">// ...etc...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Although such wrapping is awful, this is not the only place where one
+would want to do it.  Therefore, some kind of ability to forward an
+entire interface wholesale could be added as a separate extension
+(getter/setter for <code class="docutils literal"><span class="pre">This</span></code>?), which would solve more problems.  Then it
+would be easy enough to write the wrapper as a generic struct and
+<code class="docutils literal"><span class="pre">Val&lt;T&gt;</span></code> would be a reality.</p>
+<p>By eliminating <code class="docutils literal"><span class="pre">ref</span></code>, we lose the easy creation of references to
+value types.  However, among those who prefer programming with values,
+having an explicit step for dereferencing might make more sense, so we
+could use this generic class:</p>
+<blockquote>
+<div>class Reference&lt;T&gt; { value : T }</div></blockquote>
+<p>If explicit dereferencing isn&#8217;t desired, there&#8217;s always manual (or
+automatic, if we add that feature) forwarding.</p>
+<p>By dropping <code class="docutils literal"><span class="pre">val</span></code> we also lose some terseness aggregating <code class="docutils literal"><span class="pre">class</span></code>
+contents into <code class="docutils literal"><span class="pre">struct</span></code>s.  However, since <code class="docutils literal"><span class="pre">ref</span></code> is being dropped
+there&#8217;s less call for a symmetric <code class="docutils literal"><span class="pre">val</span></code>.  The extra &#8220;cruft&#8221; that
+<code class="docutils literal"><span class="pre">[clone]</span></code> adds actually seems appropriate when viewed as a special
+bridge for <code class="docutils literal"><span class="pre">class</span></code> types, and less like a penalty against value
+types.</p>
+</div>
+<div class="section" id="generics">
+<h2>Generics<a class="headerlink" href="#generics" title="Permalink to this headline">¶</a></h2>
+<p>There is actually a straightforward programming model for generics.
+If you want to design a generic component where a type parameter <code class="docutils literal"><span class="pre">T</span></code>
+binds to both <code class="docutils literal"><span class="pre">class</span></code>es and non-<code class="docutils literal"><span class="pre">class</span></code> types, you can view
+<code class="docutils literal"><span class="pre">T</span></code> as a value type where—as with C pointers—the value is the
+reference rather than the object being referred to.</p>
+<p>Of course, if <code class="docutils literal"><span class="pre">T</span></code> is only supposed to bind to <code class="docutils literal"><span class="pre">class</span></code>es, a
+different programming model may work just as well.</p>
+</div>
+<div class="section" id="implications-for-equality">
+<h2>Implications for Equality<a class="headerlink" href="#implications-for-equality" title="Permalink to this headline">¶</a></h2>
+<p>We think the programming model suggested for generics has some pretty
+strong implications for equality of <code class="docutils literal"><span class="pre">class</span></code>es: <code class="docutils literal"><span class="pre">a</span> <span class="pre">==</span> <span class="pre">b</span></code> must
+return true iff <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">b</span></code> refer to the same object.</p>
+</div>
+<div class="section" id="details-unchanged-from-revision-1">
+<h2>Details <em>(unchanged from Revision 1)</em><a class="headerlink" href="#details-unchanged-from-revision-1" title="Permalink to this headline">¶</a></h2>
+<p>When a type with reference semantics <code class="docutils literal"><span class="pre">R</span></code> is to be used as a part of
+(versus merely being referred-to-by) a type with value semantics <code class="docutils literal"><span class="pre">V</span></code>,
+a new annotation, <code class="docutils literal"><span class="pre">[clone]</span></code> can be used to indicate that the <code class="docutils literal"><span class="pre">R</span></code>
+instance variable should be <code class="docutils literal"><span class="pre">clone()</span></code>d when <code class="docutils literal"><span class="pre">V</span></code> is copied.</p>
+<p>A <code class="docutils literal"><span class="pre">class</span></code> can be <code class="docutils literal"><span class="pre">clone()</span></code>d when it implements the built-in <code class="docutils literal"><span class="pre">Clonable</span></code>
+protocol:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>protocol Clonable {
+   func clone() -&gt; Self { /* see below */ }
+}
+</pre></div>
+</div>
+<p>The implementation of <code class="docutils literal"><span class="pre">clone()</span></code> (which will be generated by the
+compiler and typically never overridden) performs a primitive copy of
+all ordinary instance variables, and a <code class="docutils literal"><span class="pre">clone()</span></code> of all instance
+variables marked <code class="docutils literal"><span class="pre">[clone]</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">class </span><span class="nc">FooValue</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Clonable</span><span class="w">  </span><span class="p">{}</span>
+
+<span class="kd">class </span><span class="nc">Bar</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="kd">class </span><span class="nc">Foo</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Clonable</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">var </span><span class="nv">count</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Int</span>
+<span class="w">    </span><span class="kd">var </span><span class="p">[</span><span class="na">clone</span><span class="p">]</span><span class="w"> </span><span class="nv">myValue</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">FooValue</span>
+<span class="w">    </span><span class="kd">var </span><span class="nv">somethingIJustReferTo</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Bar</span>
+<span class="p">}</span>
+
+<span class="kd">struct </span><span class="nc">Baz</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">var </span><span class="p">[</span><span class="na">clone</span><span class="p">]</span><span class="w"> </span><span class="nv">partOfMyValue</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Foo</span>
+<span class="w">    </span><span class="kd">var </span><span class="nv">anotherPart</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Int</span>
+<span class="w">    </span><span class="kd">var </span><span class="nv">somethingIJustReferTo</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Bar</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>When a <code class="docutils literal"><span class="pre">Baz</span></code> is copied by any of the &#8220;big three&#8221; operations (variable
+initialization, assignment, or function argument passing), even as
+part of a larger <code class="docutils literal"><span class="pre">struct</span></code>, its <code class="docutils literal"><span class="pre">[clone]</span></code> member is <code class="docutils literal"><span class="pre">clone()</span></code>d.
+Because <code class="docutils literal"><span class="pre">Foo</span></code> itself has a <code class="docutils literal"><span class="pre">[clone]</span></code> member, that is <code class="docutils literal"><span class="pre">clone()</span></code>d
+also.  Therefore copying a <code class="docutils literal"><span class="pre">Baz</span></code> object <code class="docutils literal"><span class="pre">clone()</span></code>s a <code class="docutils literal"><span class="pre">Foo</span></code> and
+<code class="docutils literal"><span class="pre">clone()</span></code>ing a <code class="docutils literal"><span class="pre">Foo</span></code> <code class="docutils literal"><span class="pre">clone()</span></code>s a <code class="docutils literal"><span class="pre">FooValue</span></code>.</p>
+<p>All <code class="docutils literal"><span class="pre">struct</span></code>s are <code class="docutils literal"><span class="pre">Clonable</span></code> by default, with <code class="docutils literal"><span class="pre">clone()</span></code> delivering
+ordinary copy semantics.  Therefore,</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Baz</span>
+<span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span><span class="p">.</span><span class="n">clone</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>is equivalent to</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Baz</span>
+<span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span>
+</pre></div>
+</div>
+<p>Note that <code class="docutils literal"><span class="pre">Clonable</span></code> is the first protocol with a default
+implementation that can&#8217;t currently be written in the standard library
+(though arguably we&#8217;d like to add the capability to write that
+implementation).</p>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

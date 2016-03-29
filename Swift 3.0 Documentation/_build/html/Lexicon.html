@@ -1,0 +1,226 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Lexicon &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Lexicon</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <p>This file defines several terms used by the Swift compiler and standard library
+source code, tests, and commit messages. See also the <a class="reference external" href="http://llvm.org/docs/Lexicon.html">LLVM lexicon</a>.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This document uses Sphinx-specific features. If you are viewing this on
+GitHub, you&#8217;ll have to use raw mode, or download and build the docs
+yourself.</p>
+</div>
+<dl class="glossary docutils">
+<dt id="term-archetype">archetype</dt>
+<dd>A placeholder for a generic parameter or an associated type within a
+generic context.</dd>
+<dt id="term-canonical-sil">canonical SIL</dt>
+<dd>SIL after the
+<a class="reference internal" href="#term-mandatory-passes-mandatory-optimizations"><span class="xref std std-term">mandatory passes</span></a> have run.
+This can be used as input to IRGen to generate LLVM IR or object files.</dd>
+<dt id="term-clang-importer">Clang importer</dt>
+<dd>The part of the compiler that reads C and Objective-C declarations and
+exposes them as Swift. Essentially contains a small instance of Clang
+running inside the Swift compiler, which is also used during IRGen.</dd>
+<dt id="term-conformance">conformance</dt>
+<dd>A construct detailing how a particular type conforms to a particular
+protocol. Represented in the compiler by the ProtocolConformance type at
+the AST level. See also <a class="reference internal" href="#term-witness-table"><span class="xref std std-term">witness table</span></a>.</dd>
+<dt id="term-di-definite-initialization-definitive-initialization">DI (definite initialization / definitive initialization)</dt>
+<dd>The feature that no uninitialized variables, constants, or properties will
+be read by a program, or the analysis pass that operates on SIL to
+guarantee this. This was <a class="reference external" href="https://developer.apple.com/swift/blog/?id=28">discussed on Apple&#8217;s Swift blog</a>.</dd>
+<dt id="term-existential">existential</dt>
+<dd>A value whose type is a protocol composition (including a single protocol
+and <em>zero</em> protocols; the latter is the <code class="docutils literal"><span class="pre">Any</span></code> type).</dd>
+<dt id="term-fragile">fragile</dt>
+<dd>Describes a type or function where making changes will break binary
+compatibility. See <a class="reference internal" href="LibraryEvolution.html"><em>LibraryEvolution.rst</em></a>.</dd>
+<dt id="term-iuo-implicitly-unwrapped-optional">IUO (implicitly unwrapped optional)</dt>
+<dd>A type like Optional, but it implicitly converts to its wrapped type. If
+the value is <code class="docutils literal"><span class="pre">nil</span></code> during such a conversion, the program traps just as
+it would when a normal Optional is force-unwrapped. IUOs implicitly
+convert to and from normal Optionals with the same wrapped type.</dd>
+<dt id="term-main-module">main module</dt>
+<dd>The module for the file or files currently being compiled.</dd>
+<dt id="term-mandatory-passes-mandatory-optimizations">mandatory passes / mandatory optimizations</dt>
+<dd>Transformations over SIL that run immediately after SIL generation. Once
+all mandatory passes have run (and if no errors are found), the SIL is
+considered <a class="reference internal" href="#term-canonical-sil"><span class="xref std std-term">canonical</span></a>.</dd>
+<dt id="term-metatype">metatype</dt>
+<dd><p class="first">The type of a value representing a type. Greg Parker has a good
+explanation of <a class="reference external" href="http://sealiesoftware.com/blog/archive/2009/04/14/objc_explain_Classes_and_metaclasses.html">Objective-C&#8217;s &#8220;metaclasses&#8221;</a>; because Swift has types
+that are <em>not</em> classes, a more general term is used.</p>
+<p class="last">We also sometimes refer to a value representing a type as a &#8220;metatype
+object&#8221; or just &#8220;metatype&#8221;, usually within low-level contexts like IRGen
+and LLDB. This is technically incorrect (it&#8217;s just a &#8220;type object&#8221;), but
+the malapropism happened early in the project and has stuck around.</p>
+</dd>
+<dt id="term-model">model</dt>
+<dd>A type that conforms to a particular protocol. Sometimes &#8220;concrete
+model&#8221;. Example: &#8220;Array and Set are both models of CollectionType&#8221;.</dd>
+<dt id="term-module">module</dt>
+<dd><p class="first">Has <em>many</em> uses in the Swift world. We may want to rename some of them.
+#1 and #2 are the most common.</p>
+<ol class="last arabic simple">
+<li>A unit of API distribution and grouping. The <code class="docutils literal"><span class="pre">import</span></code> declaration
+brings modules into scope. Represented as ModuleDecl in the compiler.</li>
+<li>A compilation unit; that is, source files that are compiled together.
+These files may contain cross-references. Represented as &#8220;the main
+module&#8221; (a specific ModuleDecl).</li>
+<li>(as &#8220;SIL module&#8221;) A container for SIL to be compiled together, along
+with various context for the compilation.</li>
+<li>(as &#8220;LLVM module&#8221;) A collection of LLVM IR to be compiled together.
+Always created in an LLVMContext.</li>
+<li>A file containing serialized AST and SIL information for a source file
+or entire compilation unit. Often &#8220;swiftmodule file&#8221;, with &#8220;swiftmodule&#8221;
+pronounced as a single word.</li>
+<li>(as &#8220;Clang module&#8221;) A set of self-contained C-family header files.
+Represented by a ClangModuleUnit in the Swift compiler, each of which is
+contained in its own ModuleDecl. For more information, see
+<a class="reference external" href="http://clang.llvm.org/docs/Modules.html">Clang&#8217;s documentation for Modules</a>.</li>
+<li>Shorthand for a &#8220;precompiled module file&#8221;; effectively &#8220;precompiled
+headers&#8221; for an entire Clang module. Never used directly by Swift.
+See also <a class="reference internal" href="#term-module-cache"><span class="xref std std-term">module cache</span></a>.</li>
+</ol>
+</dd>
+<dt id="term-module-cache">module cache</dt>
+<dd>Clang&#8217;s cache directory for precompiled module files. As cache files, these
+are not forward-compatible, and so cannot be loaded by different versions
+of Clang (or programs using Clang, like the Swift compiler). Normally this
+is fine, but occasionally a development compiler will not have proper
+version information and may try to load older module files, resulting in
+crashes in <code class="docutils literal"><span class="pre">clang::ASTReader</span></code>.</dd>
+<dt id="term-open-existential">open existential</dt>
+<dd>An <a class="reference internal" href="#term-existential"><span class="xref std std-term">existential</span></a> value with its dynamic type pulled out, so that the
+compiler can do something with it.</dd>
+<dt id="term-pr">PR</dt>
+<dd><ol class="first last arabic simple">
+<li>&#8220;Problem Report&#8221;: An issue reported in <a class="reference external" href="https://llvm.org/bugs/">LLVM&#8217;s bug tracker</a>.
+See also <a class="reference internal" href="#term-sr"><span class="xref std std-term">SR</span></a>.</li>
+<li>&#8220;pull request&#8221;</li>
+</ol>
+</dd>
+<dt id="term-primary-file">primary file</dt>
+<dd>The file currently being compiled, as opposed to the other files that are
+only needed for context. See also
+<a class="reference internal" href="#term-wmo-whole-module-optimization"><span class="xref std std-term">Whole-Module Optimization</span></a>.</dd>
+<dt id="term-radar">Radar</dt>
+<dd><a class="reference external" href="https://bugreport.apple.com">Apple&#8217;s bug-tracking system</a>, or an issue reported on that system.</dd>
+<dt id="term-raw-sil">raw SIL</dt>
+<dd>SIL just after being generated, not yet in a form that can be used for
+IR generation.
+See <a class="reference internal" href="#term-mandatory-passes-mandatory-optimizations"><span class="xref std std-term">mandatory passes</span></a>.</dd>
+<dt id="term-resilient">resilient</dt>
+<dd>Describes a type or function where making certain changes will not break
+binary compatibility. See <a class="reference internal" href="LibraryEvolution.html"><em>LibraryEvolution.rst</em></a>.</dd>
+<dt id="term-script-mode">script mode</dt>
+<dd>The parsing mode that allows top-level imperative code in a source file.</dd>
+<dt id="term-sil">SIL</dt>
+<dd>&#8220;Swift Intermediate Language&#8221;. A high-level IR used by the Swift compiler
+for flow-sensitive diagnostics, optimization, and LLVM IR generation.</dd>
+<dt id="term-sil-serialize-all">-sil-serialize-all</dt>
+<dd>A mode where all functions in a library are made available for inlining by
+any client, regardless of access control. Also called &#8220;magic performance
+mode&#8221; as a reminder of how this drastically changes compilation. Not
+guaranteed to work on arbitrary code.</dd>
+<dt id="term-sr">SR</dt>
+<dd>An issue reported on <a class="reference external" href="https://bugs.swift.org">bugs.swift.org</a>. A
+backronym for &#8220;Swift Report&#8221;; really the name is derived from LLVM&#8217;s
+idiomatic use of &#8220;PR&#8221; (&#8220;Problem Report&#8221;) for its bugs. We didn&#8217;t go with
+&#8220;PR&#8221; for Swift because we wanted to be able to unambiguously reference
+LLVM bugs.</dd>
+<dt id="term-trap">trap</dt>
+<dd>A deterministic runtime failure. Can be used as both as a noun (&#8220;Using an
+out-of-bounds index on an Array results in a trap&#8221;) and a verb
+(&#8220;Force-unwrapping a nil Optional will trap&#8221;).</dd>
+<dt id="term-type-metadata">type metadata</dt>
+<dd>The runtime representation of a type, and everything you can do with it.
+Like a <code class="docutils literal"><span class="pre">Class</span></code> in Objective-C, but for any type.</dd>
+<dt id="term-value-witness-table">value witness table</dt>
+<dd><p class="first">A runtime structure that describes how to do basic operations on an unknown
+value, like &#8220;assign&#8221;, &#8220;copy&#8221;, and &#8220;destroy&#8221;. (For example, does copying
+this value require any retains?)</p>
+<p class="last">Only conceptually related to a <a class="reference internal" href="#term-witness-table"><span class="xref std std-term">witness table</span></a>.</p>
+</dd>
+<dt id="term-vtable-virtual-dispatch-table">vtable (virtual dispatch table)</dt>
+<dd>A map attached to a class of which implementation to use for each
+overridable method in the class. Unlike an Objective-C method table,
+vtable keys are just offsets, making lookup much simpler at the cost of
+dynamism and duplicated information about <em>non</em>-overridden methods.</dd>
+<dt id="term-witness">witness</dt>
+<dd>The value or type that satisfies a protocol requirement.</dd>
+<dt id="term-witness-table">witness table</dt>
+<dd><p class="first">The SIL (and runtime) representation of a <a class="reference internal" href="#term-conformance"><span class="xref std std-term">conformance</span></a>; essentially a
+<a class="reference internal" href="#term-vtable-virtual-dispatch-table"><span class="xref std std-term">vtable</span></a> but for a protocol instead of
+a class.</p>
+<p class="last">Only conceptually related to a <a class="reference internal" href="#term-value-witness-table"><span class="xref std std-term">value witness table</span></a>.</p>
+</dd>
+<dt id="term-wmo-whole-module-optimization">WMO (whole-module optimization)</dt>
+<dd>A compilation mode where all files in a module are compiled in a single
+process. In this mode there is no <a class="reference internal" href="#term-primary-file"><span class="xref std std-term">primary file</span></a>; all files are parsed,
+type-checked, and optimized together at the SIL level. LLVM optimization
+and object file generation may happen all together or in separate threads.</dd>
+</dl>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>
