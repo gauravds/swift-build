@@ -1,0 +1,422 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Case Initializers &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Case Initializers</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <p>One of the issues that came up in our design discussions around <code class="docutils literal"><span class="pre">Result</span></code> was
+that enum cases don&#8217;t really follow the conventions of anything else in our
+system. Our current convention for enum cases is to use
+<code class="docutils literal"><span class="pre">CapitalizedCamelCase</span></code>. This convention arose from the Cocoa
+<code class="docutils literal"><span class="pre">NSEnumNameCaseName</span></code> convention for constants, but the convention feels
+foreign even in the context of Objective-C. Non-enum type constants in Cocoa
+are often namespaced into classes, using class methods such as <code class="docutils literal"><span class="pre">[UIColor</span>
+<span class="pre">redColor]</span></code> (and would likely have been class properties if those were
+supported by ObjC). It&#8217;s also worth noting that our &#8220;builtin&#8221; enum-like
+keywords such as <code class="docutils literal"><span class="pre">true</span></code>, <code class="docutils literal"><span class="pre">false</span></code>, and <code class="docutils literal"><span class="pre">nil</span></code> are lowercased, more like
+properties.</p>
+<p>Swift also has enum cases with associated values, which don&#8217;t have an immediate
+analog in Cocoa to draw inspiration from, but if anything feel
+&#8220;initializer-like&#8221;.  Aside from naming style, working with enum values also
+requires a different set of tools from other types, pattern matching with
+<code class="docutils literal"><span class="pre">switch</span></code> or <code class="docutils literal"><span class="pre">if</span> <span class="pre">case</span></code> instead of working with more readily-composable
+expressions. The compound effect of these style mismatches is that enums in the
+wild tend to grow a bunch of boilerplate helper members in order to make them
+fit better with other types.  For example, <code class="docutils literal"><span class="pre">Optional</span></code>, aside from the massive
+amounts of language sugar it&#8217;s given, vends initializers corresponding to
+<code class="docutils literal"><span class="pre">Some</span></code> and <code class="docutils literal"><span class="pre">None</span></code> cases:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">extension </span><span class="nc">Optional</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">init</span><span class="p">(</span><span class="n">_</span><span class="w"> </span><span class="n">value</span><span class="p">:</span><span class="w"> </span><span class="n">Wrapped</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="bp">self</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="no">Some</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="n">init</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="bp">self</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">None</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">Result</span></code> was proposed to have not only initializers corresponding to its
+<code class="docutils literal"><span class="pre">Success</span></code> and <code class="docutils literal"><span class="pre">Error</span></code> cases, but accessor properties as well:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>extension Result {
+  init(success: Wrapped) {
+    self = .Success(success)
+  }
+  init(error: ErrorProtocol) {
+    self = .Error(error)
+  }
+
+  var success: Wrapped? {
+    switch self {
+    case .Success(let success): return success
+    case .Error: return nil
+    }
+  }
+  var error: ErrorProtocol? {
+    switch self {
+    case .Success: return nil
+    case .Error(let error): return error
+    }
+  }
+}
+</pre></div>
+</div>
+<p>This pattern of boilerplate also occurs in third-party frameworks that make
+heavy use of enums. Some examples from Github:</p>
+<ul class="simple">
+<li><a class="reference external" href="https://github.com/antitypical/Manifold/blob/ae94eb96085c2c8195d457e06df485b1cca455cb/Manifold/Name.swift">https://github.com/antitypical/Manifold/blob/ae94eb96085c2c8195d457e06df485b1cca455cb/Manifold/Name.swift</a></li>
+<li><a class="reference external" href="https://github.com/antitypical/TesseractCore/blob/73099ae5fa772b90cefa49395f237290d8363f76/TesseractCore/Symbol.swift">https://github.com/antitypical/TesseractCore/blob/73099ae5fa772b90cefa49395f237290d8363f76/TesseractCore/Symbol.swift</a></li>
+<li><a class="reference external" href="https://github.com/antitypical/TesseractCore/blob/73099ae5fa772b90cefa49395f237290d8363f76/TesseractCore/Value.swift">https://github.com/antitypical/TesseractCore/blob/73099ae5fa772b90cefa49395f237290d8363f76/TesseractCore/Value.swift</a></li>
+</ul>
+<p>That people inside and outside of our team consider this boilerplate necessary
+for enums is a strong sign we should improve our core language design.
+I&#8217;d like to start discussion by proposing the following:</p>
+<ul>
+<li><p class="first">Because cases with associated values are initializer-like, declaring and
+using them ought to feel like using initializers on other types.
+A <code class="docutils literal"><span class="pre">case</span></code> declaration should be able to declare an initializer, which
+follows the same keyword naming rules as other initializers, for example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">Result</span><span class="o">&lt;</span><span class="n">Wrapped</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">success</span><span class="p">:</span><span class="w"> </span><span class="n">Wrapped</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">error</span><span class="p">:</span><span class="w"> </span><span class="n">ErrorProtocol</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Constructing a value of the case can then be done with the usual initializer
+syntax:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">let </span><span class="nv">success</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">Result</span><span class="p">(</span><span class="n">success</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="kd">let </span><span class="nv">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">Result</span><span class="p">(</span><span class="n">error</span><span class="p">:</span><span class="w"> </span><span class="n">SillyError</span><span class="p">.</span><span class="n">JazzHands</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>And case initializers can be pattern-matched using initializer-like
+matching syntax:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>switch result {
+case Result(success: let success):
+  ...
+case Result(error: let error):
+  ...
+}
+</pre></div>
+</div>
+</li>
+<li><p class="first">Enums with associated values implicitly receive <code class="docutils literal"><span class="pre">internal</span></code> properties
+corresponding to the argument labels of those associated values. The
+properties are optional-typed unless a value with the same name and type
+appears in every <code class="docutils literal"><span class="pre">case</span></code>. For example, this enum:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">public</span><span class="w"> </span><span class="n">enum</span><span class="w"> </span><span class="n">Example</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">foo</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">,</span><span class="w"> </span><span class="n">alwaysPresent</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">bar</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">,</span><span class="w"> </span><span class="n">alwaysPresent</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>receives the following implicit members:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>/*implicit*/
+internal extension Example {
+  var foo: Int? { get }
+  var bar: Int? { get }
+  var alwaysPresent: String { get } // Not optional
+}
+</pre></div>
+</div>
+</li>
+<li><p class="first">Because cases without associated values are property-like, they ought to
+follow the <code class="docutils literal"><span class="pre">lowercaseCamelCase</span></code> naming convention of other properties.
+For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">ComparisonResult</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">descending</span><span class="p">,</span><span class="w"> </span><span class="n">same</span><span class="p">,</span><span class="w"> </span><span class="n">ascending</span>
+<span class="p">}</span>
+
+<span class="n">enum</span><span class="w"> </span><span class="n">Bool</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="kr">true</span><span class="p">,</span><span class="w"> </span><span class="kr">false</span>
+<span class="p">}</span>
+
+<span class="n">enum</span><span class="w"> </span><span class="n">Optional</span><span class="o">&lt;</span><span class="n">Wrapped</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">nil</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">_</span><span class="w"> </span><span class="n">some</span><span class="p">:</span><span class="w"> </span><span class="n">Wrapped</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</li>
+</ul>
+<p>Since this proposal affects how we name things, it has ABI stability
+implications (albeit ones we could hack our way around with enough symbol
+aliasing), so I think we should consider this now. It also meshes with other
+naming convention discussions that have been happening.</p>
+<p>I&#8217;ll discuss the points above in more detail:</p>
+<div class="section" id="case-initializers">
+<h1>Case Initializers<a class="headerlink" href="#case-initializers" title="Permalink to this headline">¶</a></h1>
+<p>Our standard recommended style for cases with associated values should be
+to declare them as initializers with keyword arguments, much as we do
+other kinds of initializer:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">Result</span><span class="o">&lt;</span><span class="n">Wrapped</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">success</span><span class="p">:</span><span class="w"> </span><span class="n">Wrapped</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">error</span><span class="p">:</span><span class="w"> </span><span class="n">ErrorProtocol</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="n">enum</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">Element</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">empty</span>
+<span class="w">  </span><span class="n">indirect</span><span class="w"> </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">element</span><span class="p">:</span><span class="w"> </span><span class="n">Element</span><span class="p">,</span><span class="w"> </span><span class="n">rest</span><span class="p">:</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">Element</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>It should be possible to declare unlabeled case initializers too, for types
+like Optional with a natural &#8220;primary&#8221; case:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">Optional</span><span class="o">&lt;</span><span class="n">Wrapped</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">nil</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">_</span><span class="w"> </span><span class="n">some</span><span class="p">:</span><span class="w"> </span><span class="n">Wrapped</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Patterns should also be able to match against case initializers:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>switch result {
+case Result(success: let s):
+  ...
+case Result(error: let e):
+  ...
+}
+</pre></div>
+</div>
+<div class="section" id="overloading">
+<h2>Overloading<a class="headerlink" href="#overloading" title="Permalink to this headline">¶</a></h2>
+<p>I think it would also be reasonable to allow overloading of case initializers,
+as long as the associated value types cannot overlap. (If the keyword labels
+are overloaded and the associated value types overlap, there would
+be no way to distinguish the cases.) Overloading is not essential, though, and
+it would be simpler to disallow it.</p>
+</div>
+<div class="section" id="named-cases-with-associated-values">
+<h2>Named cases with associated values<a class="headerlink" href="#named-cases-with-associated-values" title="Permalink to this headline">¶</a></h2>
+<p>One question would be, if we allow <code class="docutils literal"><span class="pre">case</span> <span class="pre">init</span></code> declarations, whether we
+should also remove the existing ability to declare named cases with associated
+values:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">Foo</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// OK</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">foo</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span>
+<span class="w">  </span><span class="c1">// Should this become an error?</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">foo</span><span class="p">(</span><span class="n">Int</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Doing so would help unambiguously push the new style, but would drive a
+syntactic wedge between associated-value and no-associated-value cases.
+If we keep named cases with associated values, I think we should consider
+altering the declaration syntax to require keyword labels (or explicit <code class="docutils literal"><span class="pre">_</span></code>
+to suppress labels), for better consistency with other function-like decls:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">Foo</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// Should be a syntax error, &#39;label:&#39; expected</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">foo</span><span class="p">(</span><span class="n">Int</span><span class="p">)</span>
+
+<span class="w">  </span><span class="c1">// OK</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">foo</span><span class="p">(</span><span class="n">_</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span>
+
+<span class="w">  </span><span class="c1">// OK</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">foo</span><span class="p">(</span><span class="n">label</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="shorthand-for-init-style-cases">
+<h2>Shorthand for init-style cases<a class="headerlink" href="#shorthand-for-init-style-cases" title="Permalink to this headline">¶</a></h2>
+<p>Unlike enum cases and static methods, initializers currently don&#8217;t have any
+contextual shorthand when the type of an initialization can be inferred from
+context. This could be seen as an expressivity regression in some cases.
+With named cases, one can write:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">foo</span><span class="p">(.</span><span class="no">Left</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>but with case initializers, they have to write:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">foo</span><span class="p">(</span><span class="no">Either</span><span class="p">(</span><span class="n">left</span><span class="p">:</span><span class="w"> </span><span class="n">x</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Some would argue this is clearer. It&#8217;s a bit more painful in <code class="docutils literal"><span class="pre">switch</span></code>
+patterns, though, where the type would need to be repeated redundantly:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>switch x {
+case Either(left: let left):
+  ...
+case Either(right: let right):
+  ...
+}
+</pre></div>
+</div>
+<p>One possibility would be to allow <code class="docutils literal"><span class="pre">.init</span></code>, like we do other static methods:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>switch x {
+case .init(left: let left):
+  ...
+case .init(right: let right):
+  ...
+}
+</pre></div>
+</div>
+<p>Or maybe allow labeled tuple patterns to match, leaving the name off
+altogether:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>switch x {
+case (left: let left):
+  ...
+case (right: let right):
+  ...
+}
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="implicit-case-properties">
+<h1>Implicit Case Properties<a class="headerlink" href="#implicit-case-properties" title="Permalink to this headline">¶</a></h1>
+<p>The only native operation enums currently support is <code class="docutils literal"><span class="pre">switch</span></code>-ing. This is
+nice and type-safe, but <code class="docutils literal"><span class="pre">switch</span></code> is heavyweight and not very expressive.
+We now have a large set of language features and library operators for working
+with <code class="docutils literal"><span class="pre">Optional</span></code>, so it is expressive and convenient in many cases to be able
+to project associated values from enums as <code class="docutils literal"><span class="pre">Optional</span></code> values. As noted above,
+third-party developers using enums often write out the boilerplate to do this.
+We should automate it. For every <code class="docutils literal"><span class="pre">case</span> <span class="pre">init</span></code> with labeled associated values,
+we can generate an <code class="docutils literal"><span class="pre">internal</span></code> property to access that associated value.
+The value will be <code class="docutils literal"><span class="pre">Optional</span></code>, unless every <code class="docutils literal"><span class="pre">case</span></code> has the same associated
+value, in which case it can be nonoptional. To repeat the above example, this
+enum:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">public</span><span class="w"> </span><span class="n">enum</span><span class="w"> </span><span class="n">Example</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">foo</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">,</span><span class="w"> </span><span class="n">alwaysPresent</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">bar</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">,</span><span class="w"> </span><span class="n">alwaysPresent</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>receives the following implicit members:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>/*implicit*/
+internal extension Example {
+  var foo: Int? { get }
+  var bar: Int? { get }
+  var alwaysPresent: String { get } // Not optional
+}
+</pre></div>
+</div>
+<p>Similar to the elementwise initializer for <code class="docutils literal"><span class="pre">struct</span></code> types, these property
+accessors should be <code class="docutils literal"><span class="pre">internal</span></code>, since they rely on potentially fragile layout
+characteristics of the enum. (Like the struct elementwise initializer, we
+ought to have a way to easily export these properties as <code class="docutils literal"><span class="pre">public</span></code> when
+desired too, but that can be designed separately.)</p>
+<p>These implicit properties should be read-only, until we design a model for
+enum mutation-by-part.</p>
+<p>An associated value property should be suppressed if:</p>
+<ul>
+<li><p class="first">there&#8217;s an explicit declaration in the type with the same name:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>enum Foo {
+  case init(foo: Int)
+
+  var foo: String { return &quot;foo&quot; } // suppresses implicit &quot;foo&quot; property
+}
+</pre></div>
+</div>
+</li>
+<li><p class="first">there are associated values with the same label but conflicting types:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">Foo</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">foo</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">,</span><span class="w"> </span><span class="n">bar</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">foo</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">bas</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span>
+
+<span class="w">  </span><span class="c1">// No &#39;foo&#39; property, because of conflicting associated values</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">if the associated value has no label:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">Foo</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">_</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span>
+
+<span class="w">  </span><span class="c1">// No property for the associated value</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>An associated value could be unlabeled but still provide an internal argument
+name to name its property:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">Foo</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">_</span><span class="w"> </span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">init</span><span class="p">(</span><span class="n">_</span><span class="w"> </span><span class="n">y</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">)</span>
+
+<span class="w">  </span><span class="c1">// var x: Int?</span>
+<span class="w">  </span><span class="c1">// var y: String?</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</div>
+<div class="section" id="naming-conventions-for-enum-cases">
+<h1>Naming Conventions for Enum Cases<a class="headerlink" href="#naming-conventions-for-enum-cases" title="Permalink to this headline">¶</a></h1>
+<p>To normalize enums and bring them into the &#8220;grand unified theory&#8221; of type
+interfaces shared by other Swift types, I think we should encourage the
+following conventions:</p>
+<ul class="simple">
+<li>Cases with associated values should be declared as <code class="docutils literal"><span class="pre">case</span> <span class="pre">init</span></code>
+initializers with labeled associated values.</li>
+<li>Simple cases without associated values should be named like properties,
+using <code class="docutils literal"><span class="pre">lowercaseCamelCase</span></code>. We should also import Cocoa <code class="docutils literal"><span class="pre">NS_ENUM</span></code>
+and <code class="docutils literal"><span class="pre">NS_OPTIONS</span></code> constants using <code class="docutils literal"><span class="pre">lowercaseCamelCase</span></code>.</li>
+</ul>
+<p>This is a big change from the status quo, including the Cocoa tradition for
+C enum constants, but I think it&#8217;s the right thing to do. Cocoa uses
+the <code class="docutils literal"><span class="pre">NSEnumNameCaseName</span></code> convention largely because enum constants are
+not namespaced in Objective-C. When Cocoa associates constants with
+class types, it uses its normal method naming conventions, as in
+<code class="docutils literal"><span class="pre">UIColor.redColor</span></code>.  In Swift&#8217;s standard library, type constants for structs
+follow the same convention, for example <code class="docutils literal"><span class="pre">Int.max</span></code> and <code class="docutils literal"><span class="pre">Int.min</span></code>. The
+literal keywords <code class="docutils literal"><span class="pre">true</span></code>, <code class="docutils literal"><span class="pre">false</span></code>, and <code class="docutils literal"><span class="pre">nil</span></code> are arguably enum-case-like
+and also lowercased. Simple enum cases are essentially static constant
+properties of their type, so they should follow the same conventions.</p>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

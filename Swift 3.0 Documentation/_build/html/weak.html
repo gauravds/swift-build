@@ -1,0 +1,1101 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Weak References &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Weak References</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="weak-references">
+<h1>Weak References<a class="headerlink" href="#weak-references" title="Permalink to this headline">¶</a></h1>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Author:</th><td class="field-body">John McCall</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Date:</th><td class="field-body">2013-05-23</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Abstract:</strong> This paper discusses the general concept of weak
+references, including various designs in other languages, and proposes
+several new core language features and a more sophisticated runtime
+support feature which can be exploited in the standard library.</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This document was used in planning Swift 1.0; it has not been kept
+up to date and does not describe the current or planned behavior of Swift.</p>
+</div>
+<div class="section" id="reference-graphs">
+<h2>Reference Graphs<a class="headerlink" href="#reference-graphs" title="Permalink to this headline">¶</a></h2>
+<p>Let&#8217;s run through some basic terminology.</p>
+<p>Program memory may be seen abstractly as a (not necessarily connected)
+directed graph where the nodes are objects (treating transient
+allocations like local scopes as objects) and the edges are
+references.  (Multi-edges and self-edges are permitted, of course.)</p>
+<p>We may assign a level of strength to each of these edges.  We will
+call the highest level <em>strong</em>; all others are some flavor of <em>weak</em>.</p>
+<p>Every object has a <em>strength of reference</em> which arises from the
+reference graph.  This can be any level of strength or the special
+value <em>unreferenced</em>.  The strength of a path is the minimum strength
+of any edge in the path.  The strength of a set of paths is the
+maximum strength of all the paths, unless the set is empty, in which
+case it is <em>unreferenced</em>.</p>
+<p>In general, the implementation is only outright forbidden to
+deallocate an object if it is strongly referenced.  However,
+being somehow weakly referenced may trigger some sort of additional
+guarantee; see the Language Precedents section.</p>
+<p>In a cycle-collecting environment, certain nodes are given special
+treatment as <em>roots</em>; these nodes are always strongly referenced.
+Otherwise, the strength of reference for an object is the strength
+of all paths from any root to the object.</p>
+<p>In a non-cycle-collecting environment, the strength of reference for
+an object is the strength of all the direct references to that
+object, taken as length=1 paths.  Note that this environmental
+consideration becomes a language guarantee: even if the implementation
+can trivially prove that an object is referenced only by itself, it
+is still not permitted to deallocate the object.</p>
+<p>It is common for certain kinds of reference to not receive a full
+guarantee.  For example, a strong reference from a local variable
+may lose effectiveness as soon as the variable is no longer needed
+(but before it formally leaves scope).  This is pervasive in GC
+environments but also true in e.g. ObjC ARC.</p>
+<p>In some programs, especially event-driven programs like UIs or
+servers, it can be useful to consider the <em>static</em> reference graph as
+captured during a notional steady state.  Local scopes may form many
+references to objects in the static graph, but unless the scope
+persists indefinitely or a major restructuring is triggered, these
+references are likely to have no effect on the reference graph, and so
+their strength of reference has no semantic importance.  Understanding
+this helps to explain why many environments provide no direct way to
+form a local weak reference.</p>
+</div>
+<div class="section" id="language-and-library-precedents">
+<h2>Language and Library Precedents<a class="headerlink" href="#language-and-library-precedents" title="Permalink to this headline">¶</a></h2>
+<p>We&#8217;re only going to discuss <em>managed</em> precedents here.</p>
+<p>It is possible to create a kind of weak reference by just not
+providing any special behavior to an object reference; if the
+object is deallocated, the reference will dangle and uses of it
+will likely crash or cause corruption.  This could happen by
+e.g. declining to insert reference-count manipulations for a
+particular variable (in an ARC-like environment) or not mapping
+a variable&#8217;s frame offset as a pointer in a type map (in a
+precise-GC environment).  We will call this <em>dangling weak</em>.</p>
+<div class="section" id="objective-c">
+<h3>Objective-C<a class="headerlink" href="#objective-c" title="Permalink to this headline">¶</a></h3>
+<p>All modes of Objective-C automate memory management for
+synthesized properties.  In GC and ARC, accessors just
+use the normal semantics for the underlying ivar (plus
+copy/atomic guarantees, of course).  In MRC, accessors
+use dangling weak semantics unless they&#8217;re <code class="code docutils literal"><span class="pre">retain</span></code>
+or <code class="code docutils literal"><span class="pre">copy</span></code>, in which case they maintain a +1 refcount
+invariant on the referent.</p>
+<p>In GC and ARC, variables qualified with <code class="code docutils literal"><span class="pre">__weak</span></code> are
+immediately zeroed out when the referenced object begins
+deallocation.  There is no syntactic difference on use;
+it&#8217;s just possible that the value read will be <code class="code docutils literal"><span class="pre">nil</span></code>
+instead of whatever was last written there, possibly causing
+the loading code to crash (e.g. on an ivar access) or silently
+do nothing (e.g. on a message send).   There is an opt-in
+warning in ARC for certain uses of values loaded from
+<code class="code docutils literal"><span class="pre">__weak</span></code> ivars.</p>
+<p>In GC, it is also possible to construct a dangling
+weak reference by storing an object pointer into (1) unscanned
+heap memory or (2) an instance variable that&#8217;s not of
+object-pointer type and isn&#8217;t qualified with <code class="code docutils literal"><span class="pre">__strong</span></code>
+or <code class="code docutils literal"><span class="pre">__weak</span></code>.  Otherwise, object references are strong
+(including all references from local scopes).</p>
+<p>In ARC, it is possible to construct a dangling weak reference
+by using the <code class="code docutils literal"><span class="pre">__unsafe_unretained</span></code> qualifier or by
+bridging a pointer value to a C pointer type.</p>
+</div>
+<div class="section" id="c">
+<h3>C++<a class="headerlink" href="#c" title="Permalink to this headline">¶</a></h3>
+<p>C++ smart pointers (e.g. <code class="code docutils literal"><span class="pre">std::unique_ptr</span></code>) typically
+permit the creation of a dangling-weak reference by
+providing an accessor to get the pointer as a normal C
+pointer.  (Even if they didn&#8217;t have <code class="code docutils literal"><span class="pre">get()</span></code>, you could
+manually call <code class="code docutils literal"><span class="pre">operator-&gt;</span></code> to get the same effect.)</p>
+<p>C++&#8217;s <code class="code docutils literal"><span class="pre">std::shared_ptr</span></code> permits the formation of
+weak pointers (<code class="code docutils literal"><span class="pre">std::weak_ptr</span></code>) from shared pointers.
+It is not possibly to directly use a weak pointer;  it must
+first be converted back to a <code class="code docutils literal"><span class="pre">shared_ptr</span></code>, either by
+using the <code class="code docutils literal"><span class="pre">lock()</span></code> operation (which produces a null
+pointer if the referent has been deallocated) or by directly
+constructing a <code class="code docutils literal"><span class="pre">shared_ptr</span></code> with the <code class="code docutils literal"><span class="pre">weak_ptr</span></code>
+(which throws an exception if the referent has been deallocated).
+There is also a way to explicitly query whether a
+<code class="code docutils literal"><span class="pre">weak_ptr</span></code> is still valid, which may be more efficient
+than checking the result of the cast.</p>
+</div>
+<div class="section" id="java">
+<h3>Java<a class="headerlink" href="#java" title="Permalink to this headline">¶</a></h3>
+<p>Java does not provide any facility for dangling weak references.
+The standard library does provide three levels of weak reference
+(in <code class="code docutils literal"><span class="pre">java.lang.ref</span></code>).  References cannot be re-seated
+(although they can be explicitly cleared), and users must call
+<code class="code docutils literal"><span class="pre">get()</span></code> in order to access the value, which may yield
+<code class="code docutils literal"><span class="pre">null</span></code>.</p>
+<p>There is a great deal of interesting discussion of these
+reference classes <a class="reference external" href="http://www.kdgregory.com/index.php?page=java.refobj">here</a>.</p>
+<p>Java <code class="code docutils literal"><span class="pre">Reference</span></code> objects may be constructed with an
+optional <code class="code docutils literal"><span class="pre">ReferenceQueue</span></code>;  if so, then when the
+object&#8217;s reachability changes, the reference object will be
+added to that queue.  This permits data structures to clean
+up after cleared soft references without needing to either
+periodically scan the entire structure or be fully lazy.
+Additional data may be added to the reference object by
+subclassing it.</p>
+<p>The references are presented in order of decreasing strength.</p>
+<p><code class="code docutils literal"><span class="pre">SoftReference</span></code> is a sort of quasi-strong reference
+which holds onto the object until the VM begins to run out
+of memory.  Soft references to softly-referenced objects are
+guaranteed to have been cleared before the VM can throw an
+<code class="code docutils literal"><span class="pre">OutOfMemoryError</span></code>.  The reference will be cleared
+before it is added to its reference queue (and so the
+reference queue cannot resurrect the object).  The intent
+of soft references is to enable memory-sensitive caches,
+but in practice a memory-sensitive cache would probably
+want to implement a more subtle replacement strategy than
+&#8220;drop things at random as soon as memory runs low&#8221;.  A
+more interesting use is a memory-guided circuit-breaker:
+when building up a very large structure, hold it in a
+soft reference, and if that references goes null during
+construction, just bail out.  But that&#8217;s a pretty tricky
+use-case to get right.</p>
+<p><code class="code docutils literal"><span class="pre">WeakReference</span></code> is intended for use in non-memory-sensitive
+weak caches, like a uniquing cache;  it persists only as long
+as the referent is more strongly referenced.  The reference
+will be cleared before it is added to its reference queue (and
+so the reference queue cannot resurrect the object).</p>
+<p><code class="code docutils literal"><span class="pre">PhantomReference</span></code> provides a way to attach extra
+finalization to an object without actually using finalizers
+(which have several problems, including the ability to
+resurrect the object).  The phantom reference <em>always</em>
+presents <code class="code docutils literal"><span class="pre">null</span></code> as its value and is therefore itself
+useless as a reference.  Phantom references are enqueued
+after the object is finalized and therefore at a point when
+there can be no references to the object within the VM
+at all.  However, the object itself cannot be deallocated
+until the phantom references are all cleared or themselves
+deallocated, which I believe is for the convenience of native
+code that may hold a dangling weak reference to the referent
+(or which may be able to directly read the reference).</p>
+</div>
+<div class="section" id="net">
+<h3>.NET<a class="headerlink" href="#net" title="Permalink to this headline">¶</a></h3>
+<p>The <code class="code docutils literal"><span class="pre">WeakReference</span></code> class in .NET is similar to
+Java&#8217;s <code class="code docutils literal"><span class="pre">WeakReference</span></code> class in that the value
+cannot be accessed directly;  it must be accessed
+via the <code class="code docutils literal"><span class="pre">Target</span></code> property, which may yield
+<code class="code docutils literal"><span class="pre">null</span></code>.  The reference may be reseated to a
+different value.</p>
+<p>Weak references may be created <em>long</em>, which permits the
+target object to be finalized but not actually deallocated.</p>
+</div>
+<div class="section" id="python">
+<h3>Python<a class="headerlink" href="#python" title="Permalink to this headline">¶</a></h3>
+<p>A <code class="code docutils literal"><span class="pre">weakref</span></code> acts like a function object; it is created
+with a particular value, which cannot be reseated.  The
+function will yield <code class="code docutils literal"><span class="pre">None</span></code> if the referent is collected.</p>
+<p>There is library functionality to automatically proxy a value
+as a weak reference.  An exception is thrown if an operation
+is performed on the proxy but the referent has been collected.</p>
+<p>A <code class="code docutils literal"><span class="pre">weakref</span></code> may be constructed with a callback function.
+The callback will be called after the weak reference is cleared;
+it is, however, passed the weak ref object itself.</p>
+</div>
+<div class="section" id="ruby">
+<h3>Ruby<a class="headerlink" href="#ruby" title="Permalink to this headline">¶</a></h3>
+<p>A <code class="code docutils literal"><span class="pre">WeakRef</span></code> is automatically a proxy for an object.
+There is a <code class="code docutils literal"><span class="pre">weakref_alive</span></code> method to query whether the
+reference is still alive; another other operation will cause
+an exception to be thrown.</p>
+</div>
+<div class="section" id="rust">
+<h3>Rust<a class="headerlink" href="#rust" title="Permalink to this headline">¶</a></h3>
+<p>As far as I can tell, there is nothing like a weak reference
+in Rust at the moment.</p>
+<p>A <em>managed pointer</em> (<code class="code docutils literal"><span class="pre">&#64;int</span></code>) is a strong reference
+subject to GC.</p>
+<p>An <em>owning pointer</em> (<code class="code docutils literal"><span class="pre">~int</span></code>) is a strong reference
+that cannot be cloned (copying the pointer actually copies the
+underlying data).</p>
+<p>A <em>borrowed pointer</em> (<code class="code docutils literal"><span class="pre">&amp;int</span></code>) is essentially a dangling
+weak reference that is subject to static restrictions which
+ensure that it doesn&#8217;t actually dangle.  It is thus primarily
+a performance optimization.</p>
+<p>A <em>raw pointer</em> (<code class="code docutils literal"><span class="pre">*int</span></code>) is a dangling weak reference.</p>
+</div>
+<div class="section" id="haskell">
+<h3>Haskell<a class="headerlink" href="#haskell" title="Permalink to this headline">¶</a></h3>
+<p>Yes, of course Haskell has weak references.</p>
+<p>A <code class="code docutils literal"><span class="pre">Weak</span> <span class="pre">t</span></code> is an association between a hidden key
+and a visible value of type <code class="code docutils literal"><span class="pre">t</span></code>.
+<code class="code docutils literal"><span class="pre">doRefWeak</span> <span class="pre">theRef</span></code> is an <code class="code docutils literal"><span class="pre">IO</span> <span class="pre">(Maybe</span> <span class="pre">t)</span></code>.</p>
+<p>A weak reference may be constructed with an optional
+<code class="code docutils literal"><span class="pre">IO</span> <span class="pre">()</span></code> which will be run when the referent is
+collected.  This finalizer may (somehow) refer to the key
+and value without itself keeping them alive;  it is also
+explicitly permitted to resurrect them.</p>
+</div>
+</div>
+<div class="section" id="use-cases">
+<h2>Use Cases<a class="headerlink" href="#use-cases" title="Permalink to this headline">¶</a></h2>
+<p>There are many problems that are potentially addressable with
+functionality like weak references.  It is not at all obvious
+that they should be addressed with the same language feature.</p>
+<div class="section" id="back-references">
+<h3>Back references<a class="headerlink" href="#back-references" title="Permalink to this headline">¶</a></h3>
+<p>Given that Swift is not cycle-collecting, far and away the most
+important use case in the static reference graph is that of the
+<em>back-reference</em>: a reference <em>R</em> to an object which holds a strong
+reference (possibly indirectly) to the object holding <em>R</em>.  Examples
+include:</p>
+<ul class="simple">
+<li>A &#8216;previousNode&#8217; pointer in a doubly-linked list.</li>
+<li>A &#8216;parent&#8217; pointer in a render tree.</li>
+<li>An edge in a general graph structure.</li>
+</ul>
+<p>These have several properties in common:</p>
+<ul class="simple">
+<li>Using strong references would require a lot of explicit
+code to tear down the reference cycles.</li>
+<li>These references may be accessed very frequently, so
+performance is important.</li>
+<li>It is not always feasible to make these references valid
+immediately on construction.</li>
+<li>Traversing a reference after the referent is deallocated is likely a
+sign that something has been kept alive longer than it was meant to
+be.  However, programmers may reasonably differ about the correct
+response to this: crashing, and therefore encouraging the programmer
+to track down a root cause, or simply writing the operation to
+handle both cases correctly.  Ultimately, this choice comes down to
+philosophy.</li>
+</ul>
+</div>
+<div class="section" id="caches">
+<h3>Caches<a class="headerlink" href="#caches" title="Permalink to this headline">¶</a></h3>
+<p>Weak caches are used in order to prevent a cache from taking
+over all available memory.  By being tied to the reachability
+of a value, the cache prevents entries from spuriously
+expiring when their values are still in active use;  but by
+using weak references, the cache permits the system to
+deallocate values that are no longer in use.</p>
+<p>Generally, a data structure using weak references extensively
+also needs some way to receive notification that the weak
+reference was collected.  This is because entries in the data
+structure are likely to have significant overhead even if the
+value is collected.  A weak data structure which receives no
+notification that a reference has been invalidated must either
+allow these entries to accumulate indefinitely or must
+periodically scan the entire structure looking for stale entries.</p>
+<p>A weak reference which permits immediate deallocation of its
+referent when the last strong reference is dropped is
+substantially less useful for the implementation of a weak
+cache.  It is a common access pattern (for, say, a memoizing
+cache) for a value to be looked up many times in rapid
+succession, but for each use to be temporarily disjoint
+from the others.  A naive use of weak references in this case
+will simply cause the cache to thrash.  This problem is less
+likely to arise in an environment with nondeterministic
+collection because the entry is likely to service multiple
+lookups between collections.</p>
+<p>It is likely that users implementing weak data structures
+would prefer a highly flexible infrastructure centered around
+resurrection and notifications of reaching a zero refcount
+than a more rigid system built directly into the language.
+Since the Swift model is built around statically-inserted
+operations rather than a memory scanner, this is much more
+workable.</p>
+</div>
+<div class="section" id="external-finalization">
+<h3>External Finalization<a class="headerlink" href="#external-finalization" title="Permalink to this headline">¶</a></h3>
+<p>Finalization models built around calling a method on the
+finalized object (such as Objective-C&#8217;s <code class="code docutils literal"><span class="pre">-dealloc</span></code>)
+suffer from a number of limitations and problems:</p>
+<ul class="simple">
+<li>Since the method receives a pointer to the object being
+deallocated, the implementation must guard against
+attempts to resurrect the object.  This may complicate
+and/or slow down the system&#8217;s basic reference-management
+logic, which tends to be quite important for performance.</li>
+<li>Since the method receives a pointer to the object being
+deallocated, the implementation must leave the object at
+least a minimally valid state until the user code is
+complete.  For example, the instance variables of a
+subclass cannot be destroyed until a later phase of
+destruction, because a superclass finalizer might invoke
+subclass behavior.  (This assumes that the dynamic type
+of the object does not change during destruction, which
+is an alternative that brings its own problems.)</li>
+<li>Finalization code must be inherent to the object; other
+objects cannot request that code be run when the object
+is deallocated.  For example, an object that registers
+itself to observe a certain event source must explicitly
+deregister itself in a finalizer; the event source cannot
+simply automatically drop the object when it is
+deallocated.</li>
+</ul>
+</div>
+<div class="section" id="optimization">
+<h3>Optimization<a class="headerlink" href="#optimization" title="Permalink to this headline">¶</a></h3>
+<p>Functions often create a large number of temporary references.  In a
+reference-counting environment like Swift, these references require
+the implementation to implicitly perform operations to increment and
+decrement the reference count.  These operations can be quite fast,
+but they are not free, and our experience has been that the
+accumulated cost can be quite significant.  A straightforward local
+static analysis can eliminate many operations, but many others will be
+blocked by abstraction barriers, chiefly dynamically-dispatched calls.
+Therefore, if Swift is to allow precise performance control, it is
+important to be able to allow motivated users to selectively control
+the emission of reference-counting operations.</p>
+<p>This sort of control necessarily permits the creation of dangling weak
+references and so is not safe.</p>
+</div>
+</div>
+<div class="section" id="proposal-overview">
+<h2>Proposal Overview<a class="headerlink" href="#proposal-overview" title="Permalink to this headline">¶</a></h2>
+<p>Looking at these use-cases, there are two main thrusts:</p>
+<ul class="simple">
+<li>There is a general need to set up back references to objects.
+These references must be designed for convenient use by non-expert
+users.</li>
+<li>There are a number of more sophisticated use cases which require
+notification or interruption of deallocation; these can be used in
+the implementation of higher-level abstractions like weak caches.
+Here it is reasonable to expect more user expertise, such that
+power and flexibility should take priority over ease of use.</li>
+</ul>
+<p>The second set of use cases should addressed by library types working
+on top of basic runtime support.</p>
+<p>The first set of use cases will require more direct language support.
+To that end, I propose adding two new variable attributes,
+<code class="code docutils literal"><span class="pre">&#64;weak</span></code> and <code class="code docutils literal"><span class="pre">&#64;unowned</span></code>.  I also propose a small slate of
+new features which directly address the problem of capturing a value
+in a closure with a different strength of reference than it had in the
+enclosing context.</p>
+</div>
+<div class="section" id="proposed-variable-attributes">
+<h2>Proposed Variable Attributes<a class="headerlink" href="#proposed-variable-attributes" title="Permalink to this headline">¶</a></h2>
+<p>In the following discussion, a &#8220;variable-like&#8221; declaration is any
+declaration which binds a name to a (possibly mutable) value of
+arbitrary type.  Currently this is just <code class="code docutils literal"><span class="pre">var</span></code>, but this proposal
+also adds <code class="code docutils literal"><span class="pre">capture</span></code>, and we may later add more variants, such as
+<code class="code docutils literal"><span class="pre">const</span></code> or <code class="code docutils literal"><span class="pre">val</span></code> or the like.</p>
+<div class="section" id="weak">
+<h3><code class="code docutils literal"><span class="pre">&#64;weak</span></code><a class="headerlink" href="#weak" title="Permalink to this headline">¶</a></h3>
+<p><code class="code docutils literal"><span class="pre">weak</span></code> is an attribute which may be applied to any
+variable-like declaration of reference type <code class="code docutils literal"><span class="pre">T</span></code>.  For
+type-system purposes, the variables behaves like a normal
+variable of type <code class="code docutils literal"><span class="pre">Optional&lt;T&gt;</span></code>, except:</p>
+<ul class="simple">
+<li>it does not maintain a +1 reference count invariant and</li>
+<li>loading from the variable after the current referent (if present)
+has started destruction will result in a <code class="code docutils literal"><span class="pre">Nothing</span></code> value,
+indistinguishable from the normal case.</li>
+</ul>
+<p>The semantics are quite similar to weak references in other
+environments (particularly Objective-C) except that the change in
+formal type forces the user of the value to check its validity before
+using it.</p>
+<p>It doesn&#8217;t really matter how the compiler would find the type
+<code class="code docutils literal"><span class="pre">Optional&lt;T&gt;</span></code>; compiler-plus-stdlib magic, most likely.  I do
+not think the type should be <code class="code docutils literal"><span class="pre">Weak&lt;T&gt;</span></code> because that would
+effectively make this a type attribute and thus make it too easy to
+accidentally preserve the value as a weak reference.  See the section
+discussing type attributes vs. declaration attributes.</p>
+<p>Giving the variable a consistent type of <code class="code docutils literal"><span class="pre">Optional&lt;T&gt;</span></code> permits
+the user to assign <code class="code docutils literal"><span class="pre">Nothing</span></code> into it and therefore removes the
+somewhat odd expressive possibility of a reference that can only be
+missing if the object has been deallocated.  I think this is an
+acceptable cost of making a cleaner feature.</p>
+<p>One alternative to using <code class="code docutils literal"><span class="pre">Optional&lt;T&gt;</span></code> would be to simply treat
+the load as a potentially-failing operation, subject to the (not yet
+precisely designed) language rules for error handling.  This would
+require the runtime to potentially synthesize an error event, which
+could then propagate all the way to the end-user if the programmer
+accidentally failed to check the result in a context that permitted
+error propagation outwards.  That&#8217;s bad.</p>
+<p>A slightly different alternative would be to treat it as a form of
+error orthogonal to the standard user-error propagation.  This would
+be cleaner than changing the type of the variable but can&#8217;t really be
+designed without first having a solid error-handling design.</p>
+</div>
+<div class="section" id="unowned">
+<h3><code class="code docutils literal"><span class="pre">&#64;unowned</span></code><a class="headerlink" href="#unowned" title="Permalink to this headline">¶</a></h3>
+<p><code class="code docutils literal"><span class="pre">unowned</span></code> is an attribute which may be applied to any
+&#8220;variable-like&#8221; declaration of reference type <code class="code docutils literal"><span class="pre">T</span></code>.  For
+type-system purposes, the variable behaves exactly like a normal
+variable of type <code class="code docutils literal"><span class="pre">T</span></code>, except:</p>
+<ul class="simple">
+<li>it does not maintain a +1 reference count invariant and</li>
+<li>loading from the variable after the referent has started
+destruction causes an assertion failure.</li>
+</ul>
+<p>This is a refinement of <code class="code docutils literal"><span class="pre">weak</span></code> focused more narrowly on the case
+of a back reference with relatively tight validity invariants.  This
+is also the case that&#8217;s potentially optimizable to use dangling weak
+references; see below.</p>
+<p>This name isn&#8217;t really optimal.  We&#8217;ve considered several different
+candidates:</p>
+<ul class="simple">
+<li><code class="code docutils literal"><span class="pre">weak</span></code> is a poor choice because our semantics are very
+different from weak references in other environments where it&#8217;s
+valid to access a cleared reference.  Plus, we need to expose
+those semantics, so the name is claimed.</li>
+<li><code class="code docutils literal"><span class="pre">backref</span></code> is strongly evocative of the major use case in the
+static reference graph; this would encourage users to use it for
+back references and to consider alternatives for other cases, both
+of which I like.  The latter also makes the husk-leaking
+implementation (see below) more palatable.  It also contrasts very
+well with <code class="code docutils literal"><span class="pre">weak</span></code>.  However, its evocativeness makes it
+unwieldy to use for local reference-counting optimizations.</li>
+<li><code class="code docutils literal"><span class="pre">dangling</span></code> is more general than <code class="code docutils literal"><span class="pre">backref</span></code>, but it has
+such strong negative associations that it wouldn&#8217;t be unreasonable
+for users to assume that it&#8217;s unsafe (with all the pursuant
+debugging difficulties) based on the name alone.  I don&#8217;t think
+we want to discourage a feature that can help users build tighter
+invariants on their classes.</li>
+<li><code class="code docutils literal"><span class="pre">unowned</span></code> is somewhat cleaner-looking, and it isn&#8217;t as tied
+to a specific use case, but it does not contrast with <code class="code docutils literal"><span class="pre">weak</span></code>
+<em>at all</em>; only someone with considerable exposure to weak
+references would understand why we named each one the way we did,
+and even they are likely to roll their eyes at us.  But it&#8217;s okay
+for a working proposal.</li>
+</ul>
+<div class="section" id="asserting-and-uncheckable">
+<h4>Asserting and Uncheckable<a class="headerlink" href="#asserting-and-uncheckable" title="Permalink to this headline">¶</a></h4>
+<p>There should not be a way to check whether a <code class="code docutils literal"><span class="pre">unowned</span></code>
+reference is still valid.</p>
+<ul class="simple">
+<li>An invalid back-reference is a consistency error that
+we should encourage programmers to fix rather than work
+around by spot-testing for validity.</li>
+<li>Contrariwise, a weak reference that might reasonably be
+invalidated during active use should be checked for validity
+at <em>every</em> use.  We can provide a simple library facility
+for this pattern.</li>
+<li>Permitting implicit operations like loads to fail in a
+recoverable way may end up complicating the language model
+for error-handling.</li>
+<li>By disallowing recovery, we create a model where the only
+need to actually register the weak reference with the system
+is to enable a consistency check.  Users who are confident
+in the correctness of their program may therefore simply
+disable the consistency check without affecting the semantics
+of the program.  In this case, that leaves the variable a
+simple dangling-weak reference.</li>
+</ul>
+</div>
+<div class="section" id="implementation">
+<h4>Implementation<a class="headerlink" href="#implementation" title="Permalink to this headline">¶</a></h4>
+<p>The standard implementation for a weak reference requires the
+address of the reference to be registered with the system so
+that it can be cleared when the referent is finalized.  This
+has two problems:</p>
+<ul class="simple">
+<li>It forces the runtime to maintain a side-table mapping
+objects to the list of weak references; generally this
+adds an allocation per weakly-referenced object.</li>
+<li>It forces the representation of weak references to either
+be non-address-invariant or to introduce an extra level of
+indirection.</li>
+</ul>
+<p>For some use cases, this may be warranted; for example, in
+a weak cache it might come out in the noise.  But for a simple
+back-reference, these are substantial penalties.</p>
+<p>Dave Z. has proposed instead using a weak refcount, analogous to a
+strong refcount.  Ownership of a weak retain can be easily transferred
+between locations, and it does not require a side-table of an object&#8217;s
+weak references.  However, it does have a very important downside:
+since the system cannot clear all the references, it is impossible to
+actually deallocate an object that is still weakly-referenced
+(although it can be finalized).  Instead, the system must wait for all
+the weak references to at least be accessed.  We call this &#8220;husk
+leaking&#8221;.</p>
+<p>This downside could be a problem for a general weak reference.
+However, it&#8217;s fine for a back-reference, which we expect to typically
+be short-lived after its referent is finalized.</p>
+</div>
+</div>
+<div class="section" id="declaration-attribute-or-type-attribute">
+<h3>Declaration Attribute or Type Attribute<a class="headerlink" href="#declaration-attribute-or-type-attribute" title="Permalink to this headline">¶</a></h3>
+<p>This proposal describes <code class="code docutils literal"><span class="pre">weak</span></code> and <code class="code docutils literal"><span class="pre">unowned</span></code> as
+declaration attributes, not type attributes.</p>
+<p>As declaration attributes, <code class="code docutils literal"><span class="pre">&#64;unowned</span></code> and <code class="code docutils literal"><span class="pre">weak</span></code> would be
+permitted on any <code class="code docutils literal"><span class="pre">var</span></code> declaration of reference type.  Their
+special semantics would be a property only of the declaration; in
+particular, they would not change the type (beyond the shift to
+<code class="code docutils literal"><span class="pre">Optional&lt;T&gt;</span></code> for <code class="code docutils literal"><span class="pre">weak</span></code>) , and more generally the
+type-checker would not need to know about them.  The implementation
+would simply use different behavior when loading or storing that
+variable.</p>
+<p>As a type attribute, <code class="code docutils literal"><span class="pre">weak</span></code> and <code class="code docutils literal"><span class="pre">&#64;unowned</span></code> would be
+permitted to appear at arbitrary nested locations in the type system,
+such as tuple elements, function result types, or generic arguments.
+It would be possible to have both lvalues and rvalues of so-qualified
+type, and the type checker would need to introduce implicit
+conversions in the right places.</p>
+<p>These implicit conversions require some thought.  Consider code like
+the following:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">moveToWindow</span><span class="p">(</span><span class="n">newWindow</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Window</span><span class="p">) {</span>
+<span class="w">  </span><span class="kd">var </span><span class="nv">oldWindow</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">window</span><span class="w">   </span><span class="c1">// an @unowned back reference</span>
+<span class="w">  </span><span class="n">oldWindow</span><span class="p">.</span><span class="n">hide</span><span class="p">()</span><span class="w">              </span><span class="c1">// might remove the UI&#39;s strong reference</span>
+<span class="w">  </span><span class="n">oldWindow</span><span class="p">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+<span class="w">  </span><span class="n">newWindow</span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>It would be very unfortunate if the back-reference nature of the
+<code class="code docutils literal"><span class="pre">window</span></code> property were somehow inherited by <code class="code docutils literal"><span class="pre">oldWindow</span></code>!
+Something, be it a general rule on loading back-references or a
+type-inference rule, must introduce an implicit conversion and cause
+the <code class="code docutils literal"><span class="pre">unowned</span></code> qualifier to be stripped.</p>
+<p>That rule, however, is problematic for generics.  A key goal of
+generics is substitutability: the semantics of generic code should
+match the semantics of the code you&#8217;d get from copy-pasting the
+generic code and substituting the arguments wherever they&#8217;re written.
+But if a generic argument can be <code class="code docutils literal"><span class="pre">&#64;unowned</span> <span class="pre">T</span></code>, then this
+won&#8217;t be true; consider:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">func </span><span class="nf">foo</span><span class="p">&lt;</span><span class="no">T</span><span class="p">&gt;(</span><span class="n">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">T</span><span class="p">) {</span>
+<span class="w">  </span><span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span>
+<span class="w">  </span><span class="o">..</span><span class="p">.</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>In substituted code, <code class="code docutils literal"><span class="pre">y</span></code> would have the qualifier stripped and
+become a strong reference.  But the generic type-checker cannot
+statically recognize that this type is <code class="code docutils literal"><span class="pre">unowned</span></code>-qualified, so
+in order to match semantics, this decision must be deferred until
+runtime, and the type-checker must track the unqualified variant of
+<code class="code docutils literal"><span class="pre">T</span></code>.  This adds a great deal of complexity, both to the
+implementation and to the user model, and removes many static
+optimization opportunities due to potential mismatches of types.</p>
+<p>An alternative rule would be to apply an implicit &#8220;decay&#8221; to a strong
+reference only when a type is known to be a <code class="code docutils literal"><span class="pre">unowned</span></code> type.  It
+could be argued that breaking substitution is not a big deal because
+other language features, like overloading, can already break it.  But
+an overlapping overload set with divergent behavior is a poor design
+which itself violates substitution, whereas this would be a major
+unexcused deviation.  Furthermore, preserving the weakness of a
+reference is not a safe default, because it permits the object to be
+destroyed while a reference is still outstanding.</p>
+<p>In addition, any implementation model which permits the safety checks
+on <code class="code docutils literal"><span class="pre">unowned</span></code>s to be disabled will require all code to agree about
+whether or not the checks are enabled.  When this information is tied
+to a declaration, this is easy, because declarations are ultimately
+owned by a particular component, and we can ask how that component is
+compiled.  (And we can demand that external APIs commit to one level
+of safety or the other before publishing.)  The setting for a type, on
+the other hand, would have to be determined by the module which &#8220;wrote
+the type&#8221;, but again this introduces a great deal of complexity which
+one can only imagine settling on the head of some very confused user.</p>
+<p>For all these reasons, I feel that making <code class="code docutils literal"><span class="pre">weak</span></code> and
+<code class="code docutils literal"><span class="pre">unowned</span></code> type attributes would be unworkable.  However, there
+are still costs to making them declaration attributes:</p>
+<ul class="simple">
+<li>It forces users to use awkward workarounds if they want to
+make, say, arrays of back-references.</li>
+<li>It makes back-references less composable by, say, preventing
+them from being stored in a tuple.</li>
+<li>It complicates SIL and IR-gen by making the rules for manipulating a
+physical variable depend on more than just the type of the variable.</li>
+<li>It automatically enables certain things (like passing the address of
+a <code class="code docutils literal"><span class="pre">&#64;unowned</span></code> variable of type <code class="code docutils literal"><span class="pre">T</span></code> to a <code class="code docutils literal"><span class="pre">inout</span> <span class="pre">T</span></code>
+parameter) that perhaps ought to be more carefully considered.</li>
+</ul>
+<p>The first two points can be partly compensated for by adding library
+types to wrap a back-reference.  Accessing a wrapped reference will
+require extra syntax, and it runs the same risk of accidentally
+preserving the weakness of a reference that I discussed above.
+However, note that these problems are actually at odds: requiring
+extra syntax to access the wrapped reference will leave breadcrumbs
+making it clear when the change-over occurs.  For more on this,
+see the library section.</p>
+</div>
+<div class="section" id="weak-capable-types">
+<h3><code class="code docutils literal"><span class="pre">weak</span></code>-Capable Types<a class="headerlink" href="#weak-capable-types" title="Permalink to this headline">¶</a></h3>
+<p>Swift reference types can naturally be made to support any kind of
+semantics, and I&#8217;m taking it on faith that we could enhance ObjC
+objects to support whatever extended semantics we want.  There
+are, however, certain Swift value types which have reference-like
+semantics that it could be useful to extend <code class="code docutils literal"><span class="pre">weak</span></code> (and/or
+<code class="code docutils literal"><span class="pre">unowned</span></code>) to:</p>
+<ul class="simple">
+<li>Being able to conveniently form an optional back-reference seems
+like a core requirement.  If <code class="code docutils literal"><span class="pre">weak</span></code> were a type attribute,
+we could just expect users to write <code class="code docutils literal"><span class="pre">Optional&lt;&#64;weak</span> <span class="pre">T&gt;</span></code>;
+as a declaration attribute, this is substantially more difficult.  I
+expect this to be common enough that it&#8217;ll be unreasonable to ask
+users to use <code class="code docutils literal"><span class="pre">Optional&lt;WeakReference&lt;T&gt;&gt;</span></code>.</li>
+<li>Being able to form a back-reference to a slice or a string seems
+substantially less important.</li>
+</ul>
+<p>One complication with extending <code class="code docutils literal"><span class="pre">weak</span></code> to value types is that
+generally the implementing type will need to be different from the
+underlying value type.  Probably the best solution would be to hide
+the use of the implementing type from the type system outside of the
+wellformedness checks for the variable; SIL-gen would lower the field
+to its implementing type using the appropriate protocol conformances.</p>
+<p>As long as we have convenient optional back-references, though, we
+can avoid designing a general feature for 1.0.</p>
+</div>
+<div class="section" id="generic-weak-support">
+<h3>Generic Weak Support<a class="headerlink" href="#generic-weak-support" title="Permalink to this headline">¶</a></h3>
+<p>All other uses for weak references can be glossed as desiring
+some amount of additional work to occur when the strong reference
+count for an object reaches zero.  This necessarily entails a
+global side-table of such operations, but I believe that&#8217;s
+acceptable as long as it&#8217;s relegated to less common use-cases.</p>
+<p>It is important that the notification mechanism not require
+executing code re-entrantly during the finalization process.</p>
+<p>I suggest adopting an interface centered around the Java
+concept of a <code class="code docutils literal"><span class="pre">ReferenceQueue</span></code>.  A reference structure
+is registered with the runtime for a particular object with
+a particular set of flags and an optional reference queue:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct Reference {
+  void *Referent; // must be non-null upon registration
+  struct ReferenceQueue *Queue; // must be valid or null
+  size_t Reserved[2];
+};
+
+void swift_registerReference(struct Reference *reference,
+                             size_t flags);
+</pre></div>
+</div>
+<p>The user/library code is responsible for allocating these structures
+and initializing the first two fields, and it may include arbitrary
+fields before or after the <code class="code docutils literal"><span class="pre">Reference</span></code> section, but while the
+reference is registered with the runtime, the entire <code class="code docutils literal"><span class="pre">Reference</span></code>
+section becomes reserved and user/library code must not access it in
+any way.</p>
+<p>The flags include:</p>
+<ul class="simple">
+<li>A priority.  Should be constrained to two or three bits.  References
+are processed in order of decreasing priority; as long as a
+reference still exists with higher priority, references with lower
+priority cannot be processed.  Furthermore, as long as any reference
+exists, the referent cannot be finalized.</li>
+<li>Whether to automatically clear the reference when processing it.
+Note that a cleared reference is still considered to be
+registered with the runtime.</li>
+</ul>
+<p>These could be combined so that e.g. even priorities cause
+an automatic clear and odd priorities do not;  this would avoid some
+odd effects.</p>
+<p>The runtime may assume that explicit user operations on the same
+reference will not race with each other.  However, user operations on
+different references to the same referent may be concurrent, either
+with each other or with other refcount operations on the referent.</p>
+<p>The operations on references are as follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>void *swift_readReference(struct Reference *reference);
+</pre></div>
+</div>
+<p>This operation atomically either produces a strong reference to the
+referent of the given object or yields <code class="code docutils literal"><span class="pre">null</span></code> if the referent
+has been finalized (or if the referent is <code class="code docutils literal"><span class="pre">null</span></code>).  The
+reference must currently be registered with the runtime:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>void swift_writeReference(struct Reference *reference,
+                          void *newReferent);
+</pre></div>
+</div>
+<p>This operation changes the referent of the reference to a new object,
+potentially <code class="code docutils literal"><span class="pre">null</span></code>.  The argument is taken at +0.  The reference
+must currently be registered with the runtime.  The reference keeps
+the same flags and reference queue:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>void swift_unregisterReference(struct Reference *Reference);
+</pre></div>
+</div>
+<p>This operation clears a reference, removes it from its reference
+queue (if it is enqueued), and unregisters it from the runtime.
+The reference must currently be registered with the runtime.</p>
+<p>I propose the following simple interface to a ReferenceQueue;
+arguably, however, it ought to be a reference-counted library
+type with a small amount of native implementation:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct ReferenceQueue;
+struct ReferenceQueue *swift_createReferenceQueue(void);
+</pre></div>
+</div>
+<p>Allocate a new reference queue:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>void swift_destroyReferenceQueue(struct ReferenceQueue *queue);
+</pre></div>
+</div>
+<p>Destroy a reference queue.  There must not be any references with
+this queue currently registered with the runtime:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct Reference *swift_pollReferenceQueue(struct ReferenceQueue *queue);
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="proposed-rules-for-captures-within-closures">
+<h2>Proposed Rules for Captures within Closures<a class="headerlink" href="#proposed-rules-for-captures-within-closures" title="Permalink to this headline">¶</a></h2>
+<p>When a variable from an enclosing context is referenced in a closure,
+by default it is captured by reference.  Semantically, this means that
+the variable and the enclosing context(s) will see the variable as a
+single, independent entity; modifications will be seen in all places.
+In terms of the reference graph, each context holds a strong reference
+to the variable itself.  (In practice, most local variables captured
+by reference will not require individual allocation; usually they will
+be allocated as part of the closure object.  But in the formalism,
+they are independent objects.)</p>
+<p>Closures therefore make it fairly easy to introduce reference cycles:
+for example, an instance method might install a closure as an event
+listener on a child object, and if that closure refers to
+<code class="code docutils literal"><span class="pre">self</span></code>, a reference cycle will be formed.  This is an
+indisputable drawback of an environment which cannot collect reference
+cycles.</p>
+<p>Relatively few languages both support closures and use
+reference-counting.  I&#8217;m not aware of any that attempt a language
+solution to the problem; the usual solution is to the change the
+captured variable to use weak-reference semantics, usually by copying
+the original into a new variable used only for this purpose.  This is
+annoyingly verbose, clutters up the enclosing scope, and duplicates
+information across multiple variables.  It&#8217;s also error-prone: since
+both names are in scope, it&#8217;s easy to accidentally refer to the wrong
+one, and explicit capture lists only help if you&#8217;re willing to be very
+explicit.</p>
+<p>A better alternative (which we should implement in Objective-C as
+well) is to permit closures to explicitly specify the semantics under
+which a variable is captured.  In small closures, it makes sense to
+put this near the variable reference; in larger closures, this can
+become laborious and redundant, and a different mechanism is called for.</p>
+<p>In the following discussion, a <em>var-or-member expression</em> is an
+expression which is semantically constrained to be one of:</p>
+<ul class="simple">
+<li>A reference to a local variable-like declaration from an
+enclosing context.</li>
+<li>A member access thereof, possibly recursively.</li>
+</ul>
+<p>Such expressions have two useful traits:</p>
+<ul class="simple">
+<li>They always end in an identifier which on some level meaningfully
+identifies the object.</li>
+<li>Evaluating them is relatively likely (but not guaranteed) to not
+have interesting side effects, and so we feel less bad about
+apparently shifting their evaluation around.</li>
+</ul>
+<div class="section" id="decorated-capture-references">
+<h3>Decorated Capture References<a class="headerlink" href="#decorated-capture-references" title="Permalink to this headline">¶</a></h3>
+<p>Small closures are just as likely to participate in a reference cycle,
+but they suffer much more from extraneous syntax because they&#8217;re more
+likely to be center-embedded in interesting expressions.  So if
+there&#8217;s anything to optimize for in the grammar, it&#8217;s this.</p>
+<p>I propose this fairly obvious syntax:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">button1</span><span class="p">.</span><span class="n">setAction</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">unowned</span><span class="p">(</span><span class="bp">self</span><span class="p">).</span><span class="n">tapOut</span><span class="p">()</span><span class="w"> </span><span class="p">}</span>
+<span class="n">button2</span><span class="p">.</span><span class="n">setAction</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kr">if </span><span class="p">(</span><span class="n">weak</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">weak</span><span class="p">(</span><span class="bp">self</span><span class="p">).</span><span class="n">swapIn</span><span class="p">()</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</pre></div>
+</div>
+<p>The operand is evaluated at the time of closure formation.  Since
+these references can be a long way from the top of the closure, we
+don&#8217;t want to allow a truly arbitrary expression here, because the
+order of side-effects in the surrounding context could be very
+confusing.  So we require the operand to be an <code class="code docutils literal"><span class="pre">expr-var-or-member</span></code>.
+More complicated expressions really ought to be hoisted out to a
+separate variable for legibility anyway.</p>
+<p>I do believe that being able to capture the value of a property
+(particularly of <code class="code docutils literal"><span class="pre">self</span></code>) is very important.  In fact, it&#8217;s
+important independent of weak references.  It is often possible to
+avoid a reference cycle by simply capturing a specific property value
+instead of the base object.  Capturing by value is also an
+expressivity improvement: the programmer can easily choose between
+working with the property&#8217;s instantaneous value (at the time the
+closure is created) or its current value (at the time the closure is
+invoked).</p>
+<p>Therefore I also suggest a closely-related form of decoration:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">button3</span><span class="p">.</span><span class="n">setAction</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">capture</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">model</span><span class="p">).</span><span class="n">addProfitStep</span><span class="p">()</span><span class="w"> </span><span class="p">}</span>
+</pre></div>
+</div>
+<p>This syntax would force <code class="code docutils literal"><span class="pre">capture</span></code> to become a real keyword.</p>
+<p>All of these kinds of decorated references are equivalent to adding a
+so-attributed <code class="code docutils literal"><span class="pre">capture</span></code> declaration (see below) with a nonce
+identifier to the top of the closure:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>button1.setAction {
+  capture @unowned _V1 = self
+  _V1.tapOut()
+}
+button2.setAction {
+  capture @weak _V2 = self
+  if (_V2) { _V2.swapIn() }
+}
+button3.setAction {
+  capture _V3 = self.model
+  _V3.addProfitStep()
+}
+</pre></div>
+</div>
+<p>If the operand of a decorated capture is a local variable, then that
+variable must not be the subject of an explicit <code class="code docutils literal"><span class="pre">capture</span></code>
+declaration, and all references to that variable within the closure
+must be identically decorated.</p>
+<p>The requirement to decorate all references can add redundancy, but
+only if the programmer insists on decorating references instead of
+adding an explicit <code class="code docutils literal"><span class="pre">capture</span></code> declaration.  Meanwhile, that
+redundancy aids both maintainers (by preventing refactors from
+accidentally removing the controlling decoration) and readers (who
+would otherwise need to search the entire closure to understand how
+the variable is captured).</p>
+<p>Captures with identical forms (the same sequence of members of the
+same variable) are merged to the same capture declaration.  This
+permits type refinement to work as expected, as seen above with the
+<code class="code docutils literal"><span class="pre">weak</span></code> capture.  It also guarantees the elimination of some
+redundant computation, such as with the <code class="code docutils literal"><span class="pre">state</span></code> property in this
+example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">resetButton</span><span class="p">.</span><span class="n">setAction</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">log</span><span class="p">(</span><span class="s">&quot;resetting state to &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">capture</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">state</span><span class="p">))</span>
+<span class="w">  </span><span class="n">capture</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">model</span><span class="p">).</span><span class="n">setState</span><span class="p">(</span><span class="n">capture</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">state</span><span class="p">))</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>I don&#8217;t see any immediate need for other kinds of capture decoration.
+In particular, I think back references are likely to be the right kind
+of weak reference here for basically every use, and I don&#8217;t think that
+making it easy to capture a value with, say, a zeroable weak reference
+is important.  This is just an intuition deepened by hallway
+discussions and close examination of a great many test cases, so I
+concede it may prove to be misguided, in which case it should be easy
+enough to add a new kind of decoration (if we&#8217;re willing to burn a
+keyword on it).</p>
+</div>
+<div class="section" id="capture-declarations">
+<h3><code class="code docutils literal"><span class="pre">capture</span></code> Declarations<a class="headerlink" href="#capture-declarations" title="Permalink to this headline">¶</a></h3>
+<p>This feature generalizes the above, removing some redundancy in large
+closures and adding a small amount of expressive power.</p>
+<p>A <code class="code docutils literal"><span class="pre">capture</span></code> declaration can only appear in a closure: an
+anonymous closure expression or <code class="code docutils literal"><span class="pre">func</span></code> declaration that appears
+directly within a function.  (By &#8220;directly&#8221; I mean not within, say, a
+local type declaration within the function).  <code class="code docutils literal"><span class="pre">capture</span></code> will
+need to at least become a context-sensitive keyword.</p>
+<p>A closure may contain multiple <code class="code docutils literal"><span class="pre">capture</span></code> declarations, but they
+must all appear at the very top.  One reason is that they can affect
+the capture semantics within the closure, so someone reading the
+closure should be able to find them easily.  Another reason is that
+they can involve executing interesting code in the enclosing context
+and so should reliably appear near the closure formation site in the
+source code:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>decl                   ::= decl-capture
+decl-capture           ::= &#39;capture&#39; attribute-list &#39;=&#39; expr-var-or-member
+decl-capture           ::= &#39;capture&#39; attribute-list decl-capture-expr-list
+decl-capture-expr-list ::= expr-var-or-member
+decl-capture-expr-list ::= expr-var-or-member &#39;,&#39; decl-capture-expr-list
+</pre></div>
+</div>
+<p>Both forms of <code class="code docutils literal"><span class="pre">capture</span></code> declaration cause one or more fields to
+be created within the closure object.  At the time of creating the
+closure, these fields are initialized with the result of evaluating an
+expression in the enclosing context.  Since the expression is
+evaluated in the enclosing context, it cannot refer to &#8220;previous&#8221;
+captures; otherwise we could have some awkward ambiguities.  I think
+we should reserve the right to not execute an initializer if the
+closure will never be called; this is more important for local
+<code class="code docutils literal"><span class="pre">func</span></code> declarations than for anonymous closure expressions.</p>
+<p>The fields introduced by <code class="code docutils literal"><span class="pre">capture</span></code> declarations should be
+immutable by default, but programmers should be able to write
+something like <code class="code docutils literal"><span class="pre">capture</span> <span class="pre">var</span> <span class="pre">...</span></code> to make them mutable.  Locking
+down on mutation isn&#8217;t quite as important as it is with implicit
+captures (where it&#8217;s easy to accidentally believe you&#8217;re modifying the
+enclosing variable) or even explicit captures in C++11 lambdas (where
+copies of the lambda object will copy the capture field and thus
+produce mystifying behavior in uncareful code), but it&#8217;s still a
+source of easy mistakes that should require manual intervention to
+enable.  This all presumes that we eventually design mutability into
+the language, of course.</p>
+<p>In the pattern-initializer form, the field names are given explicitly
+by the pattern.  The abbreviated form borrows the name of the captured
+member or local variable.  In either case, names should be subject to
+the usual shadowing rules, whatever they may be, with the exception
+that capturing an enclosing variable with the abbreviated form is not
+problematic.</p>
+<p>Attributes on a <code class="code docutils literal"><span class="pre">capture</span></code> declaration affect all the fields it
+declares.</p>
+<p>Let&#8217;s spell out some examples.  I expect the dominant form to be a
+simple identifier:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>capture @unowned foo
+</pre></div>
+</div>
+<p>This captures the current value of whatever <code class="code docutils literal"><span class="pre">foo</span></code> resolves to
+(potentially a member of <code class="code docutils literal"><span class="pre">self</span></code>!) and binds it within the
+closure as a back-reference.</p>
+<p>Permitting the slightly more general form:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">capture</span><span class="w"> </span><span class="n">window</span><span class="p">.</span><span class="n">title</span>
+</pre></div>
+</div>
+<p>allows users to conveniently capture specific values without mucking
+up the enclosing scope with tons of variables only needed for setting
+up the closure.  In particular, this makes it easy to capture specific
+fields out of an enclosing <code class="code docutils literal"><span class="pre">self</span></code> object instead of capturing
+the object itself; that, plus forcing uses of <code class="code docutils literal"><span class="pre">self</span></code> to be
+explicit in closures, would help users to conveniently avoid a class
+of inadvertent retain cycles.</p>
+<p>I&#8217;ve included the general pattern-initializer form mostly for ease of
+exposition.  It adds no major expressivity improvements over just
+creating a variable in the enclosing context.  It does avoid
+cluttering the enclosing scope with new variables and permits captures
+to be locally renamed, and it can very convenient if introducing a new
+variable in the enclosing scope would be complicated (for example, if
+there were a reason to prefer using a single statement there).  I
+don&#8217;t think it does any harm, but I wouldn&#8217;t mourn it, either.  I do
+think that generalizing the initializer to an arbitrary expression
+would be a serious mistake, because readers are naturally going to
+overlook code which occurs inside the closure, and promoting side
+effects there would be awful.</p>
+<p>It would be nice to have a way to declare that a closure should not
+have any implicit captures.  I don&#8217;t have a proposal for that right now,
+but it&#8217;s not important for weak references.</p>
+</div>
+<div class="section" id="nested-closures">
+<h3>Nested Closures<a class="headerlink" href="#nested-closures" title="Permalink to this headline">¶</a></h3>
+<p>It is important to spell out how these rules affect captures in nested
+closures.</p>
+<p>Recall that all of the above rules can be transformed into
+<code class="docutils literal"><span class="pre">capture</span></code> declarations at the beginning of a closure, and that
+<code class="docutils literal"><span class="pre">capture</span></code> declarations always introduce a by-value capture
+instead of a by-reference capture.</p>
+<p>A by-reference capture is always of either a local variable or a
+<code class="docutils literal"><span class="pre">capture</span></code> declaration.  In neither case do we currently permit
+such captures to &#8220;drag in&#8221; other declarations silently, to the extent
+that this is detectable.  This means that mutable <code class="docutils literal"><span class="pre">capture</span></code>
+declarations that are themselves captured by reference must be
+separately allocated from the closure object, much like what happens
+with normal locals captured by reference.</p>
+<p>I&#8217;ve considered it quite a bit, and I think that a by-value capture of
+a variable from a non-immediately enclosing context must be made
+ill-formed.  At the very least, it must be ill-formed if either the
+original variable is mutable (or anything along the path is, if it
+involves properties) or the capture adds <code class="docutils literal"><span class="pre">&#64;unowned</span></code>.</p>
+<p>This rule will effectively force programmers to use extra variables or
+<code class="docutils literal"><span class="pre">capture</span></code>s as a way of promising validity of the internal
+captures.</p>
+<p>The motivation for this prohibition is that the intent of such
+captures is actually quite ambiguous and/or dangerous.  Consider
+the following code:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">async</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">doSomething</span><span class="p">();</span><span class="w"> </span><span class="no">GUI</span><span class="p">.</span><span class="n">sync</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">unowned</span><span class="p">(</span><span class="n">view</span><span class="p">).</span><span class="n">fireCompleted</span><span class="p">()</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</pre></div>
+</div>
+<p>The intent of this code is to have captured a back-reference to the
+value of <code class="code docutils literal"><span class="pre">view</span></code>, but it could be to do so at either of two
+points in time.  The language must choose, and in this hypothetical it
+must do so without further declaration of intent and without knowledge
+of when and how many times the closures will be called.</p>
+<p>Suppose that we capture the value at the earlier point, when we form
+the outer closure.  This will behave very surprisingly if <code class="code docutils literal"><span class="pre">view</span></code>
+is in fact mutated; it may be easier to imagine this if, instead of a
+simple local variable, it was instead a path like <code class="code docutils literal"><span class="pre">self.view</span></code>.
+And it&#8217;s not clear that forming a back-reference at this earlier point
+is actually valid; it is easy to imagine code that would rely on the
+intermediate closure holding a strong reference to the view.
+Furthermore, and crucially, these issues are inextricable: we cannot
+somehow keep track of the mutable variable but only hold its value
+weakly.</p>
+<p>But suppose instead that we capture the value at the later point.
+Then the intermediate closure will capture the <code class="code docutils literal"><span class="pre">view</span></code> variable
+by reference, which means that in effect it will hold <code class="code docutils literal"><span class="pre">view</span></code>
+strongly.  This may actually completely subvert the user&#8217;s desired
+behavior.</p>
+<p>It&#8217;s not clear to me right now whether this problem applies equally to
+explicit <code class="code docutils literal"><span class="pre">capture</span></code> declarations.  Somehow decorated expressions
+seem more ambiguous in intent, probably because the syntax is more
+thoughtlessly convenient.  On the other hand, making the decoration
+syntax not just a shorthand for the explicit declarations makes the
+model more complex, and it may be over-complex already.</p>
+<p>So in summary, it would be best to enforce a strong prohibition against
+these dangerous multi-level captures.  We can tell users to introduce
+secondary variables when they need to do subtle things across several
+closure levels.</p>
+</div>
+</div>
+<div class="section" id="library-directions">
+<h2>Library Directions<a class="headerlink" href="#library-directions" title="Permalink to this headline">¶</a></h2>
+<p>The library should definitely provide the following types:</p>
+<ul>
+<li><p class="first"><code class="code docutils literal"><span class="pre">UnownedReference&lt;T&gt;</span></code>: a fragile value type with a single
+public <code class="code docutils literal"><span class="pre">unowned</span></code> field of type <code class="code docutils literal"><span class="pre">T</span></code>.  There should be an
+implicit conversion <em>from</em> <code class="code docutils literal"><span class="pre">T</span></code> so that obvious initializations
+and assignments succeed.  However, there should not be an implicit
+conversion <em>to</em> <code class="code docutils literal"><span class="pre">T</span></code>; this would be dangerous because it could
+hide bugs introduced by the way that e.g. naive copies into locals
+will preserve the weakness of the reference.</p>
+<p>In keeping with our design for <code class="code docutils literal"><span class="pre">unowned</span></code>, I think this type
+should actually be an alias to either
+<code class="code docutils literal"><span class="pre">SafeUnownedReference&lt;T&gt;</span></code> or <code class="code docutils literal"><span class="pre">UnsafeUnownedReference&lt;T&gt;</span></code>
+depending on the current component&#8217;s build settings.  The choice
+would be exported in binary modules, but for cleanliness we would
+also require public APIs to visibly commit to one choice or the
+other.</p>
+</li>
+<li><p class="first"><code class="code docutils literal"><span class="pre">WeakReference&lt;T&gt;</span></code>: a fragile value type with a single public
+<code class="code docutils literal"><span class="pre">weak</span></code> field of type <code class="code docutils literal"><span class="pre">T</span></code>.  As above, there should be an
+implicit conversion <em>from</em> <code class="code docutils literal"><span class="pre">T</span></code> but no implicit conversion to
+<code class="code docutils literal"><span class="pre">T</span></code> (or even <code class="code docutils literal"><span class="pre">Optional&lt;T&gt;</span></code>).  There is, however, no
+need for safe and unsafe variants.</p>
+</li>
+</ul>
+<p>The library should consider providing the following types:</p>
+<ul class="simple">
+<li>A simple, memory-sensitive weak cache.</li>
+<li><code class="code docutils literal"><span class="pre">Finalizer</span></code>: a value type which is constructed with a referent
+and a <code class="code docutils literal"><span class="pre">()</span> <span class="pre">-&gt;</span> <span class="pre">()</span></code> function and which causes the function to be
+run (on a well-known dispatch queue?) when the object is finalized.</li>
+</ul>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

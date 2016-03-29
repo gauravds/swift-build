@@ -1,0 +1,277 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Copy-On-Write Optimization of inout Values &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Copy-On-Write Optimization of inout Values</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="copy-on-write-optimization-of-inout-values">
+<h1>Copy-On-Write Optimization of <code class="docutils literal"><span class="pre">inout</span></code> Values<a class="headerlink" href="#copy-on-write-optimization-of-inout-values" title="Permalink to this headline">¶</a></h1>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Authors:</th><td class="field-body">Dave Abrahams, Joe Groff</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Summary:</th><td class="field-body">Our writeback model interacts with Copy-On-Write (COW) to
+cause some surprising inefficiencies, such as O(N) performance
+for <code class="docutils literal"><span class="pre">x[0][0]</span> <span class="pre">=</span> <span class="pre">1</span></code>. We propose a modified COW optimization
+that recovers O(1) performance for these cases and supports
+the efficient use of slices in algorithm implementation.</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="whence-the-problem">
+<h2>Whence the Problem?<a class="headerlink" href="#whence-the-problem" title="Permalink to this headline">¶</a></h2>
+<p>The problem is caused as follows:</p>
+<ul>
+<li><p class="first">COW depends on the programmer being able to mediate all writes (so
+she can copy if necessary)</p>
+</li>
+<li><p class="first">Writes to container elements and slices are mediated through
+subscript setters, so in</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">mutate</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>we &#8220;<code class="docutils literal"><span class="pre">subscript</span> <span class="pre">get</span></code>&#8221; <code class="docutils literal"><span class="pre">x[0]</span></code> into a temporary, mutate the
+temporary, and &#8220;<code class="docutils literal"><span class="pre">subscript</span> <span class="pre">set</span></code>&#8221; it back into <code class="docutils literal"><span class="pre">x[0]</span></code>.</p>
+</li>
+<li><p class="first">When the element itself is a COW type, that temporary implies a
+retain count of at least 2 on the element&#8217;s buffer.</p>
+</li>
+<li><p class="first">Therefore, mutating such an element causes an expensive copy, <em>even
+when the element&#8217;s buffer isn&#8217;t otherwise shared</em>.</p>
+</li>
+</ul>
+<p>Naturally, this problem generalizes to any COW value backed by a
+getter/setter pair, such as a computed or resilient <code class="docutils literal"><span class="pre">String</span></code>
+property:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>anObject.title.append(&#39;.&#39;) // O(N)
+</pre></div>
+</div>
+</div>
+<div class="section" id="interaction-with-slices">
+<h2>Interaction With Slices<a class="headerlink" href="#interaction-with-slices" title="Permalink to this headline">¶</a></h2>
+<p>Consider the classic divide-and-conquer algorithm QuickSort, which
+could be written as follows:</p>
+<pre class="literal-block">
+protocol Sliceable {
+  ...
+  &#64;mutating
+  func quickSort(compare: (StreamType.Element, StreamType.Element) -&gt; Bool) {
+    let (start,end) = (startIndex, endIndex)
+    if start != end &amp;&amp; start.succ() != end {
+      let pivot = self[start]
+      let mid = partition({compare($0, pivot)})
+      <strong>self[start...mid].quickSort(compare)</strong>
+      <strong>self[mid...end].quickSort(compare)</strong>
+    }
+  }
+}
+</pre>
+<p>The implicit <code class="docutils literal"><span class="pre">inout</span></code> on the target of the recursive <code class="docutils literal"><span class="pre">quickSort</span></code>
+calls currently forces two allocations and O(N) copies in each layer
+of the QuickSort implementation.  Note that this problem applies to
+simple containers such as <code class="docutils literal"><span class="pre">Int[]</span></code>, not just containers of COW
+elements.</p>
+<p>Without solving this problem, mutating algorithms must operate on
+<code class="docutils literal"><span class="pre">MutableCollection</span></code>s and pairs of their <code class="docutils literal"><span class="pre">Index</span></code> types, and we
+must hope the ARC optimizer is able to eliminate the additional
+reference at the top-level call.  However, that does nothing for the
+cases mentioned in the previous section.</p>
+</div>
+<div class="section" id="our-solution">
+<h2>Our Solution<a class="headerlink" href="#our-solution" title="Permalink to this headline">¶</a></h2>
+<p>We need to prevent lvalues created in an <code class="docutils literal"><span class="pre">inout</span></code> context from
+forcing a copy-on-write.  To accomplish that:</p>
+<ul class="simple">
+<li>In the class instance header, we reserve a bit <code class="docutils literal"><span class="pre">INOUT</span></code>.</li>
+<li>When a unique reference to a COW buffer <code class="docutils literal"><span class="pre">b</span></code> is copied into
+an <code class="docutils literal"><span class="pre">inout</span></code> lvalue, we save the value of the <code class="docutils literal"><span class="pre">b.INOUT</span></code> bit and set it.</li>
+<li>When a reference to <code class="docutils literal"><span class="pre">b</span></code> is taken that is not part of an <code class="docutils literal"><span class="pre">inout</span></code>
+value, <code class="docutils literal"><span class="pre">b.INOUT</span></code> is cleared.</li>
+<li>When <code class="docutils literal"><span class="pre">b</span></code> is written-back into <code class="docutils literal"><span class="pre">r</span></code>, <code class="docutils literal"><span class="pre">b.INOUT</span></code> is restored to the saved
+value.</li>
+<li>A COW buffer can be modified in-place when it is uniquely referenced
+<em>or</em> when <code class="docutils literal"><span class="pre">INOUT</span></code> is set.</li>
+</ul>
+<p>We believe this can be done with little user-facing change; the author
+of a COW type would add an attribute to the property that stores the
+buffer, and we would use a slightly different check for in-place
+writability.</p>
+<div class="section" id="other-considered-solutions">
+<h3>Other Considered Solutions<a class="headerlink" href="#other-considered-solutions" title="Permalink to this headline">¶</a></h3>
+<p>Move optimization seemed like a potential solution when we first considered
+this problem&#8211;given that it is already unspecified to reference a property
+while an active <code class="docutils literal"><span class="pre">inout</span></code> reference can modify it, it seems natural to move
+ownership of the value to the <code class="docutils literal"><span class="pre">inout</span></code> when entering writeback and move it
+back to the original value when exiting writeback. We do not think it is viable
+for the following reasons:</p>
+<ul>
+<li><p class="first">In general, relying on optimizations to provide performance semantics is
+brittle.</p>
+</li>
+<li><p class="first">Move optimization would not be memory safe if either the original value or
+<code class="docutils literal"><span class="pre">inout</span></code> slice were modified to give up ownership of the original backing
+store.  Although observing a value while it has inout aliases is unspecified,
+it should remain memory-safe to do so. This should remain memory safe, albeit
+unspecified:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>var arr = [1,2,3]
+func mutate(x: inout Int[]) -&gt; Int[] {
+  x = [3...4]
+  return arr[0...2]
+}
+mutate(&amp;arr[0...2])
+</pre></div>
+</div>
+<p>Inout slices thus require strong ownership of the backing store independent
+of the original object, which must also keep strong ownership of the backing
+store.</p>
+</li>
+<li><p class="first">Move optimization requires unique referencing and would fail when there are
+multiple concurrent, non-overlapping <code class="docutils literal"><span class="pre">inout</span></code> slices. <code class="docutils literal"><span class="pre">swap(&amp;x.a,</span> <span class="pre">&amp;x.b)</span></code>
+should be well-defined if <code class="docutils literal"><span class="pre">x.a</span></code> and <code class="docutils literal"><span class="pre">x.b</span></code> do not access overlapping
+state, and so should be <code class="docutils literal"><span class="pre">swap(&amp;x[0...50],</span> <span class="pre">&amp;x[50...100])</span></code>.  More
+generally, we would like to use inout slicing to implement
+divide-and-conquer parallel algorithms, as in:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">async</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">mutate</span><span class="p">(</span><span class="o">&amp;</span><span class="n">arr</span><span class="p">[</span><span class="mi">0</span><span class="o">..</span><span class="p">.</span><span class="mi">50</span><span class="p">])</span><span class="w"> </span><span class="p">}</span>
+<span class="n">async</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">mutate</span><span class="p">(</span><span class="o">&amp;</span><span class="n">arr</span><span class="p">[</span><span class="mi">50</span><span class="o">..</span><span class="p">.</span><span class="mi">100</span><span class="p">])</span><span class="w"> </span><span class="p">}</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</div>
+</div>
+<div class="section" id="language-changes">
+<h2>Language Changes<a class="headerlink" href="#language-changes" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="builtin-isuniquelyreferenced">
+<h3>Builtin.isUniquelyReferenced<a class="headerlink" href="#builtin-isuniquelyreferenced" title="Permalink to this headline">¶</a></h3>
+<p>A mechanism needs to be exposed to library writers to allow them to check
+whether a buffer is uniquely referenced. This check requires primitive access
+to the layout of the heap object, and can also potentially be reasoned about
+by optimizations, so it makes sense to expose it as a <code class="docutils literal"><span class="pre">Builtin</span></code> which lowers
+to a SIL <code class="docutils literal"><span class="pre">is_uniquely_referenced</span></code> instruction.</p>
+</div>
+<div class="section" id="the-cow-attribute">
+<h3>The <code class="docutils literal"><span class="pre">&#64;cow</span></code> attribute<a class="headerlink" href="#the-cow-attribute" title="Permalink to this headline">¶</a></h3>
+<p>A type may declare a stored property as being <code class="docutils literal"><span class="pre">&#64;cow</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>class ArrayBuffer { /* ... */ }
+
+struct Array {
+  @cow var buffer : ArrayBuffer
+}
+</pre></div>
+</div>
+<p>The property must meet the following criteria:</p>
+<ul class="simple">
+<li>It must be a stored property.</li>
+<li>It must be of a pure Swift class type. (More specifically, at the
+implementation level, it must have a Swift refcount.)</li>
+<li>It must be mutable. A <code class="docutils literal"><span class="pre">&#64;cow</span> <span class="pre">val</span></code> property would not be useful.</li>
+</ul>
+<p>Values with <code class="docutils literal"><span class="pre">&#64;cow</span></code> properties have special implicit behavior when they are
+used in <code class="docutils literal"><span class="pre">inout</span></code> contexts, described below.</p>
+</div>
+</div>
+<div class="section" id="implementation-of-cow-properties">
+<h2>Implementation of &#64;cow properties<a class="headerlink" href="#implementation-of-cow-properties" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="inout-sil-operations">
+<h3>inout SIL operations<a class="headerlink" href="#inout-sil-operations" title="Permalink to this headline">¶</a></h3>
+<p>To maintain the <code class="docutils literal"><span class="pre">INOUT</span></code> bit of a class instance, we need new SIL operations
+that update the <code class="docutils literal"><span class="pre">INOUT</span></code> bit. Because the state of the bit needs to be
+saved and restored through every writeback scope, we can have:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>%former = inout_retain %b : $ClassType
+</pre></div>
+</div>
+<p>increase the retain count, save the current value of <code class="docutils literal"><span class="pre">INOUT</span></code>, set <code class="docutils literal"><span class="pre">INOUT</span></code>,
+and produce the <code class="docutils literal"><span class="pre">%former</span></code> value as its <code class="docutils literal"><span class="pre">Int1</span></code> result. To release,
+we have:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>inout_release %b : $ClassType, %former : $Builtin.Int1
+</pre></div>
+</div>
+<p>both reduce the retain count and change the value of <code class="docutils literal"><span class="pre">INOUT</span></code> back to the
+value saved in <code class="docutils literal"><span class="pre">%former</span></code>. Furthermore:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>strong_retain %b : $ClassType
+</pre></div>
+</div>
+<p>must always clear the <code class="docutils literal"><span class="pre">INOUT</span></code> bit.</p>
+<p>To work with opaque types, <code class="docutils literal"><span class="pre">copy_addr</span></code> must also be able to perform an
+<code class="docutils literal"><span class="pre">inout</span></code> initialization of a writeback buffer as well as reassignment to
+an original value. This can be an additional attribute on the source, mutually
+exclusive with <code class="docutils literal"><span class="pre">[take]</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">copy_addr</span><span class="w"> </span><span class="p">[</span><span class="n">inout</span><span class="p">]</span><span class="w"> </span><span class="o">%</span><span class="n">a</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="p">[</span><span class="n">initialization</span><span class="p">]</span><span class="w"> </span><span class="o">%</span><span class="n">b</span>
+</pre></div>
+</div>
+<p>This implies that value witness tables will need witnesses for
+inout-initialization and inout-reassignment.</p>
+</div>
+<div class="section" id="copying-of-cow-properties-for-writeback">
+<h3>Copying of &#64;cow properties for writeback<a class="headerlink" href="#copying-of-cow-properties-for-writeback" title="Permalink to this headline">¶</a></h3>
+<p>When a value is copied into a writeback buffer, its <code class="docutils literal"><span class="pre">&#64;cow</span></code> properties must
+be retained for the new value using <code class="docutils literal"><span class="pre">inout_retain</span></code> instead of
+<code class="docutils literal"><span class="pre">strong_retain</span></code> (or <code class="docutils literal"><span class="pre">copy_addr</span> <span class="pre">[inout]</span> <span class="pre">[initialization]</span></code> instead of plain
+<code class="docutils literal"><span class="pre">copy_addr</span> <span class="pre">[initialization]</span></code>). When the value is written back, the
+property values should be <code class="docutils literal"><span class="pre">inout_release</span></code>d, or the value should be
+written back using <code class="docutils literal"><span class="pre">copy_addr</span> <span class="pre">[inout]</span></code> reassignment.</p>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,203 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>The new @c attribute &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>The new @c attribute</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <p>Eventually, we would like to write Swift modules which define pure-C entry
+points for top-level functions, and be able to export more data types to
+C code.</p>
+<p>This will be important for the Linux port, but also perhaps for system
+frameworks that want to transition to Swift.</p>
+<p>The radars tracking this work are:</p>
+<ul class="simple">
+<li><a class="reference external" href="rdar://22488618">rdar://22488618</a> - &#64;c top-level functions</li>
+<li><a class="reference external" href="rdar://22490914">rdar://22490914</a> - &#64;c structs</li>
+</ul>
+<div class="section" id="the-new-c-attribute">
+<h1>The new &#64;c attribute<a class="headerlink" href="#the-new-c-attribute" title="Permalink to this headline">¶</a></h1>
+<p>This attribute can be applied to the following kinds of declarations:</p>
+<ul class="simple">
+<li>top-level functions</li>
+<li>static methods in non-generic classes</li>
+<li>enums</li>
+<li>structs</li>
+</ul>
+<p>There are two forms of the attribute:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>@c
+@c(asmname)
+</pre></div>
+</div>
+<p>The latter allows the exported name to be set. By default, the exported
+name is the unmangled, unqualified name of the function or nominal type.</p>
+<p>There is the question of how to gracefully handle name conflicts inside
+a module. Since C does not have real modules or qualified names, we
+probably can&#8217;t catch name conflicts until link time. At the very least,
+we will prohibit overloading <code class="docutils literal"><span class="pre">&#64;c</span></code> functions (unless we use Clang-style
+mangling and <code class="docutils literal"><span class="pre">__attribute__((overloadable))</span></code>).</p>
+<p>However, we might want to prefix the default &#64;asmname of a &#64;c symbol
+with the Swift module name followed by an underscore, instead of using
+the unqualified name.</p>
+</div>
+<div class="section" id="type-bridging">
+<h1>Type bridging<a class="headerlink" href="#type-bridging" title="Permalink to this headline">¶</a></h1>
+<p>The rules for bridging types in <code class="docutils literal"><span class="pre">&#64;c</span></code> function signatures are a subset
+of <code class="docutils literal"><span class="pre">&#64;objc</span></code>.</p>
+<p>Bridgeable types are now partitioned into two broad categories, &#8220;POD&#8221;
+and &#8220;non-POD&#8221;. POD types include:</p>
+<ul class="simple">
+<li>integers</li>
+<li>floating point numbers</li>
+<li>&#64;c enums</li>
+<li>fixed size arrays (currently presented as homogeneous tuples of POD types)</li>
+<li>&#64;c structs (whose fields must all be POD types)</li>
+<li>pointers to C types</li>
+<li>&#64;convention(c) function types</li>
+</ul>
+<p>On Linux, we can&#8217;t have reference counted pointers here at all, and
+NSArray, etc do not exist, so only POD types are bridgeable. We must
+ensure that we produce the right diagnostic and not crash when the
+user references NSArray, etc on Linux.</p>
+<p>On Darwin, we can allow passing reference counted pointers directly
+as function parameters. They are still not allowed as fields in <code class="docutils literal"><span class="pre">&#64;c</span></code>
+structs, though.</p>
+<p>The convention for arguments and results can be the same as CoreFoundation
+functions imported from C. The code in <code class="docutils literal"><span class="pre">CFunctionConventions</span></code> in
+SILFunctionType.cpp looks relevant.</p>
+</div>
+<div class="section" id="bridging-header-output">
+<h1>Bridging header output<a class="headerlink" href="#bridging-header-output" title="Permalink to this headline">¶</a></h1>
+<p>We can reuse most of <code class="docutils literal"><span class="pre">PrintAsObjC</span></code> to allow generating pure-C headers
+for Swift modules which use &#64;c but not &#64;objc.</p>
+</div>
+<div class="section" id="exporting-functions-to-c">
+<h1>Exporting functions to C<a class="headerlink" href="#exporting-functions-to-c" title="Permalink to this headline">¶</a></h1>
+<p>Applying <code class="docutils literal"><span class="pre">&#64;c</span></code> to a function is like a combination of <code class="docutils literal"><span class="pre">&#64;convention(c)</span></code>
+and <code class="docutils literal"><span class="pre">&#64;asmname(func_name)</span></code>.</p>
+<p>The types in the function signature are bridged as described above, and a
+foreign entry point is generated with the C calling convention and given
+asmname.</p>
+<p>When the function is referenced from a <code class="docutils literal"><span class="pre">DeclRefExpr</span></code> inside of a
+<code class="docutils literal"><span class="pre">FunctionConversionExpr</span></code> to <code class="docutils literal"><span class="pre">&#64;convention(c)</span></code>, we emit a direct
+reference to this foreign entry point.</p>
+</div>
+<div class="section" id="c-applied-to-enums-and-structs">
+<h1>&#64;c applied to enums and structs<a class="headerlink" href="#c-applied-to-enums-and-structs" title="Permalink to this headline">¶</a></h1>
+<p>For enums, <code class="docutils literal"><span class="pre">&#64;c</span></code> and <code class="docutils literal"><span class="pre">&#64;objc</span></code> can be synonyms. We still have to track
+which one the user used, for accurate printing. On Linux, <code class="docutils literal"><span class="pre">&#64;objc</span></code>
+could probably be changed to always diagnose, but this will require
+changing some tests.</p>
+<p>As stated above, all the fields of a <code class="docutils literal"><span class="pre">&#64;c</span></code> struct must themselves be POD.</p>
+<p>Structs declared as <code class="docutils literal"><span class="pre">&#64;c</span></code> need to be laid out with C size and alignment
+conventions. We already do that for Swift structs imported from Clang by
+asking Clang to do the layout on Clang AST, so perhaps for <code class="docutils literal"><span class="pre">&#64;c</span></code> structs
+declared in Swift, we can go in the other direction by constructing Clang
+AST for the struct.</p>
+</div>
+<div class="section" id="accessibility-and-linkage-for-c-declarations">
+<h1>Accessibility and linkage for &#64;c declarations<a class="headerlink" href="#accessibility-and-linkage-for-c-declarations" title="Permalink to this headline">¶</a></h1>
+<p>Only public enums and structs should appear in generated headers; for
+private types, <code class="docutils literal"><span class="pre">&#64;c</span></code> only affects layout and restrictions on the field
+types.</p>
+<p>For functions, it is not clear if private together with <code class="docutils literal"><span class="pre">&#64;c</span></code> is useful,
+but it could be implemented for completeness. We could either give the
+foreign entry point private linkage, or intentionally give it incorrect
+linkage allowing it to be found with <code class="docutils literal"><span class="pre">dlsym()</span></code>.</p>
+</div>
+<div class="section" id="inout-parameters-in-c-and-objc-functions">
+<h1>inout parameters in &#64;c and &#64;objc functions<a class="headerlink" href="#inout-parameters-in-c-and-objc-functions" title="Permalink to this headline">¶</a></h1>
+<p>Right now we don&#8217;t allow <code class="docutils literal"><span class="pre">inout</span></code> parameters for <code class="docutils literal"><span class="pre">&#64;objc</span></code> methods.
+We could export them as nonnull pointers, using <code class="docutils literal"><span class="pre">__attribute__((nonnull(N)))</span></code>
+rather than <code class="docutils literal"><span class="pre">_Nonnull</span></code>.</p>
+<p>If we ever get as far as implementing C++ interoperability, we could also
+export inouts as references rather than pointers.</p>
+</div>
+<div class="section" id="diagnostics">
+<h1>Diagnostics<a class="headerlink" href="#diagnostics" title="Permalink to this headline">¶</a></h1>
+<p>Right now all diagnostics for type bridging in Sema talk about Objective-C,
+leading to funny phrasing when using invalid types in a <code class="docutils literal"><span class="pre">&#64;convention(c)</span></code>
+function, for instance.</p>
+<p>All diagnostics need to be audited to take the language as a parameter, and
+either say <code class="docutils literal"><span class="pre">cannot</span> <span class="pre">be</span> <span class="pre">represented</span> <span class="pre">in</span> <span class="pre">C</span></code> or <code class="docutils literal"><span class="pre">cannot</span> <span class="pre">be</span> <span class="pre">represented</span> <span class="pre">in</span>
+<span class="pre">Objective-C</span></code>. A Linux user should never see diagnostics talking about
+Objective-C, except maybe if they explicitly mention <code class="docutils literal"><span class="pre">&#64;objc</span></code> in their code.</p>
+<p>On the plus side, it is okay if we conservatively talk about <code class="docutils literal"><span class="pre">C</span></code> in
+Objective-C diagnostics on Darwin.</p>
+</div>
+<div class="section" id="cleanups">
+<h1>Cleanups<a class="headerlink" href="#cleanups" title="Permalink to this headline">¶</a></h1>
+<p>Right now various aspects of the type bridging mapping are duplicated in
+several places:</p>
+<ul class="simple">
+<li>ASTContext::getBridgedToObjC()</li>
+<li>TypeChecker::isRepresentableInObjC() (various overloads)</li>
+<li>include/swift/ClangImporter/BuiltinMappedTypes.def</li>
+<li>include/swift/SIL/BridgedTypes.def</li>
+<li>TypeConverter::getLoweredCBridgedType()</li>
+<li>ClangImporter::VisitObjCObjectPointerType() and other places in ImportType.cpp</li>
+<li>PrintAsObjC::printIfKnownGenericStruct()</li>
+<li>PrintAsObjC::printIfKnownTypeName()</li>
+</ul>
+<p>We should try to consolidate some of this if possible, to make the
+rules more consistent and easier to describe between Darwin and Linux.</p>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

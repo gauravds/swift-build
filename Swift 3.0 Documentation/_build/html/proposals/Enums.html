@@ -1,0 +1,404 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Why ‘enum’? &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Why ‘enum’?</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <p>Swift supports what type theory calls &#8220;algebraic data types&#8221;, or ADTs, which
+are an amalgam of two familiar C-family language features, enums and unions.
+They are similar to enums in that they allow collections of independent symbolic
+values to be collected into a type and switched over:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">Color</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">Red</span><span class="p">,</span><span class="w"> </span><span class="n">Green</span><span class="p">,</span><span class="w"> </span><span class="n">Blue</span><span class="p">,</span><span class="w"> </span><span class="n">Black</span><span class="p">,</span><span class="w"> </span><span class="n">White</span>
+<span class="p">}</span>
+
+<span class="kd">var </span><span class="nv">c</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Color</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">Red</span>
+<span class="n">switch</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="p">{</span>
+<span class="n">case</span><span class="w"> </span><span class="p">.</span><span class="n">Red</span><span class="p">:</span>
+<span class="w">  </span><span class="o">..</span><span class="p">.</span>
+<span class="n">case</span><span class="w"> </span><span class="p">.</span><span class="n">Green</span><span class="p">:</span>
+<span class="w">  </span><span class="o">..</span><span class="p">.</span>
+<span class="n">case</span><span class="w"> </span><span class="p">.</span><span class="n">Blue</span><span class="p">:</span>
+<span class="w">  </span><span class="o">..</span><span class="p">.</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>They are also similar to C unions in that they allow a single type to
+contain a value of two or more other types. Unlike C unions, however, ADTs
+remember which type they contain, and can be switched over, guaranteeing that
+only the currently inhabited type is ever used:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>enum Pattern {
+  case Solid(Color)
+  case Outline(Color)
+  case Checkers(Color, Color)
+}
+
+var p : Pattern = .Checkers(.Black, .White)
+switch p {
+case .Solid(var c):
+  print(&quot;solid \(c)&quot;)
+case .Outline(var c):
+  print(&quot;outlined \(c)&quot;)
+case .Checkers(var a, var b):
+  print(&quot;checkered \(a) and \(b)&quot;)
+}
+</pre></div>
+</div>
+<p>Given the choice between two familiar keywords, we decided to use &#8216;enum&#8217; to
+name these types. Here are some of the reasons why:</p>
+<div class="section" id="why-enum">
+<h1>Why &#8216;enum&#8217;?<a class="headerlink" href="#why-enum" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="the-common-case-works-like-c">
+<h2>The common case works like C<a class="headerlink" href="#the-common-case-works-like-c" title="Permalink to this headline">¶</a></h2>
+<p>C programmers with no interest in learning about ADTs can use &#8216;enum&#8217; like they
+always have.</p>
+</div>
+<div class="section" id="union-doesn-t-exist-to-cocoa-programmers">
+<h2>&#8220;Union&#8221; doesn&#8217;t exist to Cocoa programmers<a class="headerlink" href="#union-doesn-t-exist-to-cocoa-programmers" title="Permalink to this headline">¶</a></h2>
+<p>Cocoa programmers really don&#8217;t think about unions at all. The frameworks vend
+no public unions. If a Cocoa programmer knows what a union is, it&#8217;s as a
+broken C bit-bangy thing. Cocoa programmers are used to more safely
+and idiomatically modeling ADTs in Objective-C as class hierarchies. The
+concept of closed-hierarchy variant value types is new territory for them, so
+we have some freedom in choosing how to present the feature. Trying to relate
+it to C&#8217;s &#8216;union&#8217;, a feature with negative connotations, is a disservice if
+anything that will dissuade users from wanting to learn and take advantage of
+it.</p>
+</div>
+<div class="section" id="it-parallels-our-extension-of-switch">
+<h2>It parallels our extension of &#8216;switch&#8217;<a class="headerlink" href="#it-parallels-our-extension-of-switch" title="Permalink to this headline">¶</a></h2>
+<p>The idiomatic relationship between &#8216;enum&#8217; and &#8216;switch&#8217; in C is
+well-established&#8211;If you have an enum, the best practice for consuming it is to
+switch over it so the compiler can check exhaustiveness for you. We&#8217;ve extended
+&#8216;switch&#8217; with pattern matching, another new concept for our target audience,
+and one that happens to be dual to the concept of enums with payload. In the
+whitepaper, we introduce pattern matching by starting from the familiar C case
+of switching over an integer and gradually introduce the new capabilities of
+Swift&#8217;s switch. If all ADTs are &#8216;enums&#8217;, this lets us introduce both features
+to C programmers organically, starting from the familiar case that looks like
+C:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">Foo</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">case</span><span class="w"> </span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">B</span><span class="p">,</span><span class="w"> </span><span class="n">C</span><span class="p">,</span><span class="w"> </span><span class="n">D</span><span class="w"> </span><span class="p">}</span>
+
+<span class="kd">func </span><span class="nf">use</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="n">Foo</span><span class="p">) {</span>
+<span class="w">  </span><span class="n">switch</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="p">.</span><span class="n">A</span><span class="p">:</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="p">.</span><span class="n">B</span><span class="p">:</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="p">.</span><span class="n">C</span><span class="p">:</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="p">.</span><span class="n">D</span><span class="p">:</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>and then introducing the parallel new concepts of payloads and patterns
+together:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>enum Foo { case A, B, C, D, Other(String) }
+
+func use(x:Foo) {
+  switch x {
+  case .A:
+  case .B:
+  case .C:
+  case .D:
+  case .Other(var s):
+  }
+}
+</pre></div>
+</div>
+</div>
+<div class="section" id="people-already-use-enum-to-define-adts-badly">
+<h2>People already use &#8216;enum&#8217; to define ADTs, badly<a class="headerlink" href="#people-already-use-enum-to-define-adts-badly" title="Permalink to this headline">¶</a></h2>
+<p>Enums are already used and abused in C in various ways as a building block for
+ADT-like types. An enum is of course the obvious choice to represented the
+discriminator in a tagged-union structure. Instead of saying &#8216;you write union
+and get the enum for free&#8217;, we can switch the message around: &#8216;you write enum
+and get the union for free&#8217;. Aside from that case, though, there are many uses
+in C of enums as ordered integer-convertible values that are really trying to
+express more complex symbolic ADTs. For example, there&#8217;s the pervasive LLVM
+convention of &#8216;First_*&#8217; and &#8216;Last_*&#8217; sigils:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="cm">/* C */</span>
+<span class="n">enum</span><span class="w"> </span><span class="n">Pet</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">First_Reptile</span><span class="p">,</span>
+<span class="w">    </span><span class="n">Lizard</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">First_Reptile</span><span class="p">,</span>
+<span class="w">    </span><span class="n">Snake</span><span class="p">,</span>
+<span class="w">  </span><span class="n">Last_Reptile</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Snake</span><span class="p">,</span>
+
+<span class="w">  </span><span class="n">First_Mammal</span><span class="p">,</span>
+<span class="w">    </span><span class="n">Cat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">First_Mammal</span><span class="p">,</span>
+<span class="w">    </span><span class="n">Dog</span><span class="p">,</span>
+<span class="w">  </span><span class="n">Last_Mammal</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Dog</span><span class="p">,</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+<p>which is really crying out for a nested ADT representation:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// Swift</span>
+<span class="n">enum</span><span class="w"> </span><span class="n">Reptile</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">case</span><span class="w"> </span><span class="n">Lizard</span><span class="p">,</span><span class="w"> </span><span class="n">Snake</span><span class="w"> </span><span class="p">}</span>
+<span class="n">enum</span><span class="w"> </span><span class="n">Mammal</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">case</span><span class="w"> </span><span class="n">Cat</span><span class="p">,</span><span class="w"> </span><span class="n">Dog</span><span class="w"> </span><span class="p">}</span>
+<span class="n">enum</span><span class="w"> </span><span class="n">Pet</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Reptile</span><span class="p">(</span><span class="n">Reptile</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Mammal</span><span class="p">(</span><span class="n">Mammal</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Or there&#8217;s the common case of an identifier with standardized symbolic values
+and a &#8216;user-defined&#8217; range:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="cm">/* C */</span>
+<span class="n">enum</span><span class="w"> </span><span class="n">Language</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">uint16_t</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">C89</span><span class="p">,</span>
+<span class="w">  </span><span class="n">C99</span><span class="p">,</span>
+<span class="w">  </span><span class="n">Cplusplus98</span><span class="p">,</span>
+<span class="w">  </span><span class="n">Cplusplus11</span><span class="p">,</span>
+<span class="w">  </span><span class="n">First_UserDefined</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x8000</span><span class="p">,</span>
+<span class="w">  </span><span class="n">Last_UserDefined</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0xFFFF</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+<p>which again is better represented as an ADT:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// Swift</span>
+<span class="n">enum</span><span class="w"> </span><span class="n">Language</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">C89</span><span class="p">,</span><span class="w"> </span><span class="n">C99</span><span class="p">,</span><span class="w"> </span><span class="n">Cplusplus98</span><span class="p">,</span><span class="w"> </span><span class="n">Cplusplus11</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">UserDefined</span><span class="p">(</span><span class="n">UInt16</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="rust-does-it">
+<h2>Rust does it<a class="headerlink" href="#rust-does-it" title="Permalink to this headline">¶</a></h2>
+<p>Rust also labels their ADTs &#8216;enum&#8217;, so there is some alignment with the
+&#8220;extended family&#8221; of C-influenced modern systems programming languages in making
+the same choice</p>
+</div>
+</div>
+<div class="section" id="design">
+<h1>Design<a class="headerlink" href="#design" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="syntax">
+<h2>Syntax<a class="headerlink" href="#syntax" title="Permalink to this headline">¶</a></h2>
+<p>The &#8216;enum&#8217; keyword introduces an ADT (hereon called an &#8220;enum&#8221;). Within an enum,
+the &#8216;case&#8217; keyword introduces a value of the enum. This can either be a purely
+symbolic case or can declare a payload type that is stored with the value:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">Color</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">Red</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">Green</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">Blue</span>
+<span class="p">}</span>
+
+<span class="n">enum</span><span class="w"> </span><span class="n">Optional</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Some</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">None</span>
+<span class="p">}</span>
+
+<span class="n">enum</span><span class="w"> </span><span class="n">IntOrInfinity</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Int</span><span class="p">(</span><span class="n">Int</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">NegInfinity</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">PosInfinity</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Multiple &#8216;case&#8217; declarations may be specified in a single declaration, separated
+by commas:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">IntOrInfinity</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">NegInfinity</span><span class="p">,</span><span class="w"> </span><span class="no">Int</span><span class="p">(</span><span class="n">Int</span><span class="p">),</span><span class="w"> </span><span class="n">PosInfinity</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Enum declarations may also contain the same sorts of nested declarations as
+structs, including nested types, methods, constructors, and properties:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>enum IntOrInfinity {
+  case NegInfinity, Int(Int), PosInfinity
+
+  constructor() {
+    this = .Int(0)
+  }
+
+  func min(x:IntOrInfinity) -&gt; IntOrInfinity {
+    switch (self, x) {
+    case (.NegInfinity, _):
+    case (_, .NegInfinity):
+      return .NegInfinity
+    case (.Int(var a), .Int(var b)):
+      return min(a, b)
+    case (.Int(var a), .PosInfinity):
+      return a
+    case (.PosInfinity, .Int(var b)):
+      return b
+    }
+  }
+}
+</pre></div>
+</div>
+<p>They may not however contain physical properties.</p>
+<p>Enums do not have default constructors (unless one is explicitly declared).
+Enum values are constructed by referencing one of its cases, which are scoped
+as if static values inside the enum type:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">var </span><span class="nv">red</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Color</span><span class="p">.</span><span class="n">Red</span>
+<span class="kd">var </span><span class="nv">zero</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">IntOrInfinity</span><span class="p">.</span><span class="no">Int</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="kd">var </span><span class="nv">inf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">IntOrInfinity</span><span class="p">.</span><span class="n">PosInfinity</span>
+</pre></div>
+</div>
+<p>If the enum type can be deduced from context, it can be elided and the case
+can be referenced using leading dot syntax:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">var </span><span class="nv">inf</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">IntOrInfinity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">PosInfinity</span>
+<span class="kr">return</span><span class="w"> </span><span class="n">inf</span><span class="p">.</span><span class="n">min</span><span class="p">(.</span><span class="n">NegInfinity</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="the-rawrepresentable-protocol">
+<h2>The &#8216;RawRepresentable&#8217; protocol<a class="headerlink" href="#the-rawrepresentable-protocol" title="Permalink to this headline">¶</a></h2>
+<p>In the library, we define a compiler-blessed &#8216;RawRepresentable&#8217; protocol that
+models the traditional relationship between a C enum and its raw type:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>protocol RawRepresentable {
+  /// The raw representation type.
+  typealias RawType
+
+  /// Convert the conforming type to its raw type.
+  /// Every valid value of the conforming type should map to a unique
+  /// raw value.
+  func toRaw() -&gt; RawType
+
+  /// Convert a value of raw type to the corresponding value of the
+  /// conforming type.
+  /// Returns None if the raw value has no corresponding conforming type
+  /// value.
+  class func fromRaw(_:RawType) -&gt; Self?
+}
+</pre></div>
+</div>
+<p>Any type may manually conform to the RawRepresentable protocol following the above
+invariants, regardless of whether it supports compiler derivation as underlined
+below.</p>
+</div>
+<div class="section" id="deriving-the-rawrepresentable-protocol-for-enums">
+<h2>Deriving the &#8216;RawRepresentable&#8217; protocol for enums<a class="headerlink" href="#deriving-the-rawrepresentable-protocol-for-enums" title="Permalink to this headline">¶</a></h2>
+<p>An enum can obtain a compiler-derived &#8216;RawRepresentable&#8217; conformance by
+declaring &#8220;inheritance&#8221; from its raw type in the following
+circumstances:</p>
+<ul class="simple">
+<li>The inherited raw type must be IntegerLiteralConvertible,
+FloatLiteralConvertible, CharLiteralConvertible, and/or
+StringLiteralConvertible.</li>
+<li>None of the cases of the enum may have non-void payloads.</li>
+</ul>
+<p>If an enum declares a raw type, then its cases may declare raw
+values. raw values must be integer, float, character, or string
+literals, and must be unique within the enum. If the raw type is
+IntegerLiteralConvertible, then the raw values default to
+auto-incrementing integer literal values starting from &#8216;0&#8217;, as in C. If the
+raw type is not IntegerLiteralConvertible, the raw values must
+all be explicitly declared:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">Color</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">Black</span><span class="w">   </span><span class="c1">// = 0</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">Cyan</span><span class="w">    </span><span class="c1">// = 1</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">Magenta</span><span class="w"> </span><span class="c1">// = 2</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">White</span><span class="w">   </span><span class="c1">// = 3</span>
+<span class="p">}</span>
+
+<span class="n">enum</span><span class="w"> </span><span class="n">Signal</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">Int32</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">SIGKILL</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">9</span><span class="p">,</span><span class="w"> </span><span class="n">SIGSEGV</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">11</span>
+<span class="p">}</span>
+
+<span class="n">enum</span><span class="w"> </span><span class="n">NSChangeDictionaryKey</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// All raw values are required because String is not</span>
+<span class="w">  </span><span class="c1">// IntegerLiteralConvertible</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">NSKeyValueChangeKindKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;NSKeyValueChangeKindKey&quot;</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">NSKeyValueChangeNewKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;NSKeyValueChangeNewKey&quot;</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">NSKeyValueChangeOldKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;NSKeyValueChangeOldKey&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The compiler, on seeing a valid raw type for an enum, derives a RawRepresentable
+conformance, using &#8216;switch&#8217; to implement the fromRaw and toRaw
+methods. The NSChangeDictionaryKey definition behaves as if defined:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">NSChangeDictionaryKey</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">RawRepresentable</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">typealias</span><span class="w"> </span><span class="n">RawType</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">String</span>
+
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">NSKeyValueChangeKindKey</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">NSKeyValueChangeNewKey</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">NSKeyValueChangeOldKey</span>
+
+<span class="w">  </span><span class="kd">func </span><span class="nf">toRaw</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">String</span><span class="p"> {</span>
+<span class="w">    </span><span class="n">switch</span><span class="w"> </span><span class="bp">self</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">case</span><span class="w"> </span><span class="p">.</span><span class="n">NSKeyValueChangeKindKey</span><span class="p">:</span>
+<span class="w">      </span><span class="kr">return</span><span class="w"> </span><span class="s">&quot;NSKeyValueChangeKindKey&quot;</span>
+<span class="w">    </span><span class="n">case</span><span class="w"> </span><span class="p">.</span><span class="n">NSKeyValueChangeNewKey</span><span class="p">:</span>
+<span class="w">      </span><span class="kr">return</span><span class="w"> </span><span class="s">&quot;NSKeyValueChangeNewKey&quot;</span>
+<span class="w">    </span><span class="n">case</span><span class="w"> </span><span class="p">.</span><span class="n">NSKeyValueChangeOldKey</span><span class="p">:</span>
+<span class="w">      </span><span class="kr">return</span><span class="w"> </span><span class="s">&quot;NSKeyValueChangeOldKey&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="n">static</span><span class="w"> </span><span class="kd">func </span><span class="nf">fromRaw</span><span class="p">(</span><span class="n">s</span><span class="p">:</span><span class="n">String</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">NSChangeDictionaryKey?</span><span class="p"> {</span>
+<span class="w">    </span><span class="n">switch</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">case</span><span class="w"> </span><span class="s">&quot;NSKeyValueChangeKindKey&quot;</span><span class="p">:</span>
+<span class="w">      </span><span class="kr">return</span><span class="w"> </span><span class="p">.</span><span class="n">NSKeyValueChangeKindKey</span>
+<span class="w">    </span><span class="n">case</span><span class="w"> </span><span class="s">&quot;NSKeyValueChangeNewKey&quot;</span><span class="p">:</span>
+<span class="w">      </span><span class="kr">return</span><span class="w"> </span><span class="p">.</span><span class="n">NSKeyValueChangeNewKey</span>
+<span class="w">    </span><span class="n">case</span><span class="w"> </span><span class="s">&quot;NSKeyValueChangeOldKey&quot;</span><span class="p">:</span>
+<span class="w">      </span><span class="kr">return</span><span class="w"> </span><span class="p">.</span><span class="n">NSKeyValueChangeOldKey</span>
+<span class="w">    </span><span class="n">default</span><span class="p">:</span>
+<span class="w">      </span><span class="kr">return</span><span class="w"> </span><span class="n">nil</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

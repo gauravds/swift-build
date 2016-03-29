@@ -1,0 +1,562 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Text Formatting in Swift &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Text Formatting in Swift</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="text-formatting-in-swift">
+<h1><a class="toc-backref" href="#id4">Text Formatting in Swift</a><a class="headerlink" href="#text-formatting-in-swift" title="Permalink to this headline">¶</a></h1>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Author:</th><td class="field-body">Dave Abrahams</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Author:</th><td class="field-body">Chris Lattner</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Author:</th><td class="field-body">Dave Zarzycki</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Date:</th><td class="field-body">2013-08-12</td>
+</tr>
+</tbody>
+</table>
+<div class="contents topic" id="index">
+<p class="topic-title first">Index</p>
+<ul class="simple">
+<li><a class="reference internal" href="#text-formatting-in-swift" id="id4">Text Formatting in Swift</a><ul>
+<li><a class="reference internal" href="#scope" id="id5">Scope</a><ul>
+<li><a class="reference internal" href="#goals" id="id6">Goals</a></li>
+<li><a class="reference internal" href="#non-goals" id="id7">Non-Goals</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#customstringconvertible-types" id="id8">CustomStringConvertible Types</a></li>
+<li><a class="reference internal" href="#formatting-variants" id="id9">Formatting Variants</a></li>
+<li><a class="reference internal" href="#design-details" id="id10">Design Details</a><ul>
+<li><a class="reference internal" href="#output-streams" id="id11">Output Streams</a></li>
+<li><a class="reference internal" href="#debug-printing" id="id12">Debug Printing</a></li>
+<li><a class="reference internal" href="#non-debug-printing" id="id13">(Non-Debug) Printing</a></li>
+<li><a class="reference internal" href="#streamable" id="id14"><code class="docutils literal"><span class="pre">Streamable</span></code></a></li>
+<li><a class="reference internal" href="#how-string-fits-in" id="id15">How <code class="docutils literal"><span class="pre">String</span></code> Fits In</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#extended-formatting-example" id="id16">Extended Formatting Example</a></li>
+<li><a class="reference internal" href="#possible-extensions-a-k-a-complications" id="id17">Possible Extensions (a.k.a. Complications)</a><ul>
+<li><a class="reference internal" href="#outputstream-adapters" id="id18"><code class="docutils literal"><span class="pre">OutputStream</span></code> Adapters</a></li>
+<li><a class="reference internal" href="#streamable-adapters" id="id19"><code class="docutils literal"><span class="pre">Streamable</span></code> Adapters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#possible-simplifications" id="id20">Possible Simplifications</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<p><strong>Abstract:</strong> We propose a system for creating textual representations
+of Swift objects. Our system unifies conversion to <code class="docutils literal"><span class="pre">String</span></code>, string
+interpolation, printing, and representation in the REPL and debugger.</p>
+<div class="section" id="scope">
+<h2><a class="toc-backref" href="#id5">Scope</a><a class="headerlink" href="#scope" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="goals">
+<h3><a class="toc-backref" href="#id6">Goals</a><a class="headerlink" href="#goals" title="Permalink to this headline">¶</a></h3>
+<ul class="simple">
+<li>The REPL and LLDB (&#8220;debuggers&#8221;) share formatting logic</li>
+<li>All types are &#8220;debug-printable&#8221; automatically</li>
+<li>Making a type &#8220;printable for humans&#8221; is super-easy</li>
+<li><code class="docutils literal"><span class="pre">toString()</span></code>-ability is a consequence of printability.</li>
+<li>Customizing a type&#8217;s printed representations is super-easy</li>
+<li>Format variations such as numeric radix are explicit and readable</li>
+<li>Large textual representations do not (necessarily) ever need to be
+stored in memory, e.g. if they&#8217;re being streamed into a file or over
+a remote-debugging channel.</li>
+</ul>
+</div>
+<div class="section" id="non-goals">
+<h3><a class="toc-backref" href="#id7">Non-Goals</a><a class="headerlink" href="#non-goals" title="Permalink to this headline">¶</a></h3>
+<div class="sidebar">
+<p class="first sidebar-title">Rationale</p>
+<p>Localization (including single-locale linguistic processing such as
+what&#8217;s found in Clang&#8217;s diagnostics subsystem) is the only major
+application we can think of for dynamically-constructed format
+strings, <a class="footnote-reference" href="#dynamic" id="id1">[3]</a> and is certainly the most important consumer of
+that feature.  Therefore, localization and dynamic format strings
+should be designed together, and <em>under this proposal</em> the only
+format strings are string literals containing interpolations
+(&#8220;<code class="docutils literal"><span class="pre">\(...)</span></code>&#8221;). Cocoa programmers can still use Cocoa localization
+APIs for localization jobs.</p>
+<p class="last">In Swift, only the most common cases need to be very terse.
+Anything &#8220;fancy&#8221; can afford to be a bit more verbose. If and when
+we address localization and design a full-featured dynamic string
+formatter, it may make sense to incorporate features of <code class="docutils literal"><span class="pre">printf</span></code>
+into the design.</p>
+</div>
+<ul class="simple">
+<li><strong>Localization</strong> issues such as pluralizing and argument
+presentation order are beyond the scope of this proposal.</li>
+<li><strong>Dynamic format strings</strong> are beyond the scope of this proposal.</li>
+<li><strong>Matching the terseness of C</strong>&#8216;s <code class="docutils literal"><span class="pre">printf</span></code> is a non-goal.</li>
+</ul>
+</div>
+</div>
+<div class="section" id="customstringconvertible-types">
+<h2><a class="toc-backref" href="#id8">CustomStringConvertible Types</a><a class="headerlink" href="#customstringconvertible-types" title="Permalink to this headline">¶</a></h2>
+<p><code class="docutils literal"><span class="pre">CustomStringConvertible</span></code> types can be used in string literal interpolations,
+printed with <code class="docutils literal"><span class="pre">print(x)</span></code>, and can be converted to <code class="docutils literal"><span class="pre">String</span></code> with
+<code class="docutils literal"><span class="pre">x.toString()</span></code>.</p>
+<p>The simple extension story for beginners is as follows:</p>
+<blockquote>
+<div><p>&#8220;To make your type <code class="docutils literal"><span class="pre">CustomStringConvertible</span></code>, simply declare conformance to
+<code class="docutils literal"><span class="pre">CustomStringConvertible</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">extension </span><span class="nc">Person</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">CustomStringConvertible</span><span class="w"> </span><span class="p">{}</span>
+</pre></div>
+</div>
+<p>and it will have the same printed representation you see in the
+interpreter (REPL). To customize the representation, give your type
+a <code class="docutils literal"><span class="pre">func</span> <span class="pre">format()</span></code> that returns a <code class="docutils literal"><span class="pre">String</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">extension </span><span class="nc">Person</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">CustomStringConvertible</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">func </span><span class="nf">format</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">String</span><span class="p"> {</span>
+<span class="w">    </span><span class="kr">return</span><span class="w"> </span><span class="s">&quot;</span><span class="si">\(</span><span class="n">lastName</span><span class="si">)</span><span class="s">, </span><span class="si">\(</span><span class="n">firstName</span><span class="si">)</span><span class="s">&quot;</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>The formatting protocols described below allow more efficient and
+flexible formatting as a natural extension of this simple story.</p>
+</div>
+<div class="section" id="formatting-variants">
+<h2><a class="toc-backref" href="#id9">Formatting Variants</a><a class="headerlink" href="#formatting-variants" title="Permalink to this headline">¶</a></h2>
+<p><code class="docutils literal"><span class="pre">CustomStringConvertible</span></code> types with parameterized textual representations
+(e.g. number types) <em>additionally</em> support a <code class="docutils literal"><span class="pre">format(…)</span></code> method
+parameterized according to that type&#8217;s axes of variability:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">print</span><span class="p">(</span><span class="w"> </span><span class="n">offset</span><span class="w"> </span><span class="p">)</span>
+<span class="n">print</span><span class="p">(</span><span class="w"> </span><span class="n">offset</span><span class="p">.</span><span class="n">format</span><span class="p">()</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="c1">// equivalent to previous line</span>
+<span class="n">print</span><span class="p">(</span><span class="w"> </span><span class="n">offset</span><span class="p">.</span><span class="n">format</span><span class="p">(</span><span class="n">radix</span><span class="p">:</span><span class="w"> </span><span class="mi">16</span><span class="p">,</span><span class="w"> </span><span class="n">width</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="n">precision</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Although <code class="docutils literal"><span class="pre">format(…)</span></code> is intended to provide the most general
+interface, specialized formatting interfaces are also possible:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">print</span><span class="p">(</span><span class="w"> </span><span class="n">offset</span><span class="p">.</span><span class="n">hex</span><span class="p">()</span><span class="w"> </span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="design-details">
+<h2><a class="toc-backref" href="#id10">Design Details</a><a class="headerlink" href="#design-details" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="output-streams">
+<h3><a class="toc-backref" href="#id11">Output Streams</a><a class="headerlink" href="#output-streams" title="Permalink to this headline">¶</a></h3>
+<p>The most fundamental part of this design is <code class="docutils literal"><span class="pre">OutputStream</span></code>, a thing
+into which we can stream text: <a class="footnote-reference" href="#character1" id="id2">[2]</a></p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">protocol </span><span class="nc">OutputStream</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">func </span><span class="nf">append</span><span class="p">(</span><span class="n">text</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Every <code class="docutils literal"><span class="pre">String</span></code> can be used as an <code class="docutils literal"><span class="pre">OutputStream</span></code> directly:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">extension </span><span class="nc">String</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">OutputStream</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">func </span><span class="nf">append</span><span class="p">(</span><span class="n">text</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="debug-printing">
+<h3><a class="toc-backref" href="#id12">Debug Printing</a><a class="headerlink" href="#debug-printing" title="Permalink to this headline">¶</a></h3>
+<p>Via compiler magic, <em>everything</em> conforms to the <code class="docutils literal"><span class="pre">CustomDebugStringConvertible</span></code>
+protocol. To change the debug representation for a type, you don&#8217;t
+need to declare conformance: simply give the type a <code class="docutils literal"><span class="pre">debugFormat()</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">/// \brief A thing that can be printed in the REPL and the Debugger</span>
+<span class="kd">protocol </span><span class="nc">CustomDebugStringConvertible</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">typealias</span><span class="w"> </span><span class="n">DebugRepresentation</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">Streamable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">String</span>
+
+<span class="w">  </span><span class="c1">/// \brief Produce a textual representation for the REPL and</span>
+<span class="w">  </span><span class="c1">/// Debugger.</span>
+<span class="w">  </span><span class="kd">func </span><span class="nf">debugFormat</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">DebugRepresentation</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Because <code class="docutils literal"><span class="pre">String</span></code> is a <code class="docutils literal"><span class="pre">Streamable</span></code>, your implementation of
+<code class="docutils literal"><span class="pre">debugFormat</span></code> can just return a <code class="docutils literal"><span class="pre">String</span></code>. If want to write
+directly to the <code class="docutils literal"><span class="pre">OutputStream</span></code> for efficiency reasons,
+(e.g. if your representation is huge), you can return a custom
+<code class="docutils literal"><span class="pre">DebugRepresentation</span></code> type.</p>
+<div class="admonition-guideline admonition">
+<p class="first admonition-title">Guideline</p>
+<p class="last">Producing a representation that can be consumed by the REPL
+and LLDB to produce an equivalent object is strongly encouraged
+where possible!  For example, <code class="docutils literal"><span class="pre">String.debugFormat()</span></code> produces
+a representation starting and ending with &#8220;``&#8221;``&#8221;, where special
+characters are escaped, etc. A <code class="docutils literal"><span class="pre">struct</span> <span class="pre">Point</span> <span class="pre">{</span> <span class="pre">var</span> <span class="pre">x,</span> <span class="pre">y:</span> <span class="pre">Int</span> <span class="pre">}</span></code>
+might be represented as &#8220;<code class="docutils literal"><span class="pre">Point(x:</span> <span class="pre">3,</span> <span class="pre">y:</span> <span class="pre">5)</span></code>&#8221;.</p>
+</div>
+</div>
+<div class="section" id="non-debug-printing">
+<h3><a class="toc-backref" href="#id13">(Non-Debug) Printing</a><a class="headerlink" href="#non-debug-printing" title="Permalink to this headline">¶</a></h3>
+<p>The <code class="docutils literal"><span class="pre">CustomStringConvertible</span></code> protocol provides a &#8220;pretty&#8221; textual representation
+that can be distinct from the debug format. For example, when <code class="docutils literal"><span class="pre">s</span></code>
+is a <code class="docutils literal"><span class="pre">String</span></code>, <code class="docutils literal"><span class="pre">s.format()</span></code> returns the string itself,
+without quoting.</p>
+<p>Conformance to <code class="docutils literal"><span class="pre">CustomStringConvertible</span></code> is explicit, but if you want to use the
+<code class="docutils literal"><span class="pre">debugFormat()</span></code> results for your type&#8217;s <code class="docutils literal"><span class="pre">format()</span></code>, all you
+need to do is declare conformance to <code class="docutils literal"><span class="pre">CustomStringConvertible</span></code>; there&#8217;s nothing to
+implement:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>/// \brief A thing that can be print()ed and toString()ed.
+protocol CustomStringConvertible : CustomDebugStringConvertible {
+  typealias PrintRepresentation: Streamable = DebugRepresentation
+
+  /// \brief produce a &quot;pretty&quot; textual representation.
+  ///
+  /// In general you can return a String here, but if you need more
+  /// control, return a custom Streamable type
+  func format() -&gt; PrintRepresentation {
+    return debugFormat()
+  }
+
+  /// \brief Simply convert to String
+  ///
+  /// You&#39;ll never want to reimplement this
+  func toString() -&gt; String {
+    var result: String
+    self.format().write(result)
+    return result
+  }
+}
+</pre></div>
+</div>
+</div>
+<div class="section" id="streamable">
+<h3><a class="toc-backref" href="#id14"><code class="docutils literal"><span class="pre">Streamable</span></code></a><a class="headerlink" href="#streamable" title="Permalink to this headline">¶</a></h3>
+<p>Because it&#8217;s not always efficient to construct a <code class="docutils literal"><span class="pre">String</span></code>
+representation before writing an object to a stream, we provide a
+<code class="docutils literal"><span class="pre">Streamable</span></code> protocol, for types that can write themselves into an
+<code class="docutils literal"><span class="pre">OutputStream</span></code>. Every <code class="docutils literal"><span class="pre">Streamable</span></code> is also a <code class="docutils literal"><span class="pre">CustomStringConvertible</span></code>,
+naturally:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">protocol </span><span class="nc">Streamable</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">CustomStringConvertible</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">func </span><span class="nf">writeTo</span><span class="p">&lt;</span><span class="no">T</span><span class="p">:</span><span class="w"> </span><span class="no">OutputStream</span><span class="p">&gt;(</span><span class="n">target</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="n">inout</span><span class="p">]</span><span class="w"> </span><span class="n">T</span><span class="p">)</span>
+
+<span class="w">  </span><span class="c1">// You&#39;ll never want to reimplement this</span>
+<span class="w">  </span><span class="kd">func </span><span class="nf">format</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">PrintRepresentation</span><span class="p"> {</span>
+<span class="w">    </span><span class="kr">return</span><span class="w"> </span><span class="n">this</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="how-string-fits-in">
+<h3><a class="toc-backref" href="#id15">How <code class="docutils literal"><span class="pre">String</span></code> Fits In</a><a class="headerlink" href="#how-string-fits-in" title="Permalink to this headline">¶</a></h3>
+<p><code class="docutils literal"><span class="pre">String</span></code>&#8216;s <code class="docutils literal"><span class="pre">debugFormat()</span></code> yields a <code class="docutils literal"><span class="pre">Streamable</span></code> that
+adds surrounding quotes and escapes special characters:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>extension String : CustomDebugStringConvertible {
+  func debugFormat() -&gt; EscapedStringRepresentation {
+    return EscapedStringRepresentation(self)
+  }
+}
+
+struct EscapedStringRepresentation : Streamable {
+  var _value: String
+
+  func writeTo&lt;T: OutputStream&gt;(target: [inout] T) {
+    target.append(&quot;\&quot;&quot;)
+    for c in _value {
+      target.append(c.escape())
+    }
+    target.append(&quot;\&quot;&quot;)
+  }
+}
+</pre></div>
+</div>
+<p>Besides modeling <code class="docutils literal"><span class="pre">OutputStream</span></code>, <code class="docutils literal"><span class="pre">String</span></code> also conforms to
+<code class="docutils literal"><span class="pre">Streamable</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">extension </span><span class="nc">String</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Streamable</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">func </span><span class="nf">writeTo</span><span class="p">&lt;</span><span class="no">T</span><span class="p">:</span><span class="w"> </span><span class="no">OutputStream</span><span class="p">&gt;(</span><span class="n">target</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="n">inout</span><span class="p">]</span><span class="w"> </span><span class="n">T</span><span class="p">) {</span>
+<span class="w">    </span><span class="n">target</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="c1">// Append yourself to the stream</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="kd">func </span><span class="nf">format</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">String</span><span class="p"> {</span>
+<span class="w">    </span><span class="kr">return</span><span class="w"> </span><span class="n">this</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>This conformance allows <em>most</em> formatting code to be written entirely
+in terms of <code class="docutils literal"><span class="pre">String</span></code>, simplifying usage. Types with other needs can
+expose lazy representations like <code class="docutils literal"><span class="pre">EscapedStringRepresentation</span></code>
+above.</p>
+</div>
+</div>
+<div class="section" id="extended-formatting-example">
+<h2><a class="toc-backref" href="#id16">Extended Formatting Example</a><a class="headerlink" href="#extended-formatting-example" title="Permalink to this headline">¶</a></h2>
+<p>The following code is a scaled-down version of the formatting code
+used for <code class="docutils literal"><span class="pre">Int</span></code>. It represents an example of how a relatively
+complicated <code class="docutils literal"><span class="pre">format(…)</span></code> might be written:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>protocol CustomStringConvertibleInteger
+  : IntegerLiteralConvertible, Comparable, SignedNumber, CustomStringConvertible {
+  func %(lhs: Self, rhs: Self) -&gt; Self
+  func /(lhs: Self, rhs: Self) -&gt; Self
+  constructor(x: Int)
+  func toInt() -&gt; Int
+
+  func format(radix: Int = 10, fill: String = &quot; &quot;, width: Int = 0)
+    -&gt; RadixFormat&lt;This&gt; {
+
+    return RadixFormat(this, radix: radix, fill: fill, width: width)
+  }
+}
+
+struct RadixFormat&lt;T: CustomStringConvertibleInteger&gt; : Streamable {
+  var value: T, radix = 10, fill = &quot; &quot;, width = 0
+
+  func writeTo&lt;S: OutputStream&gt;(target: [inout] S) {
+    _writeSigned(value, &amp;target)
+  }
+
+  // Write the given positive value to stream
+  func _writePositive&lt;T:CustomStringConvertibleInteger, S: OutputStream&gt;(
+    value: T, stream: [inout] S
+  ) -&gt; Int {
+    if value == 0 { return 0 }
+    var radix: T = T.fromInt(self.radix)
+    var rest: T = value / radix
+    var nDigits = _writePositive(rest, &amp;stream)
+    var digit = UInt32((value % radix).toInt())
+    var baseCharOrd : UInt32 = digit &lt;= 9 ? &#39;0&#39;.value : &#39;A&#39;.value - 10
+    stream.append(String(UnicodeScalar(baseCharOrd + digit)))
+    return nDigits + 1
+  }
+
+  func _writeSigned&lt;T:CustomStringConvertibleInteger, S: OutputStream&gt;(
+    value: T, target: [inout] S
+  ) {
+    var width = 0
+    var result = &quot;&quot;
+
+    if value == 0 {
+      result = &quot;0&quot;
+      ++width
+    }
+    else {
+      var absVal = abs(value)
+      if (value &lt; 0) {
+        target.append(&quot;-&quot;)
+        ++width
+      }
+      width += _writePositive(absVal, &amp;result)
+    }
+
+    while width &lt; width {
+      ++width
+      target.append(fill)
+    }
+    target.append(result)
+  }
+}
+
+extension Int : CustomStringConvertibleInteger {
+  func toInt() -&gt; Int { return this }
+}
+</pre></div>
+</div>
+</div>
+<div class="section" id="possible-extensions-a-k-a-complications">
+<h2><a class="toc-backref" href="#id17">Possible Extensions (a.k.a. Complications)</a><a class="headerlink" href="#possible-extensions-a-k-a-complications" title="Permalink to this headline">¶</a></h2>
+<p>We are not proposing these extensions. Since we have given them
+considerable thought, they are included here for completeness and to
+ensure our proposed design doesn&#8217;t rule out important directions of
+evolution.</p>
+<div class="section" id="outputstream-adapters">
+<h3><a class="toc-backref" href="#id18"><code class="docutils literal"><span class="pre">OutputStream</span></code> Adapters</a><a class="headerlink" href="#outputstream-adapters" title="Permalink to this headline">¶</a></h3>
+<p>Most text transformations can be expressed as adapters over generic
+<code class="docutils literal"><span class="pre">OutputStream</span></code>s. For example, it&#8217;s easy to imagine an upcasing
+adapter that transforms its input to upper case before writing it to
+an underlying stream:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct UpperStream&lt;UnderlyingStream:OutputStream&gt; : OutputStream {
+  func append(x: String) { base.append( x.toUpper() ) }
+  var base: UnderlyingStream
+}
+</pre></div>
+</div>
+<p>However, upcasing is a trivial example: many such transformations—such
+as <code class="docutils literal"><span class="pre">trim()</span></code> or regex replacement—are stateful, which implies some
+way of indicating &#8220;end of input&#8221; so that buffered state can be
+processed and written to the underlying stream:</p>
+<pre class="literal-block">
+struct TrimStream&lt;UnderlyingStream:OutputStream&gt; : OutputStream {
+  func append(x: String) { ... }
+  <strong>func close() { ... }</strong>
+  var base: UnderlyingStream
+  var bufferedWhitespace: String
+}
+</pre>
+<p>This makes general <code class="docutils literal"><span class="pre">OutputStream</span></code> adapters more complicated to write
+and use than ordinary <code class="docutils literal"><span class="pre">OutputStream</span></code>s.</p>
+</div>
+<div class="section" id="streamable-adapters">
+<h3><a class="toc-backref" href="#id19"><code class="docutils literal"><span class="pre">Streamable</span></code> Adapters</a><a class="headerlink" href="#streamable-adapters" title="Permalink to this headline">¶</a></h3>
+<p>For every conceivable <code class="docutils literal"><span class="pre">OutputStream</span></code> adaptor there&#8217;s a corresponding
+<code class="docutils literal"><span class="pre">Streamable</span></code> adaptor. For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct UpperStreamable&lt;UnderlyingStreamable:Streamable&gt; {
+  var base: UnderlyingStreamable
+
+  func writeTo&lt;T: OutputStream&gt;(target: [inout] T) {
+    var adaptedStream = UpperStream(target)
+    self.base.writeTo(&amp;adaptedStream)
+    target = adaptedStream.base
+  }
+}
+</pre></div>
+</div>
+<p>Then, we could extend <code class="docutils literal"><span class="pre">Streamable</span></code> as follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">extension </span><span class="nc">Streamable</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">typealias</span><span class="w"> </span><span class="n">Upcased</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">Streamable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">UpperStreamable</span><span class="o">&lt;</span><span class="n">This</span><span class="o">&gt;</span>
+<span class="w">  </span><span class="kd">func </span><span class="nf">toUpper</span><span class="p">()</span><span class="o"> -&gt; </span><span class="no">UpperStreamable</span><span class="p">&lt;</span><span class="no">This</span><span class="p">&gt; {</span>
+<span class="w">    </span><span class="kr">return</span><span class="w"> </span><span class="no">Upcased</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>and, finally, we&#8217;d be able to write:</p>
+<pre class="literal-block">
+print( n.format(radix:16)<strong>.toUpper()</strong> )
+</pre>
+<p>The complexity of this back-and-forth adapter dance is daunting, and
+might well be better handled in the language once we have some formal
+model—such as coroutines—of inversion-of-control. We think it makes
+more sense to build the important transformations directly into
+<code class="docutils literal"><span class="pre">format()</span></code> methods, allowing, e.g.:</p>
+<pre class="literal-block">
+print( n.format(radix:16, <strong>case:.upper</strong> ) )
+</pre>
+</div>
+</div>
+<div class="section" id="possible-simplifications">
+<h2><a class="toc-backref" href="#id20">Possible Simplifications</a><a class="headerlink" href="#possible-simplifications" title="Permalink to this headline">¶</a></h2>
+<p>One obvious simplification might be to fearlessly use <code class="docutils literal"><span class="pre">String</span></code> as
+the universal textual representation type, rather than having a
+separate <code class="docutils literal"><span class="pre">Streamable</span></code> protocol that doesn&#8217;t necessarily create a
+fully-stored representation. This approach would trade some
+efficiency for considerable design simplicity. It is reasonable to
+ask whether the efficiency cost would be significant in real cases,
+and the truth is that we don&#8217;t have enough information to know. At
+least until we do, we opt not to trade away any CPU, memory, and
+power.</p>
+<p>If we were willing to say that only <code class="docutils literal"><span class="pre">class</span></code>es can conform to
+<code class="docutils literal"><span class="pre">OutputStream</span></code>, we could eliminate the explicit <code class="docutils literal"><span class="pre">[inout]</span></code> where
+<code class="docutils literal"><span class="pre">OutputStream</span></code>s are passed around. Then, we&#8217;d simply need a
+<code class="docutils literal"><span class="pre">class</span> <span class="pre">StringStream</span></code> for creating <code class="docutils literal"><span class="pre">String</span></code> representations. It
+would also make <code class="docutils literal"><span class="pre">OutputStream</span></code> adapters a <em>bit</em> simpler to use
+because you&#8217;d never need to &#8220;write back&#8221; explicitly onto the target
+stream. However, stateful <code class="docutils literal"><span class="pre">OutputStream</span></code> adapters would still need a
+<code class="docutils literal"><span class="pre">close()</span></code> method, which makes a perfect place to return a copy of
+the underlying stream, which can then be &#8220;written back&#8221;:</p>
+<pre class="literal-block">
+struct AdaptedStreamable&lt;T:Streamable&gt; {
+  ...
+  func writeTo&lt;Target: OutputStream&gt;(target: [inout] Target) {
+    // create the stream that transforms the representation
+    var adaptedTarget = adapt(target, adapter);
+    // write the Base object to the target stream
+    base.writeTo(&amp;adaptedTarget)
+    // Flush the adapted stream and, in case Target is a value type,
+    // write its new value
+    <strong>target = adaptedTarget.close()</strong>
+  }
+  ...
+}
+</pre>
+<p>We think anyone writing such adapters can handle the need for explicit
+write-back, and the ability to use <code class="docutils literal"><span class="pre">String</span></code> as an <code class="docutils literal"><span class="pre">OutputStream</span></code>
+without additionally allocating a <code class="docutils literal"><span class="pre">StringStream</span></code> on the heap seems
+to tip the balance in favor of the current design.</p>
+<hr class="docutils" />
+<table class="docutils footnote" frame="void" id="format" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[1]</td><td>Whether <code class="docutils literal"><span class="pre">format(…)</span></code> is to be a real protocol or merely
+an ad-hoc convention is TBD. So far, there&#8217;s no obvious use for a
+generic <code class="docutils literal"><span class="pre">format</span></code> with arguments that depend on the type being
+formatted, so an ad-hoc convention would be just fine.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="character1" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id2">[2]</a></td><td>We don&#8217;t support streaming individual code points
+directly because it&#8217;s possible to create invalid sequences of code
+points. For any code point that, on its own, represents a valid
+<code class="docutils literal"><span class="pre">Character</span></code> (a.k.a. Unicode <a class="reference external" href="http://www.unicode.org/glossary/#extended_grapheme_cluster">extended grapheme cluster</a>), it is
+trivial and inexpensive to create a <code class="docutils literal"><span class="pre">String</span></code>. For more
+information on the relationship between <code class="docutils literal"><span class="pre">String</span></code> and
+<code class="docutils literal"><span class="pre">Character</span></code> see the (forthcoming, as of this writing) document
+<em>Swift Strings State of the Union</em>.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="dynamic" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[3]</a></td><td>In fact it&#8217;s possible to imagine a workable system for
+localization that does away with dynamic format strings altogether,
+so that all format strings are fully statically-checked and some of
+the same formatting primitives can be used by localizers as by
+fully-privileged Swift programmers. This approach would involve
+compiling/JIT-ing localizations into dynamically-loaded modules.
+In any case, that will wait until we have native Swift dylibs.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

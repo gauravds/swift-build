@@ -1,0 +1,378 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Option Sets &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Option Sets</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <p>SUMMARY: Option sets should be structs of Bools, with a protocol to provide
+bitwise-ish operations.</p>
+<div class="section" id="option-sets">
+<h1>Option Sets<a class="headerlink" href="#option-sets" title="Permalink to this headline">¶</a></h1>
+<p>Option sets in C and ObjC are often represented using enums with bit-pattern
+constants, as used in Cocoa&#8217;s NS_OPTIONS idiom. For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// ObjC</span>
+<span class="n">typedef</span><span class="w"> </span><span class="no">NS_OPTIONS</span><span class="p">(</span><span class="n">NSUInteger</span><span class="p">,</span><span class="w"> </span><span class="n">NSStringCompareOptions</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">NSCaseInsensitiveSearch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="n">NSLiteralSearch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">  </span><span class="n">NSBackwardsSearch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
+<span class="w">  </span><span class="n">NSAnchoredSearch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span>
+<span class="w">  </span><span class="n">NSNumericSearch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span><span class="p">,</span>
+<span class="w">  </span><span class="n">NSDiacriticInsensitiveSearch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">128</span><span class="p">,</span>
+<span class="w">  </span><span class="n">NSWidthInsensitiveSearch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">256</span><span class="p">,</span>
+<span class="w">  </span><span class="n">NSForcedOrderingSearch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">512</span><span class="p">,</span>
+<span class="w">  </span><span class="n">NSRegularExpressionSearch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1024</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+<p>This approach doesn&#8217;t map well to Swift&#8217;s enums, which are intended to be
+strict enumerations of states, or &#8220;sum types&#8221; to use the type-theory-nerd term.
+An option set is more like a product type, and so more naturally map to a
+struct of booleans:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>// Swift
+struct NSStringCompareOptions {
+  var CaseInsensitiveSearch,
+      LiteralSearch,
+      BackwardsSearch,
+      AnchoredSearch,
+      NumericSearch,
+      DiacriticInsensitiveSearch,
+      WidthInsensitiveSearch,
+      ForcedOrderingSearch,
+      RegularExpressionSearch : Bool = false
+}
+</pre></div>
+</div>
+<p>There are a few reasons this doesn&#8217;t fly in C:</p>
+<ul>
+<li><p class="first">Boolean fields in C structs waste a byte by default. Option set enums are
+compact.</p>
+</li>
+<li><p class="first">Bitfield ABI has historically been weird and unstable across C
+implementations. Option set enums have a very concrete binary representation.</p>
+</li>
+<li><p class="first">Prior to C99 it was difficult to use struct literals in expressions.</p>
+</li>
+<li><p class="first">It&#8217;s useful to apply bitwise operations to option sets, which can&#8217;t be
+applied to C structs.</p>
+</li>
+<li><p class="first">Bitmasks also provide a natural way to express common option subsets as
+constants, as in the <code class="docutils literal"><span class="pre">AllEdges</span></code> constants in the following example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// ObjC</span>
+<span class="n">typedef</span><span class="w"> </span><span class="no">NS_OPTIONS</span><span class="p">(</span><span class="n">unsigned</span><span class="w"> </span><span class="n">long</span><span class="w"> </span><span class="n">long</span><span class="p">,</span><span class="w"> </span><span class="n">NSAlignmentOptions</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">NSAlignMinXInward</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignMinYInward</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignMaxXInward</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignMaxYInward</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignWidthInward</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignHeightInward</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
+
+<span class="w">    </span><span class="n">NSAlignMinXOutward</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignMinYOutward</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">9</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignMaxXOutward</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignMaxYOutward</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">11</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignWidthOutward</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignHeightOutward</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">13</span><span class="p">,</span>
+
+<span class="w">    </span><span class="n">NSAlignMinXNearest</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">16</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignMinYNearest</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">17</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignMaxXNearest</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">18</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignMaxYNearest</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">19</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignWidthNearest</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">20</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignHeightNearest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">21</span><span class="p">,</span>
+
+<span class="w">    </span><span class="n">NSAlignRectFlipped</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="n">ULL</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">63</span><span class="p">,</span><span class="w"> </span><span class="c1">// pass this if the rect is in a flipped coordinate system. This allows 0.5 to be treated in a visually consistent way.</span>
+
+<span class="w">    </span><span class="c1">// convenience combinations</span>
+<span class="w">    </span><span class="n">NSAlignAllEdgesInward</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">NSAlignMinXInward</span><span class="p">|</span><span class="n">NSAlignMaxXInward</span><span class="p">|</span><span class="n">NSAlignMinYInward</span><span class="p">|</span><span class="n">NSAlignMaxYInward</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignAllEdgesOutward</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">NSAlignMinXOutward</span><span class="p">|</span><span class="n">NSAlignMaxXOutward</span><span class="p">|</span><span class="n">NSAlignMinYOutward</span><span class="p">|</span><span class="n">NSAlignMaxYOutward</span><span class="p">,</span>
+<span class="w">    </span><span class="n">NSAlignAllEdgesNearest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">NSAlignMinXNearest</span><span class="p">|</span><span class="n">NSAlignMaxXNearest</span><span class="p">|</span><span class="n">NSAlignMinYNearest</span><span class="p">|</span><span class="n">NSAlignMaxYNearest</span><span class="p">,</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</li>
+</ul>
+<p>However, we can address all of these issues in Swift. We should make the
+theoretically correct struct-of-Bools representation also be the natural and
+optimal way to express option sets.</p>
+<div class="section" id="the-optionset-protocol">
+<h2>The &#8216;OptionSet&#8217; Protocol<a class="headerlink" href="#the-optionset-protocol" title="Permalink to this headline">¶</a></h2>
+<p>One of the key features of option set enums is that, by using the standard C
+bitwise operations, they provide easy and expressive intersection, union, and
+negation of option sets. We can encapsulate these capabilities into a
+protocol:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>// Swift
+protocol OptionSet : Equatable {
+  // Set intersection
+  @infix func &amp;(_:Self, _:Self) -&gt; Self
+  @infix func &amp;=(@inout _:Self, _:Self)
+
+  // Set union
+  @infix func |(_:Self, _:Self) -&gt; Self
+  @infix func |=(@inout _:Self, _:Self)
+
+  // Set xor
+  @infix func ^(_:Self, _:Self) -&gt; Self
+  @infix func ^=(@inout _:Self, _:Self)
+
+  // Set negation
+  @prefix func ~(_:Self) -&gt; Self
+
+  // Are any options set?
+  func any() -&gt; Bool
+
+  // Are all options set?
+  func all() -&gt; Bool
+
+  // Are no options set?
+  func none() -&gt; Bool
+}
+</pre></div>
+</div>
+<p>The compiler can derive a default conformance for a struct whose instance stored
+properties are all <code class="docutils literal"><span class="pre">Bool</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>// Swift
+struct NSStringCompareOptions : OptionSet {
+  var CaseInsensitiveSearch,
+      LiteralSearch,
+      BackwardsSearch,
+      AnchoredSearch,
+      NumericSearch,
+      DiacriticInsensitiveSearch,
+      WidthInsensitiveSearch,
+      ForcedOrderingSearch,
+      RegularExpressionSearch : Bool = false
+}
+
+var a = NSStringCompareOptions(CaseInsensitiveSearch: true,
+                               BackwardsSearch: true)
+var b = NSStringCompareOptions(WidthInsensitiveSearch: true,
+                               BackwardsSearch: true)
+var c = a &amp; b
+(a &amp; b).any() // =&gt; true
+c == NSStringCompareOptions(BackwardsSearch: true) // =&gt; true
+</pre></div>
+</div>
+</div>
+<div class="section" id="optimal-layout-of-bool-fields-in-structs">
+<h2>Optimal layout of Bool fields in structs<a class="headerlink" href="#optimal-layout-of-bool-fields-in-structs" title="Permalink to this headline">¶</a></h2>
+<p>Boolean fields should take up a single bit inside aggregates, avoiding the need
+to mess with bitfields to get efficient layout. When used as inout arguments,
+boolean fields packed into bits can go through writeback buffers.</p>
+</div>
+<div class="section" id="option-subsets">
+<h2>Option Subsets<a class="headerlink" href="#option-subsets" title="Permalink to this headline">¶</a></h2>
+<p>Option subsets can be expressed as static functions of the type.
+(Ideally these would be static constants, if we had those.)
+For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>// Swift
+struct NSAlignmentOptions : OptionSet {
+  var AlignMinXInward,
+      AlignMinYInward,
+      AlignMaxXInward,
+      AlignMaxYInward,
+      AlignWidthInward,
+      AlignHeightInward : Bool = false
+
+  // convenience combinations
+  static func NSAlignAllEdgesInward() {
+    return NSAlignmentOptions(AlignMinXInward: true,
+                              AlignMaxXInward: true,
+                              AlignMinYInward: true,
+                              AlignMaxYInward: true)
+  }
+}
+</pre></div>
+</div>
+</div>
+<div class="section" id="importing-option-sets-from-cocoa">
+<h2>Importing option sets from Cocoa<a class="headerlink" href="#importing-option-sets-from-cocoa" title="Permalink to this headline">¶</a></h2>
+<p>When importing an NS_OPTIONS declaration from Cocoa, we import it as an
+OptionSet-conforming struct, with each single-bit member of the Cocoa enum
+mapping to a Bool field of the struct with a default value of <code class="docutils literal"><span class="pre">false</span></code>.
+Their IR-level layout places the fields
+at the correct bits to be ABI-compatible with the C type.
+Multiple-bit constants are imported as <a class="reference internal" href="#option-subsets">option subsets</a>, mapping to static
+functions.</p>
+<p><em>OPEN QUESTION</em>: What to do with bits that only appear as parts of option
+subsets, as in:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// ObjC</span>
+<span class="n">typedef</span><span class="w"> </span><span class="no">NS_OPTIONS</span><span class="p">(</span><span class="n">unsigned</span><span class="p">,</span><span class="w"> </span><span class="n">MyOptions</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">Foo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x01</span><span class="p">,</span>
+<span class="w">  </span><span class="n">Bar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x03</span><span class="p">,</span><span class="w"> </span><span class="c1">// 0x02 | 0x01</span>
+<span class="w">  </span><span class="n">Bas</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x05</span><span class="p">,</span><span class="w"> </span><span class="c1">// 0x04 | 0x01</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="areas-for-potential-syntactic-refinement">
+<h2>Areas for potential syntactic refinement<a class="headerlink" href="#areas-for-potential-syntactic-refinement" title="Permalink to this headline">¶</a></h2>
+<p>There are some things that are a bit awkward under this proposal which
+I think are worthy of some examination. I don&#8217;t have great solutions to any of
+these issues off the top of my head.</p>
+<div class="section" id="type-and-default-value-of-option-fields">
+<h3>Type and default value of option fields<a class="headerlink" href="#type-and-default-value-of-option-fields" title="Permalink to this headline">¶</a></h3>
+<p>It&#8217;s a bit boilerplate-ish to have to spell out the <code class="docutils literal"><span class="pre">:</span> <span class="pre">Bool</span> <span class="pre">=</span> <span class="pre">true</span></code> for the
+set of fields:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>// Swift
+struct MyOptions : OptionSet {
+  var Foo,
+      Bar,
+      Bas : Bool = false
+}
+</pre></div>
+</div>
+<p>(though by comparison with C, it&#8217;s still a net win, since the bitshifted
+constants don&#8217;t need to be manually spelled out and maintained. Is this a big
+deal?)</p>
+</div>
+<div class="section" id="construction-of-option-sets">
+<h3>Construction of option sets<a class="headerlink" href="#construction-of-option-sets" title="Permalink to this headline">¶</a></h3>
+<p>The implicit elementwise keyworded constructor for structs works naturally for
+option set structs, except that it requires a bulky and repetitive <code class="docutils literal"><span class="pre">:</span> <span class="pre">true</span></code>
+(or <code class="docutils literal"><span class="pre">:</span> <span class="pre">false</span></code>) after each keyword:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// Swift</span>
+<span class="kd">var </span><span class="nv">myOptions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">MyOptions</span><span class="p">(</span><span class="n">Foo</span><span class="p">:</span><span class="w"> </span><span class="kr">true</span><span class="p">,</span><span class="w"> </span><span class="n">Bar</span><span class="p">:</span><span class="w"> </span><span class="kr">true</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Some sort of shorthand for <code class="docutils literal"><span class="pre">keyword:</span> <span class="pre">true</span></code>/<code class="docutils literal"><span class="pre">keyword:</span> <span class="pre">false</span></code> would be nice
+and would be generally useful beyond option sets, though I don&#8217;t have any
+awesome ideas of how that should look right now.</p>
+</div>
+<div class="section" id="nonuniformity-of-single-options-and-option-subsets">
+<h3>Nonuniformity of single options and option subsets<a class="headerlink" href="#nonuniformity-of-single-options-and-option-subsets" title="Permalink to this headline">¶</a></h3>
+<p>Treating individual options and <a class="reference internal" href="#option-subsets">option subsets</a> differently disrupts some
+of the elegance of the bitmask idiom. As static functions, option subsets can&#8217;t
+be combined freely in constructor calls like they can with <code class="docutils literal"><span class="pre">|</span></code> in C. As
+instance stored properties, individual options must be first constructed before
+bitwise operations can be applied to them.</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// ObjC</span>
+<span class="n">typedef</span><span class="w"> </span><span class="no">NS_OPTIONS</span><span class="p">(</span><span class="n">unsigned</span><span class="p">,</span><span class="w"> </span><span class="n">MyOptions</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">Foo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x01</span><span class="p">,</span>
+<span class="w">  </span><span class="n">Bar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x02</span><span class="p">,</span>
+<span class="w">  </span><span class="n">Bas</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x04</span><span class="p">,</span>
+
+<span class="w">  </span><span class="n">Foobar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x03</span><span class="p">,</span>
+<span class="p">};</span>
+
+<span class="n">MyOptions</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Foobar</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="n">Bas</span><span class="p">;</span>
+</pre></div>
+</div>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>// Swift, under this proposal
+struct MyOptions : OptionSet {
+  var Foo, Bar, Bas : Bool = false
+
+  static func Foobar() -&gt; MyOptions {
+    return MyOptions(Foo: true, Bar: true)
+  }
+}
+
+var x: MyOptions = .Foobar() | MyOptions(Bas: true)
+</pre></div>
+</div>
+<p>This nonuniformity could potentially be addressed by introducing additional
+implicit decls, such as adding implicit static properties corresponding to each
+individual option:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>// Swift
+struct MyOptions : OptionSet {
+  // Stored properties of instances
+  var Foo, Bar, Bas : Bool = false
+
+  static func Foobar() -&gt; MyOptions {
+    return MyOptions(Foo: true, Bar: true)
+  }
+
+  // Implicitly-generated static properties?
+  static func Foo() -&gt; MyOptions { return MyOptions(Foo: true) }
+  static func Bar() -&gt; MyOptions { return MyOptions(Bar: true) }
+  static func Bas() -&gt; MyOptions { return MyOptions(Bas: true) }
+}
+
+var x: MyOptions = .Foobar() | .Bas()
+</pre></div>
+</div>
+<p>This is getting outside of strict protocol conformance derivation, though.</p>
+</div>
+<div class="section" id="lack-of-static-properties">
+<h3>Lack of static properties<a class="headerlink" href="#lack-of-static-properties" title="Permalink to this headline">¶</a></h3>
+<p>Static constant properties seem to me like a necessity to make option subsets
+really acceptable to declare and use. This would be a much nicer form of the
+above:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>// Swift
+struct MyOptions : OptionSet {
+  // Stored properties of instances
+  var Foo, Bar, Bas : Bool = false
+
+  static val Foobar = MyOptions(Foo: true, Bar: true)
+
+  // Implicitly-generated static properties
+  static val Foo = MyOptions(Foo: true)
+  static val Bar = MyOptions(Bar: true)
+  static val Bas = MyOptions(Bas: true)
+}
+
+var x: MyOptions = .Foobar | .Bas
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

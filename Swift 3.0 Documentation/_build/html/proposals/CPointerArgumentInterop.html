@@ -1,0 +1,399 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Summary &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Summary</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="summary">
+<h1>Summary<a class="headerlink" href="#summary" title="Permalink to this headline">¶</a></h1>
+<p>Pointer arguments are a fact of life in C and Cocoa, and there&#8217;s no way we&#8217;re
+going to realistically annotate or wrap every API safely. However, there are
+plenty of well-behaved APIs that use pointer arguments in well-behaved ways
+that map naturally to Swift argument conventions, and we should interact with
+those APIs in a natural, Swift-ish way. To do so, I propose adding language
+and library facilities that enable the following uses of pointer
+arguments:</p>
+<ul class="simple">
+<li>Const pointer arguments <code class="docutils literal"><span class="pre">const</span> <span class="pre">int</span> <span class="pre">*</span></code>, including const pointers to ObjC
+classes <code class="docutils literal"><span class="pre">NSFoo</span> <span class="pre">*</span> <span class="pre">const</span> <span class="pre">*</span></code>, can be used as &#8220;in&#8221; array arguments,
+as <code class="docutils literal"><span class="pre">inout</span></code> scalar arguments, or as <code class="docutils literal"><span class="pre">UnsafeMutablePointer</span></code> arguments.</li>
+<li>Non-const pointer arguments to C types, <code class="docutils literal"><span class="pre">int</span> <span class="pre">*</span></code>, can be used as <code class="docutils literal"><span class="pre">inout</span></code>
+array or scalar arguments, or as <code class="docutils literal"><span class="pre">UnsafeMutablePointer</span></code> arguments.</li>
+<li>Non-const pointer arguments to ObjC class types, <code class="docutils literal"><span class="pre">NSFoo</span> <span class="pre">**</span></code>, can be used as
+<code class="docutils literal"><span class="pre">inout</span></code> scalar arguments or passed <code class="docutils literal"><span class="pre">nil</span></code>. (They cannot be used as
+array arguments or as <code class="docutils literal"><span class="pre">UnsafeMutablePointer</span></code> arguments.)</li>
+<li><code class="docutils literal"><span class="pre">const</span> <span class="pre">void</span> <span class="pre">*</span></code> and <code class="docutils literal"><span class="pre">void</span> <span class="pre">*</span></code> pointers can be used in the same ways as
+pointers to any C type (but not ObjC types).</li>
+</ul>
+<p>This model intentionally doesn&#8217;t try to provide a mapping to every possible
+use case for pointers in C.  It also intentionally avoids addressing special
+cases we could potentially provide higher-level support for. Some particular
+issues this proposal specifically does not address:</p>
+<ul class="simple">
+<li>Pointer return values</li>
+<li>Special handling of <code class="docutils literal"><span class="pre">char*</span></code> and/or <code class="docutils literal"><span class="pre">const</span> <span class="pre">char*</span></code> arguments</li>
+<li>Special handling of Core Foundation types</li>
+<li>Special handling of <code class="docutils literal"><span class="pre">NSError**</span></code> arguments</li>
+<li>Precise lifetime of values (beyond the minimal lifetime extension to the
+duration of a call)</li>
+<li>Overriding of ObjC methods that take pointer arguments with subclass methods
+that take non-pointer arguments</li>
+</ul>
+</div>
+<div class="section" id="design-considerations">
+<h1>Design Considerations<a class="headerlink" href="#design-considerations" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="const-pointer-arguments">
+<h2>Const Pointer Arguments<a class="headerlink" href="#const-pointer-arguments" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="arrays">
+<h3>Arrays<a class="headerlink" href="#arrays" title="Permalink to this headline">¶</a></h3>
+<p>Const pointer arguments are frequently used in both C and Objective-C to take
+an array of arguments effectively by value. To support this use case, we should
+support passing a Swift <code class="docutils literal"><span class="pre">Array</span></code> value to a const pointer argument. An
+example from Core Foundation is <code class="docutils literal"><span class="pre">CGColorCreate</span></code>, which takes a
+<code class="docutils literal"><span class="pre">CGFloat</span></code> array of color space-specific components:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">let </span><span class="nv">rgb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">CGColorSpaceCreateCalibratedRGB</span><span class="p">()</span>
+<span class="kd">let </span><span class="nv">cyan</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">CGColorCreate</span><span class="p">(</span><span class="n">rgb</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>We are willing to assume that the API is well-behaved and does not mutate the
+pointed-to array, so we can safely pass an interior pointer to the array storage
+without worrying about mutation. We only guarantee the lifetime of the
+array for the duration of the call, so it could potentially be promoted to a
+stack allocation.</p>
+</div>
+<div class="section" id="in-arguments">
+<h3>&#8220;In&#8221; Arguments<a class="headerlink" href="#in-arguments" title="Permalink to this headline">¶</a></h3>
+<p>Const pointer arguments are also used in many cases where a value is unmodified,
+but its identity is important. Somewhat more rarely, const pointer arguments
+are used as pure &#8220;in&#8221; value arguments with no regard for identity; this is
+particularly prevalent on platforms like Win32 where there has historically
+been no standard ABI for passing structs by value, but pure &#8220;in&#8221; pointer
+parameters are rare on our platforms.  The potential consequences of
+disregarding value identity with C APIs are too high to allow scalar arguments
+to implicitly be used as pointer arguments:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// From C: void foo(const pthread_mutex_t *);</span>
+<span class="kn">import </span><span class="nn">Foo</span>
+
+<span class="kd">let </span><span class="nv">mutex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pthread_mutex_create</span><span class="p">()</span>
+<span class="c1">// This would pass a different temporary buffer on each call--not what you</span>
+<span class="c1">// want for a mutex!</span>
+<span class="n">foo</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
+<span class="n">foo</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
+<span class="n">foo</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Although const pointers should never be used for actual mutation, we propose
+that only <code class="docutils literal"><span class="pre">inout</span></code> scalar arguments be accepted for const pointer parameters.
+Although our semantics normally do not guarantee value identity, <code class="docutils literal"><span class="pre">inout</span></code>
+parameters that refer to stored variables or stored properties of C-derived
+types are in practice never subjected to implicit writebacks except in limited
+circumstances such as capture of <code class="docutils literal"><span class="pre">inout</span></code> references in closures that could be
+diagnosed. Requiring <code class="docutils literal"><span class="pre">inout</span></code> also prevents the use of rvalues or <code class="docutils literal"><span class="pre">let</span></code>
+bindings that never have well-defined addresses as pointer arguments. This
+more clearly communicates the intent for the callee to receive the same
+variable on every call:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// From C: void foo(const pthread_mutex_t *);</span>
+<span class="kn">import </span><span class="nn">Foo</span>
+
+<span class="kd">var </span><span class="nv">mutex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pthread_mutex_create</span><span class="p">()</span>
+<span class="n">foo</span><span class="p">(</span><span class="o">&amp;</span><span class="n">mutex</span><span class="p">)</span>
+<span class="n">foo</span><span class="p">(</span><span class="o">&amp;</span><span class="n">mutex</span><span class="p">)</span>
+<span class="n">foo</span><span class="p">(</span><span class="o">&amp;</span><span class="n">mutex</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>If using an rvalue as a pointer argument is desired, it can easily be wrapped
+in an array. This communicates that the value <em>is</em> being copied into the
+temporary array, so it&#8217;s more obvious that identity would not be maintained:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// an immutable scalar we might want to pass into a &quot;const double*&quot;.</span>
+<span class="kd">let </span><span class="nv">grayLevel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5</span>
+<span class="kd">let </span><span class="nv">monochrome</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">CGColorSpaceCreateGrayscale</span><span class="p">()</span>
+
+<span class="c1">// error, can&#39;t pass Double into second argument.</span>
+<span class="kd">let </span><span class="nv">c1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">CGColorCreate</span><span class="p">(</span><span class="n">monochrome</span><span class="p">,</span><span class="w"> </span><span class="n">grayval</span><span class="p">)</span>
+<span class="c1">// error, can&#39;t take the address of a &#39;let&#39; (would be ok for a &#39;var&#39;)</span>
+<span class="kd">let </span><span class="nv">c2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">CGColorCreate</span><span class="p">(</span><span class="n">monochrome</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">grayval</span><span class="p">)</span>
+<span class="c1">// OK, we&#39;re explicitly forming an array</span>
+<span class="kd">let </span><span class="nv">c3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">CGColorCreate</span><span class="p">(</span><span class="n">monochrome</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="n">grayval</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="non-const-pointer-arguments">
+<h2>Non-Const Pointer Arguments<a class="headerlink" href="#non-const-pointer-arguments" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="c-types">
+<h3>C Types<a class="headerlink" href="#c-types" title="Permalink to this headline">¶</a></h3>
+<p>Non-const arguments of C type can be used as &#8220;out&#8221; or &#8220;inout&#8221; parameters,
+either of scalars or of arrays, and so should accept <code class="docutils literal"><span class="pre">inout</span></code> parameters of
+array or scalar type. Although a C API may expect a pure &#8220;out&#8221; parameter and
+not require initialization of its arguments, it is safer to assume the argument
+is <code class="docutils literal"><span class="pre">inout</span></code> and always require initialization:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>var s, c: Double
+// error, &#39;s&#39; and &#39;c&#39; aren&#39;t initialized
+sincos(0.5, &amp;s, &amp;c)
+
+var s1 = 0.0, c1 = 0.0
+// OK
+sincos(0.5, &amp;s1, &amp;c1)
+</pre></div>
+</div>
+<p>For array parameters, the exact point of mutation inside the callee cannot be
+known, so a copy-on-write array buffer must be eagerly uniqued prior to the
+address of the array being taken:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>func loadFloatsFromData(data: NSData) {
+  var a: [Float] = [0.0, 0.0, 0.0, 0.0]
+  var b = a
+
+  // Should only mutate &#39;b&#39; without affecting &#39;a&#39;, so its backing store
+  // must be uniqued
+  data.getBytes(&amp;b, sizeof(Float.self) * b.count)
+}
+</pre></div>
+</div>
+</div>
+<div class="section" id="objc-types">
+<h3>ObjC Types<a class="headerlink" href="#objc-types" title="Permalink to this headline">¶</a></h3>
+<p>ARC semantics treat an <code class="docutils literal"><span class="pre">NSFoo**</span></code> type as a pointer to an <code class="docutils literal"><span class="pre">__autoreleasing</span></code>
+<code class="docutils literal"><span class="pre">NSFoo*</span></code>. Although in theory these interfaces could receive arrays of object
+pointers in Objective-C, that use case doesn&#8217;t come up in Cocoa, and we can&#8217;t
+reliably bridge such APIs into Swift. We only need to bridge ObjC mutable pointer
+types to accept a scalar <code class="docutils literal"><span class="pre">inout</span></code> object reference or <code class="docutils literal"><span class="pre">nil</span></code>.</p>
+</div>
+</div>
+<div class="section" id="pointer-return-values">
+<h2>Pointer Return Values<a class="headerlink" href="#pointer-return-values" title="Permalink to this headline">¶</a></h2>
+<p>This proposal does not address the handling of return values, which should still
+be imported into Swift as <code class="docutils literal"><span class="pre">UnsafeMutablePointer</span></code> values.</p>
+</div>
+</div>
+<div class="section" id="library-features">
+<h1>Library Features<a class="headerlink" href="#library-features" title="Permalink to this headline">¶</a></h1>
+<p>The necessary conversions can be represented entirely in the standard library
+with the help of some new language features, inout address conversion, inout
+writeback conversion, and interior pointer conversion, described below. There
+are three categories of argument behavior needed, and thus three new types.
+These types should have no user-accessible operations of their own other than
+their implicit conversions. The necessary types are as follows:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">CConstPointer&lt;T&gt;</span></code> is the imported representation of a <code class="docutils literal"><span class="pre">const</span> <span class="pre">T</span> <span class="pre">*</span></code>
+argument. It is implicitly convertible from <code class="docutils literal"><span class="pre">inout</span> <span class="pre">T</span></code> by inout address
+conversion and from <code class="docutils literal"><span class="pre">Array&lt;T&gt;</span></code> by immutable interior pointer
+conversion. It is also implicitly convertible to and from <code class="docutils literal"><span class="pre">UnsafeMutablePointer&lt;T&gt;</span></code>
+by normal conversion.</li>
+<li><code class="docutils literal"><span class="pre">CMutablePointer&lt;T&gt;</span></code> is the imported representation of a <code class="docutils literal"><span class="pre">T</span> <span class="pre">*</span></code>
+argument for a POD C type <code class="docutils literal"><span class="pre">T</span></code>. It is implicitly convertible from
+<code class="docutils literal"><span class="pre">inout</span> <span class="pre">T</span></code> by inout address conversion and from <code class="docutils literal"><span class="pre">inout</span> <span class="pre">Array&lt;T&gt;</span></code> by mutating
+interior pointer conversion. It is also implicitly convertible to and from
+<code class="docutils literal"><span class="pre">UnsafeMutablePointer&lt;T&gt;</span></code> by normal conversion.</li>
+<li><code class="docutils literal"><span class="pre">ObjCInOut&lt;T&gt;</span></code> is the imported representation of a <code class="docutils literal"><span class="pre">T</span> <span class="pre">**</span></code>
+argument for an ObjC class type <code class="docutils literal"><span class="pre">T</span></code>. It is implicitly convertible from
+<code class="docutils literal"><span class="pre">inout</span> <span class="pre">T</span></code> by inout writeback conversion and is implicitly convertible
+from <code class="docutils literal"><span class="pre">nil</span></code>. It cannot be converted from an array or to <code class="docutils literal"><span class="pre">UnsafeMutablePointer</span></code>.</li>
+</ul>
+</div>
+<div class="section" id="new-language-features">
+<h1>New Language Features<a class="headerlink" href="#new-language-features" title="Permalink to this headline">¶</a></h1>
+<p>To support the necessary semantics for argument passing, some new conversion
+forms need to be supported by the language with special-cased lifetime behavior.</p>
+<div class="section" id="interior-pointer-conversions">
+<h2>Interior Pointer Conversions<a class="headerlink" href="#interior-pointer-conversions" title="Permalink to this headline">¶</a></h2>
+<p>To be able to pass a pointer to array data as an argument, we need to be able
+to guarantee the lifetime of the array buffer for the duration of the call.
+If mutation can potentially occur through the pointer, then copy-on-write
+buffers must also be uniqued prior to taking the address. A new form of
+conversion, <code class="docutils literal"><span class="pre">&#64;unsafe_interior_pointer_conversion</span></code>, can be applied to an
+instance method of a type, to allow that type to return both a converted
+pointer and an owning reference that guarantees the validity of the pointer.
+Such methods can be either <code class="docutils literal"><span class="pre">mutating</span></code> or non-mutating; only non-mutating
+conversions are considered for non- <code class="docutils literal"><span class="pre">inout</span></code> parameters, and only <code class="docutils literal"><span class="pre">mutating</span></code>
+conversions are considered for <code class="docutils literal"><span class="pre">inout</span></code> parameters:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>extension Array {
+  @unsafe_interior_pointer_conversion
+  func convertToConstPointer()
+  -&gt; (CConstPointer&lt;T&gt;, ArrayBuffer&lt;T&gt;) {
+    return (CConstPointer(self.base), self.owner)
+  }
+
+  @unsafe_interior_pointer_conversion
+  mutating func convertToMutablePointer()
+  -&gt; (CMutablePointer&lt;T&gt;, ArrayBuffer&lt;T&gt;) {
+    // Make the backing buffer unique before handing out a mutable pointer.
+    self.makeUnique()
+    return (CMutablePointer(self.base), self.owner)
+  }
+}
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">&#64;unsafe_interior_pointer_conversion</span></code> conversions are only considered in
+argument contexts. If such a conversion is found, the first element of the
+return tuple is used as the argument, and a strong reference to the second
+element is held for the duration of the callee that receives the converted
+argument.</p>
+</div>
+<div class="section" id="inout-address-conversion">
+<h2>Inout Address Conversion<a class="headerlink" href="#inout-address-conversion" title="Permalink to this headline">¶</a></h2>
+<p>To pass an <code class="docutils literal"><span class="pre">inout</span></code> as a pointer argument, we need to be able to lock an
+address for the <code class="docutils literal"><span class="pre">inout</span></code> for the duration of the call, which is not normally
+possible. This functionality only needs to be available to the standard library,
+so can be expressed in terms of builtins. A type can conform to the
+<code class="docutils literal"><span class="pre">_BuiltinInOutAddressConvertible</span></code> protocol to be convertible from an
+inout reference. The protocol is defined as follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>protocol _BuiltinInOutAddressConvertible {
+  /// The type from which inout conversions are allowed to the conforming
+  /// type.
+  typealias InOutType
+
+  /// Create a value of the conforming type using the address of an inout
+  /// argument.
+  class func _convertFromInOutAddress(p: Builtin.RawPointer) -&gt; Self
+}
+</pre></div>
+</div>
+<p>An example of a conformance for <code class="docutils literal"><span class="pre">CMutablePointer</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct CMutablePointer&lt;T&gt;: _BuiltinInOutAddressConvertible {
+  let ptr: Builtin.RawPointer
+
+  typealias InOutType = T
+
+  @_transparent
+  static func _convertFromInOutAddress(p: Builtin.RawPointer)
+  -&gt; CMutablePointer {
+    return CMutablePointer(p)
+  }
+}
+
+func foo(p: CMutablePointer&lt;Int&gt;) { }
+
+var i = 0
+foo(&amp;i)
+</pre></div>
+</div>
+<p>The lifetime of the variable, stored property owning object, or writeback
+buffer backing the inout is guaranteed for the lifetime of the callee that
+receives the converted parameter, as if the callee had received the inout
+parameter directly.</p>
+</div>
+<div class="section" id="inout-writeback-conversion">
+<h2>Inout Writeback Conversion<a class="headerlink" href="#inout-writeback-conversion" title="Permalink to this headline">¶</a></h2>
+<p>Inout address conversion alone is not enough for <code class="docutils literal"><span class="pre">ObjCInOut</span></code> to work as
+intended, because the change to the <code class="docutils literal"><span class="pre">__autoreleasing</span></code> convention for the
+pointed-to object reference requires a writeback temporary. The
+<code class="docutils literal"><span class="pre">_BuiltinInOutWritebackConvertible</span></code> protocol allows for an additional
+writeback to be introduced before and after the address of the <code class="docutils literal"><span class="pre">inout</span></code> is
+taken:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>protocol _BuiltinInOutWritebackConvertible {
+  /// The original type from which inout conversions are allowed to the
+  /// conforming type.
+  typealias InOutType
+
+  /// The type of the temporary writeback whose address is used to construct
+  /// the converted value.
+  typealias WritebackType
+
+  /// Get the initial value the writeback temporary should have on entry to
+  /// the call.
+  class func _createWriteback(inout InOutType) -&gt; WritebackType
+
+  /// Create a value of the conforming type using the address of the writeback
+  /// temporary.
+  class func _convertFromWritebackAddress(p: Builtin.RawPointer) -&gt; Self
+
+  /// Write the writeback temporary back to the original value.
+  class func _commitWriteback(inout InOutType, WritebackType)
+}
+</pre></div>
+</div>
+<p>An example of a conformance for <code class="docutils literal"><span class="pre">ObjCInOut</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct ObjCInOut&lt;T: class&gt;: _BuiltinInOutWritebackConvertible {
+  let ptr: Builtin.RawPointer
+
+  typealias InOutType = T!
+  typealias WritebackType = Builtin.RawPointer
+
+  @_transparent
+  static func _createWriteback(inout ref: T!)
+  -&gt; Builtin.RawPointer {
+    // The initial object reference is passed into the callee effectively
+    // __unsafe_unretained, so pass it as a RawPointer.
+    return unsafeBitCast(ref, Builtin.RawPointer.self)
+  }
+
+  @_transparent
+  static func _commitWriteback(inout ref: T!,
+                               value: Builtin.RawPointer) {
+    // The reference is autoreleased on return from the caller, so retain it
+    // by loading it back as a T?.
+    ref = unsafeBitCast(value, T!.self)
+  }
+
+  @_transparent
+  static func _convertFromWritebackAddress(value: Builtin.RawPointer) {
+    return ObjCInOut(value)
+  }
+}
+</pre></div>
+</div>
+<p>The lifetime of the writeback is guaranteed for the lifetime of the callee that
+receives the converted parameter, as if the callee had received the writeback
+temporary as a mutable logical property of the original inout parameter.</p>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

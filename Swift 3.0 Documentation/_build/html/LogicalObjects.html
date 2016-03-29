@@ -1,0 +1,146 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Logical Objects &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="contents.html" />
+    <link rel="next" title="Object Initialization" href="ObjectInitialization.html" />
+    <link rel="prev" title="Generics in Swift" href="Generics.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Logical Objects</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        «&#160;&#160;<a href="Generics.html">Generics in Swift</a>
+        &#160;&#160;::&#160;&#160;
+        <a class="uplink" href="contents.html">Contents</a>
+        &#160;&#160;::&#160;&#160;
+        <a href="ObjectInitialization.html">Object Initialization</a>&#160;&#160;»
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="logical-objects">
+<h1>Logical Objects<a class="headerlink" href="#logical-objects" title="Permalink to this headline">¶</a></h1>
+<p>Universal across programming languages, we have this concept of a value, which
+is just some amount of fixed data.  A value might be the int 5, or a pair of the
+bool true and the int -20, or an NSRect with the component values (0, 0, 400,
+600), or whatever.</p>
+<p>In imperative languages we have this concept of an object.  It&#8217;s an
+unfortunately overloaded term; here I&#8217;m using it like the standards do, which is
+to say that it&#8217;s a thing that holds a value, but which can be altered at any
+time to hold a different value.  It&#8217;s tempting to use the word variable instead,
+and a variable is indeed an object, but &#8220;variable&#8221; implies all this extra stuff,
+like being its own independent, self-contained thing, whereas we want a word
+that also covers fields and array elements and what-have-you.  So let&#8217;s just
+suck it up and go with &#8220;object&#8221;.</p>
+<p>You might also call these &#8220;r-value&#8221; and &#8220;l-value&#8221;.  These have their own
+connotations that I don&#8217;t want to get into.  Stick with &#8220;value&#8221; and &#8220;object&#8221;.</p>
+<p>In C and C++, every object is physical.  It&#8217;s actually a place in memory
+somewhere.  It&#8217;s not necessarily easily addressable (because of bitfields), and
+its lifetime may be tightly constrained (because of temporaries or
+deallocation), but it&#8217;s always memory.</p>
+<p>In Objective-C, properties and subscripting add an idea of a logical object.
+The only way you can manipulate it is by calling a function (with unrestricted
+extra arguments) to either fetch the current value or update it with a new
+value.  The logical object doesn&#8217;t promise to behave like a physical object,
+either: for example, you can set it, then immediately get it, and the result
+might not match the value you set.</p>
+<p>Swift has logical objects as well.  We have them in a few new places (global
+objects can be logical), and sometimes we treat objects that are really physical
+as logical (because resilience prevents us from assuming physicality), and we&#8217;re
+considering making some restrictions on how different a logical object can be
+from a physical object (although set-and-get would still be opaque), but
+otherwise they&#8217;re pretty much just like they are in Objective-C.</p>
+<p>That said, they do interact with some other language features in interesting
+ways.</p>
+<p>For example, methods on value types have a this parameter.  Usually parameters
+are values, but this is actually an object: if I call a method on an object, and
+the method modifies the value of this, I expect it to modify the object I called
+the method on.  This is the high-level perspective of what [inout] really means:
+that what we&#8217;re really passing as a parameter is an object, not a value.  With
+one exception, everything that follows applies to any sort of [inout] parameter,
+not just this on value types.  More on that exception later.</p>
+<p>How do you actually pass an object, though, given that even physical objects
+might not be addressable, but especially given that an object might be logical?</p>
+<p>Well, we can always treat a physical object like a logical object.  It&#8217;s
+possible to come up with ways to implement passing a logical object (pass a
+pointer to a struct, the first value of which is a getter, the second value of
+which is a setter, and the rest of which is opaque to the callee; the struct
+must be passed to the getter and setter functions).  Unfortunately, the
+performance implications would be terrible: accessing multiple fields would
+involve multiple calls to the getter, each returning tons of extra information.
+And getter and setter calls might be very expensive.</p>
+<p>We could pass a hybrid format, using direct accesses when possible and a
+getter/setter when not.  Unfortunately, that&#8217;s a lot of code bloat in every
+single method implementation.</p>
+<p>Or we can always pass a physical, addressable object.  This avoids penalizing
+the fast case where the object is really physical, which is great.  For the case
+where the object is logical, we just have to make it physical somehow.  That
+means materialization: calling the getter, storing the result into temporary
+memory, passing the temporary, and then calling the setter with the new value in
+the temporary when the method call is done.  This last step is called writeback.</p>
+<p>(About that one exception to this all applying equally to [inout]: in addition
+to all this stuff about calling methods on different kinds of object, we also
+want to support calling a method on a value.  This is also implemented with a
+form of materialization, which looks just like the logical-object kind except
+without writeback, because there&#8217;s nothing to write back to.  This is a special
+rule that only applies to passing this, because we assume that most types will
+have lots of useful methods that don&#8217;t involve writing to this, whereas we
+assume that a function with an explicit [inout] parameter is almost certain to
+want to write to it.)</p>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        «&#160;&#160;<a href="Generics.html">Generics in Swift</a>
+        &#160;&#160;::&#160;&#160;
+        <a class="uplink" href="contents.html">Contents</a>
+        &#160;&#160;::&#160;&#160;
+        <a href="ObjectInitialization.html">Object Initialization</a>&#160;&#160;»
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

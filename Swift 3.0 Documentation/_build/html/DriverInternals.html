@@ -1,0 +1,191 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Driver Design &amp; Internals &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="contents.html" />
+    <link rel="next" title="Parseable Driver Output" href="DriverParseableOutput.html" />
+    <link rel="prev" title="Access Control" href="AccessControl.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Driver Design &amp; Internals</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        «&#160;&#160;<a href="AccessControl.html">Access Control</a>
+        &#160;&#160;::&#160;&#160;
+        <a class="uplink" href="contents.html">Contents</a>
+        &#160;&#160;::&#160;&#160;
+        <a href="DriverParseableOutput.html">Parseable Driver Output</a>&#160;&#160;»
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="driver-design-internals">
+<h1>Driver Design &amp; Internals<a class="headerlink" href="#driver-design-internals" title="Permalink to this headline">¶</a></h1>
+<div class="contents local topic" id="contents">
+<ul class="simple">
+<li><a class="reference internal" href="#introduction" id="id1">Introduction</a></li>
+<li><a class="reference internal" href="#driver-stages" id="id2">Driver Stages</a><ul>
+<li><a class="reference internal" href="#parse-option-parsing" id="id3">Parse: Option parsing</a></li>
+<li><a class="reference internal" href="#pipeline-converting-args-into-actions" id="id4">Pipeline: Converting Args into Actions</a></li>
+<li><a class="reference internal" href="#build-translating-actions-into-jobs-using-a-toolchain" id="id5">Build: Translating Actions into Jobs using a ToolChain</a></li>
+<li><a class="reference internal" href="#execute-running-the-jobs-in-a-compilation-using-a-taskqueue" id="id6">Execute: Running the Jobs in a Compilation using a TaskQueue</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="introduction">
+<h2><a class="toc-backref" href="#id1">Introduction</a><a class="headerlink" href="#introduction" title="Permalink to this headline">¶</a></h2>
+<p>This document serves to describe the high-level design of the Swift 2.0 compiler
+driver (which includes what the driver is intended to do, and the approach it
+takes to do that), as well as the internals of the driver (which is meant to
+provide a brief overview of and rationale for how the high-level design is
+implemented).</p>
+<p>The Swift driver is not intended to be GCC/Clang compatible, as it does not
+need to serve as a drop-in replacement for either driver. However, the design
+of the driver is inspired by Clang&#8217;s design.</p>
+</div>
+<div class="section" id="driver-stages">
+<h2><a class="toc-backref" href="#id2">Driver Stages</a><a class="headerlink" href="#driver-stages" title="Permalink to this headline">¶</a></h2>
+<p>The compiler driver for Swift roughly follows the same design as Clang&#8217;s
+compiler driver:</p>
+<ol class="arabic simple">
+<li>Parse: Command-line arguments are parsed into <code class="docutils literal"><span class="pre">Arg</span></code>s. A ToolChain is
+selected based on the current platform.</li>
+<li>Pipeline: Based on the arguments and inputs, a tree of <code class="docutils literal"><span class="pre">Action</span></code>s is
+generated. These are the high-level processing steps that need to occur,
+such as &#8220;compile this file&#8221; or &#8220;link the output of all compilation actions&#8221;.</li>
+<li>Bind: The ToolChain converts the <code class="docutils literal"><span class="pre">Action</span></code>s into a set of <code class="docutils literal"><span class="pre">Job</span></code>s.
+These are individual commands that need to be run, such as
+&#8220;ld main.o -o main&#8221;. Jobs have dependencies, but are not organized into a
+tree structure.</li>
+<li>Execute: The <code class="docutils literal"><span class="pre">Job</span></code>s are run in a <code class="docutils literal"><span class="pre">Compilation</span></code>, which spawns off
+sub-processes for each job that needs execution. The <code class="docutils literal"><span class="pre">Compilation</span></code> is
+responsible for deciding which <code class="docutils literal"><span class="pre">Job</span></code>s actually need to run, based on
+dependency information provided by the output of each sub-process. The
+low-level management of sub-processes is handled by a <code class="docutils literal"><span class="pre">TaskQueue</span></code>.</li>
+</ol>
+<div class="section" id="parse-option-parsing">
+<h3><a class="toc-backref" href="#id3">Parse: Option parsing</a><a class="headerlink" href="#parse-option-parsing" title="Permalink to this headline">¶</a></h3>
+<p>The command line arguments are parsed as options and inputs into Arg instances.
+Some miscellaneous validation and normalization is performed. Most of the
+implementation is provided by LLVM.</p>
+<p>An important part of this step is selecting a ToolChain. This is the Swift
+driver&#8217;s view of the current platform&#8217;s set of compiler tools, and determines
+how it will attempt to accomplish tasks. More on this below.</p>
+<p>One of the optional steps here is building an <em>output file map.</em> This allows a
+build system (such as Xcode) to control the location of intermediate output
+files. The output file map uses a simple JSON format mapping inputs to a map of
+output paths, keyed by file type. Entries under an input of &#8220;&#8221; refer to the
+top-level driver process.</p>
+<div class="admonition-fixme admonition">
+<p class="first admonition-title">FIXME</p>
+<p class="last">Certain capabilities, like incremental builds or compilation without
+linking, currently require an output file map. This should not be necessary.</p>
+</div>
+</div>
+<div class="section" id="pipeline-converting-args-into-actions">
+<h3><a class="toc-backref" href="#id4">Pipeline: Converting Args into Actions</a><a class="headerlink" href="#pipeline-converting-args-into-actions" title="Permalink to this headline">¶</a></h3>
+<p>At this stage, the driver will take the input Args and input files and
+establish a graph of Actions. This details the high-level tasks that need to be
+performed. The graph (a DAG) tracks dependencies between actions, but also
+manages ownership.</p>
+<div class="admonition-fixme admonition">
+<p class="first admonition-title">FIXME</p>
+<p class="last">Actions currently map one-to-one to sub-process invocations. This means
+that there are actions for things that should be implementation details,
+like generating dSYM output.</p>
+</div>
+</div>
+<div class="section" id="build-translating-actions-into-jobs-using-a-toolchain">
+<h3><a class="toc-backref" href="#id5">Build: Translating Actions into Jobs using a ToolChain</a><a class="headerlink" href="#build-translating-actions-into-jobs-using-a-toolchain" title="Permalink to this headline">¶</a></h3>
+<p>Once we have a graph of high-level Actions, we need to translate that into
+actual tasks to execute. This starts by determining the output that each Action
+needs to produce based on its inputs. Then we ask the ToolChain how to perform
+that Action on the current platform. The ToolChain produces a Job, which wraps
+up both the output information and the actual invocation. It also remembers
+which Action it came from and any Jobs it depends on. Unlike the Action graph,
+Jobs are owned by a single Compilation object and stored in a flat list.</p>
+<p>When a Job represents a compile of a single file, it may also be used for
+dependency analysis, to determine whether it is safe to not recompile that file
+in the current build. This is covered by checking if the input has been
+modified since the last build; if it hasn&#8217;t, we only need to recompile if
+something it depends on has changed.</p>
+</div>
+<div class="section" id="execute-running-the-jobs-in-a-compilation-using-a-taskqueue">
+<h3><a class="toc-backref" href="#id6">Execute: Running the Jobs in a Compilation using a TaskQueue</a><a class="headerlink" href="#execute-running-the-jobs-in-a-compilation-using-a-taskqueue" title="Permalink to this headline">¶</a></h3>
+<p>A Compilation&#8217;s goal is to make sure every Job in its list of Jobs is handled.
+If a Job needs to be run, the Compilation attempts to <em>schedule</em> it. If the
+Job&#8217;s dependencies have all been completed (or determined to be skippable), it
+is added to the TaskQueue; otherwise it is marked as <em>blocked.</em></p>
+<p>To support Jobs compiling individual Swift files, which may or may not need to
+be run, the Compilation keeps track of a DependencyGraph. (If file A depends on
+file B and file B has changed, file A needs to be recompiled.) When a Job
+completes successfully, the Compilation will both re-attempt to schedule Jobs
+that were directly blocked on it, and check to see if any other Jobs now need
+to run based on the DependencyGraph. See the section on <a class="reference internal" href="DependencyAnalysis.html"><em>Dependency Analysis</em></a>
+for more information.</p>
+<p>The Compilation&#8217;s TaskQueue controls the low-level aspects of managing
+subprocesses. Multiple Jobs may execute simultaneously, but communication with
+the parent process (the driver) is handled on a single thread. The level of
+parallelism may be controlled by a compiler flag.</p>
+<p>If a Job does not finish successfully, the Compilation needs to record which
+jobs have failed, so that they get rebuilt next time the user tries to build
+the project.</p>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        «&#160;&#160;<a href="AccessControl.html">Access Control</a>
+        &#160;&#160;::&#160;&#160;
+        <a class="uplink" href="contents.html">Contents</a>
+        &#160;&#160;::&#160;&#160;
+        <a href="DriverParseableOutput.html">Parseable Driver Output</a>&#160;&#160;»
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

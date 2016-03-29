@@ -1,0 +1,723 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Objective-C Interoperability &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>Objective-C Interoperability</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="objective-c-interoperability">
+<h1><a class="toc-backref" href="#id12">Objective-C Interoperability</a><a class="headerlink" href="#objective-c-interoperability" title="Permalink to this headline">¶</a></h1>
+<p>This document tracks the differences between the Swift and Objective-C ABIs and
+class models, and what it would take to merge the two as much as possible. The
+format of each section lays out the differences between Swift and Objective-C,
+then describes what needs to happen for a user to mix the two seamlessly.</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This document was used in planning Swift 1.0; it has not been kept
+up to date and does not describe the current or planned behavior of Swift.</p>
+</div>
+<div class="contents topic" id="contents">
+<p class="topic-title first">Contents</p>
+<ul class="simple">
+<li><a class="reference internal" href="#objective-c-interoperability" id="id12">Objective-C Interoperability</a><ul>
+<li><a class="reference internal" href="#design" id="id13">Design</a></li>
+<li><a class="reference internal" href="#use-cases" id="id14">Use Cases</a><ul>
+<li><a class="reference internal" href="#simple-application-writer" id="id15">Simple Application Writer</a></li>
+<li><a class="reference internal" href="#intermediate-application-writer" id="id16">Intermediate Application Writer</a></li>
+<li><a class="reference internal" href="#transitioning-application-writer" id="id17">Transitioning Application Writer</a></li>
+<li><a class="reference internal" href="#new-framework-writer" id="id18">New Framework Writer</a></li>
+<li><a class="reference internal" href="#intermediate-framework-writer" id="id19">Intermediate Framework Writer</a></li>
+<li><a class="reference internal" href="#end-user" id="id20">End User</a></li>
+<li><a class="reference internal" href="#nice-to-have-uncategorized" id="id21">Nice to Have (uncategorized)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#tradeoffs" id="id22">Tradeoffs</a><ul>
+<li><a class="reference internal" href="#messaging-model" id="id23">Messaging Model</a></li>
+<li><a class="reference internal" href="#method-model" id="id24">Method Model</a></li>
+<li><a class="reference internal" href="#class-model" id="id25">Class Model</a></li>
+<li><a class="reference internal" href="#subclassing-model" id="id26">Subclassing Model</a></li>
+<li><a class="reference internal" href="#method-overriding-model" id="id27">Method Overriding Model</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#attributes-for-objective-c-support" id="id28">Attributes for Objective-C Support</a></li>
+<li><a class="reference internal" href="#level-1-message-passing" id="id29">Level 1: Message-passing</a><ul>
+<li><a class="reference internal" href="#arc" id="id30">ARC</a></li>
+<li><a class="reference internal" href="#arguments" id="id31">Arguments</a></li>
+<li><a class="reference internal" href="#output-parameters" id="id32">Output Parameters</a></li>
+<li><a class="reference internal" href="#messaging-nil" id="id33">Messaging <code class="docutils literal"><span class="pre">nil</span></code></a></li>
+<li><a class="reference internal" href="#overloading" id="id34">Overloading</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#level-2-messaging-id" id="id35">Level 2: Messaging <code class="docutils literal"><span class="pre">id</span></code></a><ul>
+<li><a class="reference internal" href="#isa-pointers" id="id36"><code class="docutils literal"><span class="pre">isa</span></code> Pointers</a></li>
+<li><a class="reference internal" href="#method-lookup" id="id37">Method Lookup</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#level-3a-adopting-objective-c-protocols-in-swift" id="id38">Level 3a: Adopting Objective-C Protocols in Swift</a></li>
+<li><a class="reference internal" href="#level-3b-adopting-swift-protocols-in-objective-c" id="id39">Level 3b: Adopting Swift Protocols in Objective-C</a></li>
+<li><a class="reference internal" href="#level-4a-subclassing-objective-c-classes-in-swift" id="id40">Level 4a: Subclassing Objective-C Classes in Swift</a></li>
+<li><a class="reference internal" href="#level-4b-subclassing-swift-classes-in-objective-c" id="id41">Level 4b: Subclassing Swift Classes in Objective-C</a></li>
+<li><a class="reference internal" href="#level-5a-adding-extensions-to-objective-c-classes-in-swift" id="id42">Level 5a: Adding Extensions to Objective-C Classes in Swift</a></li>
+<li><a class="reference internal" href="#level-5b-adding-categories-to-swift-classes-in-objective-c" id="id43">Level 5b: Adding Categories to Swift Classes in Objective-C</a></li>
+<li><a class="reference internal" href="#level-6-dynamic-subclassing" id="id44">Level 6: Dynamic Subclassing</a></li>
+<li><a class="reference internal" href="#level-7-method-swizzling" id="id45">Level 7: Method Swizzling</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<p>Terminology used in this document:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">id</span></code>-compatible: something that can be assigned to an <code class="docutils literal"><span class="pre">id</span></code> variable and
+sent messages using <code class="docutils literal"><span class="pre">objc_msgSend</span></code>. In practice, this probably means
+implementing the <code class="docutils literal"><span class="pre">NSObject</span></code> protocol, since most of Cocoa doesn&#8217;t check
+whether something implements <code class="docutils literal"><span class="pre">NSObject</span></code> before sending a message like
+<code class="docutils literal"><span class="pre">-class</span></code>.</li>
+<li>Objective-C isa: something that identifies the class of an Objective-C object,
+used by <code class="docutils literal"><span class="pre">objc_msgSend</span></code>. To say a Swift object has an Objective-C isa does
+<em>not</em> mean that a fully-formed Objective-C runtime class structure is
+generated for the Swift class; it just means that (1) the header of the Swift
+object &#8220;looks like&#8221; an Objective-C object, and (2) the parts of an Objective-C
+class used by the <code class="docutils literal"><span class="pre">objc_msgSend</span></code> &#8220;fast path&#8221; are the same.</li>
+</ul>
+<div class="section" id="design">
+<h2><a class="toc-backref" href="#id13">Design</a><a class="headerlink" href="#design" title="Permalink to this headline">¶</a></h2>
+<p>All Swift objects <a class="footnote-reference" href="#id4" id="id1">[1]</a> will be <code class="docutils literal"><span class="pre">id</span></code>-compatible and will have an Objective-C
+isa, on the assumption that you want to be able to put them in an array, set
+them as represented objects, etc. <a class="footnote-reference" href="#id5" id="id2">[2]</a></p>
+<p>Swift classes that inherit from NSObject (directly or indirectly <a class="footnote-reference" href="#id6" id="id3">[3]</a>) behave
+exactly like Objective-C classes from the perspective of Objective-C source.
+All methods marked as &#8220;API&#8221; in Swift will have dual entry points exposed by
+default. Methods not marked as &#8220;API&#8221; will not be exposed to Objective-C at all.
+Instances of these classes can be used like any other Objective-C objects.</p>
+<p>Subclassing a &#8220;Swift NSObject class&#8221; in Objective-C requires a bit of extra
+work: generating Swift vtables. We haven&#8217;t decided how to do this:</p>
+<ul class="simple">
+<li>Clang could be taught about Swift class layout.</li>
+<li>The Clang driver could call out to the Swift compiler to do this. Somehow.</li>
+<li>The runtime could fill in the vtable from the Objective-C isa list at class
+load time. (This could be necessary anyway to support dynamic subclassing...
+which we may or may not do.)</li>
+</ul>
+<p>Swift classes that do not inherit from NSObject are not visible from
+Objective-C. Their instances can be manipulated as <code class="docutils literal"><span class="pre">id</span></code>, or via whatever
+protocols they may implement.</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="kd">class </span><span class="nc">AppController</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">NSApplicationDelegate</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">func </span><span class="nf">applicationDidFinishLaunching</span><span class="p">(</span><span class="n">notification</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">NSNotification</span><span class="p">) {</span>
+<span class="w">    </span><span class="c1">// do stuff</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="c1">// Use &#39;id &lt;NSApplicationDelegate&gt;&#39; in Objective-C.</span>
+</pre></div>
+</div>
+<p>Like &#8220;Swift NSObject classes&#8221;, though, &#8220;pure&#8221; Swift classes will still have an
+isa, and any methods declared in an Objective-C protocol will be emitted with
+dual entry points.</p>
+<table class="docutils footnote" frame="void" id="id4" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>Really, &#8220;All Swift objects on OS X and iOS&#8221;. Presumably a Swift compiler
+on another system wouldn&#8217;t bother to emit the Objective-C isa info.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="id5" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id2">[2]</a></td><td>Dave is working out an object and class layout scheme that will minimize
+the performance cost of emitting both the Objective-C isa and a Swift vtable.
+It is entirely possible that from the Swift perspective, the Objective-C isa
+is just an opaque &#8220;vtable slice&#8221; that is fixed at offset 0.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="id6" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id3">[3]</a></td><td>...or any other Objective-C class, including alternate roots like
+NSProxy. Most likely this will be implemented with an inherited attribute
+<code class="docutils literal"><span class="pre">[objc]</span></code> on the class, which would even allow Swift to create Objective-C
+root classes.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="use-cases">
+<h2><a class="toc-backref" href="#id14">Use Cases</a><a class="headerlink" href="#use-cases" title="Permalink to this headline">¶</a></h2>
+<p><em>Unfinished and undetailed.</em></p>
+<div class="section" id="simple-application-writer">
+<h3><a class="toc-backref" href="#id15">Simple Application Writer</a><a class="headerlink" href="#simple-application-writer" title="Permalink to this headline">¶</a></h3>
+<p>I want to write my new iOS application in Swift, using all the Objective-C
+frameworks that come with iOS.</p>
+<p>Guidelines:</p>
+<p>Everything should Just Work™. There should be no need to subclass NSObject
+anywhere in your program, unless you are specifically specializing a class in
+the Cocoa Touch frameworks.</p>
+</div>
+<div class="section" id="intermediate-application-writer">
+<h3><a class="toc-backref" href="#id16">Intermediate Application Writer</a><a class="headerlink" href="#intermediate-application-writer" title="Permalink to this headline">¶</a></h3>
+<p>I want to write my new application in Objective-C, but there&#8217;s a really nice
+Swift framework I want to use.</p>
+<p>Guidelines:</p>
+<ul class="simple">
+<li>Not all Swift methods in the framework may be available in Objective-C. You
+can work around this by adding <em>extensions</em> to the Swift framework classes to
+expose a more Objective-C-friendly interface. You will need to mark these new
+methods as &#8220;API&#8221; in order to make them visible to Objective-C.</li>
+<li>&#8220;Pure&#8221; Swift classes will not be visible to Objective-C at all. You will have
+to write a wrapper class (or wrapper functions) in Swift if you want to use
+the features of these classes directly. However, you can still treat them
+like any other objects in your program (store them in <code class="docutils literal"><span class="pre">id</span></code> variables,
+Objective-C collections, etc).</li>
+</ul>
+</div>
+<div class="section" id="transitioning-application-writer">
+<h3><a class="toc-backref" href="#id17">Transitioning Application Writer</a><a class="headerlink" href="#transitioning-application-writer" title="Permalink to this headline">¶</a></h3>
+<p>I have an existing Objective-C application, and I want to convert it
+piece-by-piece to Swift.</p>
+<p>Guidelines:</p>
+<ul class="simple">
+<li>Swift is different from Objective-C in that methods in Swift classes are not
+automatically usable from everywhere. If your Swift class inherits from
+NSObject, marking your methods as &#8220;API&#8221; will allow them to be called from
+Objective-C code. A Swift class that does not inherit from NSObject will only
+respond to messages included in its adopted protocols. <a class="footnote-reference" href="#id8" id="id7">[4]</a></li>
+<li>Once you have finished transitioning to Swift, go through your classes and
+remove the &#8220;API&#8221; marker from any methods that do not need to be accessed from
+Objective-C. Remove NSObject as a superclass from any classes that do not need
+to be accessed from Objective-C. Both of these allow the compiler to be more
+aggressive in optimizing your program, potentially making it both smaller and
+faster.</li>
+</ul>
+<table class="docutils footnote" frame="void" id="id8" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id7">[4]</a></td><td><p class="first">If you explicitly want to expose a Swift method to Objective-C, but it
+is not part of an existing protocol, you can mark the method as &#8220;API&#8221; and
+include the <code class="docutils literal"><span class="pre">[objc]</span></code> attribute:</p>
+<div class="last highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// Note: This syntax is not final!</span>
+<span class="kd">func </span><span class="p">[</span><span class="na">API, objc</span><span class="p">]</span><span class="w"> </span><span class="nf">accessibilityDescription</span><span class="p"> {</span>
+<span class="w">  </span><span class="kr">return</span><span class="w"> </span><span class="s">&quot;</span><span class="si">\(</span><span class="bp">self</span><span class="p">.</span><span class="n">givenName</span><span class="si">)</span><span class="s"> </span><span class="si">\(</span><span class="bp">self</span><span class="p">.</span><span class="n">familyName</span><span class="si">)</span><span class="s">&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="new-framework-writer">
+<h3><a class="toc-backref" href="#id18">New Framework Writer</a><a class="headerlink" href="#new-framework-writer" title="Permalink to this headline">¶</a></h3>
+<p>I want to write a framework that can be used by anyone.</p>
+<p>Requirements:</p>
+<ul class="simple">
+<li>Can call (at least some) Swift methods from Objective-C.</li>
+</ul>
+</div>
+<div class="section" id="intermediate-framework-writer">
+<h3><a class="toc-backref" href="#id19">Intermediate Framework Writer</a><a class="headerlink" href="#intermediate-framework-writer" title="Permalink to this headline">¶</a></h3>
+<p>I have an existing Objective-C framework that I want to move to Swift.</p>
+<p>Requirements:</p>
+<ul class="simple">
+<li>Can subclass Objective-C classes in Swift.</li>
+<li>Can call (at least some) Swift methods from Objective-C.</li>
+</ul>
+<p>Decisions:</p>
+<ul class="simple">
+<li>Should I expose Swift entry points as API?</li>
+<li>If so, should they be essentially the same as the Objective-C entry points, or
+should I have a very different interface that&#8217;s more suited for Swift (and
+easily could be &#8220;better&#8221;)?</li>
+</ul>
+</div>
+<div class="section" id="end-user">
+<h3><a class="toc-backref" href="#id20">End User</a><a class="headerlink" href="#end-user" title="Permalink to this headline">¶</a></h3>
+<ul class="simple">
+<li>Things should be fast.</li>
+<li>Things should not take a ton of memory.</li>
+</ul>
+</div>
+<div class="section" id="nice-to-have-uncategorized">
+<h3><a class="toc-backref" href="#id21">Nice to Have (uncategorized)</a><a class="headerlink" href="#nice-to-have-uncategorized" title="Permalink to this headline">¶</a></h3>
+<ul class="simple">
+<li>Can write a Swift extension for an Objective-C class.</li>
+<li>Can write a Swift extension for an Objective-C class that adopts an
+Objective-C protocol.</li>
+<li>Can write a Swift extension for an Objective-C class that exposes arbitrary
+new methods in Objective-C.</li>
+</ul>
+</div>
+</div>
+<div class="section" id="tradeoffs">
+<h2><a class="toc-backref" href="#id22">Tradeoffs</a><a class="headerlink" href="#tradeoffs" title="Permalink to this headline">¶</a></h2>
+<p>This section discusses models for various runtime data structures, and the
+tradeoffs for making Swift&#8217;s models different from Objective-C.</p>
+<div class="section" id="messaging-model">
+<h3><a class="toc-backref" href="#id23">Messaging Model</a><a class="headerlink" href="#messaging-model" title="Permalink to this headline">¶</a></h3>
+<p>Everything is <code class="docutils literal"><span class="pre">id</span></code>-compatible:</p>
+<ul class="simple">
+<li>Less to think about, maximum compatibility.</li>
+<li>Every Swift object must have an Objective-C isa.</li>
+</ul>
+<p>Non-NSObjects are messageable but not <code class="docutils literal"><span class="pre">id</span></code>-compatible:</p>
+<ul class="simple">
+<li>Cannot assign Swift objects to <code class="docutils literal"><span class="pre">id</span></code> variables.</li>
+<li>Cannot put arbitrary Swift objects in NSArrays.</li>
+<li>Potentially confusing: &#8220;I can message it but I can&#8217;t put it in an <code class="docutils literal"><span class="pre">id</span></code>??&#8221;</li>
+<li>Clang must be taught how to message Swift objects and manage their retain
+counts.</li>
+<li>On the plus side, then non-NSObjects can use Swift calling conventions.</li>
+<li>Requires framework authors to make an arbitrary decision that may not be
+ABI-future-proof.</li>
+</ul>
+<p>Non-NSObjects are opaque:</p>
+<ul class="simple">
+<li>Can be passed around, but not manipulated.</li>
+<li>...but Clang probably <em>still</em> has to be taught how to manage the retain count
+of an opaque Swift object, and doing so in the same way as dispatch_queue_t
+and friends may be dangerous (see &lt;os/object.h&gt; &#8211; it&#8217;s pretending they&#8217;re
+NSObjects, which they are)</li>
+<li>Requires framework authors to make an arbitrary decision that may not be
+ABI-future-proof.</li>
+</ul>
+</div>
+<div class="section" id="method-model">
+<h3><a class="toc-backref" href="#id24">Method Model</a><a class="headerlink" href="#method-model" title="Permalink to this headline">¶</a></h3>
+<p><em>This only affects methods marked as &#8220;API&#8221; in some way. Assume for now that all
+methods use types shared by both Objective-C and Swift, and that calls within
+the module can still be optimized away. Therefore, this discussion only applies
+to frameworks, and specifically the use of Swift methods from outside of the
+module in which they are defined.</em></p>
+<p>Every method marked as API can <em>only</em> be accessed via Objective-C entry points:</p>
+<ul class="simple">
+<li>Less to think about, maximum compatibility.</li>
+<li>Penalizes future Swift clients (and potentially Objective-C clients?).</li>
+</ul>
+<p>Every method marked as API can be accessed both from Objective-C and Swift:</p>
+<ul class="simple">
+<li>Maximum potential performance.</li>
+<li>Increases binary size and linking time.</li>
+<li>If this is a framework converted to Swift, clients that link against the
+Swift entry points are no longer backwards-compatible. And it&#8217;s hard to know
+what you did wrong here.</li>
+<li>Overriding the method in Objective-C requires teaching Clang to emit a Swift
+vtable for the subclass.</li>
+</ul>
+<p>Methods marked as &#8220;ObjC API&#8221; can only be accessed via Objective-C entry points;
+methods marked as &#8220;Swift API&#8221; can only be accessed via Swift entry points:</p>
+<ul class="simple">
+<li>Changing the API mode breaks binary compatibility.</li>
+<li>Obviously this attribute is inherited &#8211; overriding an Objective-C method
+should produce a new Objective-C entry point. What is the default for new
+methods, though? Always Swift? Always Objective-C? Based on the class model
+(see below)? Specified manually?</li>
+</ul>
+<p>Methods marked as &#8220;ObjC API&#8221; can be accessed both from Objective-C and Swift;
+methods marked as &#8220;Swift API&#8221; can only be accessed via Swift entry points:</p>
+<ul class="simple">
+<li>More potential performance for the shared API.</li>
+<li>Increases binary size and linking time.</li>
+<li>Overriding the method in Objective-C requires teaching Clang to emit a Swift
+vtable for the subclass.</li>
+<li>Same default behavior problem as above &#8211; it becomes a decision.</li>
+</ul>
+</div>
+<div class="section" id="class-model">
+<h3><a class="toc-backref" href="#id25">Class Model</a><a class="headerlink" href="#class-model" title="Permalink to this headline">¶</a></h3>
+<p>All Swift classes are layout-compatible with Objective-C classes:</p>
+<ul class="simple">
+<li>Necessary for <code class="docutils literal"><span class="pre">id</span></code>-compatibility.</li>
+<li>Increases binary size.</li>
+</ul>
+<p>Only Swift classes marked as &#8220;ObjC&#8221; (or descending from an Objective-C class)
+are layout-compatible with Objective-C classes; other classes are not:</p>
+<ul class="simple">
+<li>Requires framework authors to make an arbitrary decision.</li>
+<li>Changing the API mode <em>may</em> break binary compatibility (consider a Swift
+subclass that is not generating Objective-C class information).</li>
+</ul>
+</div>
+<div class="section" id="subclassing-model">
+<h3><a class="toc-backref" href="#id26">Subclassing Model</a><a class="headerlink" href="#subclassing-model" title="Permalink to this headline">¶</a></h3>
+<p><em>Requirement: can subclass Objective-C objects from Swift.</em></p>
+<p>All Swift classes can be subclassed from Objective-C:</p>
+<ul class="simple">
+<li>Potentially increases binary size.</li>
+<li>Requires teaching Clang to emit Swift vtables.</li>
+</ul>
+<p>Only Swift classes marked as &#8220;ObjC&#8221; (or descending from an Objective-C class)
+are subclassable in Objective-C:</p>
+<ul class="simple">
+<li>Probably <em>still</em> requires teaching Clang to emit Swift vtables.</li>
+<li>Requires framework authors to make an arbitrary decision that may not be
+ABI-future-proof.</li>
+</ul>
+</div>
+<div class="section" id="method-overriding-model">
+<h3><a class="toc-backref" href="#id27">Method Overriding Model</a><a class="headerlink" href="#method-overriding-model" title="Permalink to this headline">¶</a></h3>
+<p><em>Requirement: Swift classes can override any Objective-C methods.</em></p>
+<p>Methods marked as &#8220;overridable API&#8221; only have Objective-C entry points:</p>
+<ul class="simple">
+<li>Less to think about, maximum compatibility.</li>
+<li>Penalizes future Swift clients (and potentially Objective-C clients?).</li>
+</ul>
+<p>Methods marked as &#8220;overridable API&#8221; have both Objective-C and Swift entry
+points:</p>
+<ul class="simple">
+<li>Requires teaching Clang to emit Swift vtables.</li>
+<li>Increases binary size and link time.</li>
+</ul>
+<p>Methods marked as &#8220;overridable API&#8221; have only Swift entry points:</p>
+<ul class="simple">
+<li>Requires teaching Clang to emit Swift vtables.</li>
+<li>Later exposing this method to Objective-C in a subclass may be awkward?</li>
+</ul>
+</div>
+</div>
+<div class="section" id="attributes-for-objective-c-support">
+<h2><a class="toc-backref" href="#id28">Attributes for Objective-C Support</a><a class="headerlink" href="#attributes-for-objective-c-support" title="Permalink to this headline">¶</a></h2>
+<dl class="docutils">
+<dt><code class="docutils literal"><span class="pre">&#64;objc</span></code></dt>
+<dd><ul class="first simple">
+<li>When applied to classes, directs the compiler to emit Objective-C metadata
+for this class. Additionally, if no superclass is specified, the superclass
+is implicitly <code class="docutils literal"><span class="pre">NSObject</span></code> rather than the default <code class="docutils literal"><span class="pre">swift.Object</span></code>.
+Note that Objective-C class names must be unique across the entire program,
+not just within a single namespace or module. <a class="footnote-reference" href="#id10" id="id9">[5]</a></li>
+<li>When applied to methods, directs the compiler to emit an Objective-C entry
+point and entry in the Objective-C method list for this method.</li>
+<li>When applied to properties, directs the compiler to emit Objective-C methods
+<code class="docutils literal"><span class="pre">-</span></code><em>foo</em> and <code class="docutils literal"><span class="pre">-set</span></code><em>Foo</em><code class="docutils literal"><span class="pre">:</span></code>, which wrap the getter and setter
+for the property.</li>
+<li>When applied to protocols, directs the compiler to emit Objective-C metadata
+for this protocol. Objective-C protocols may contain optional methods.
+Method definitions for an Objective-C protocol conformance are themselves
+implicitly <code class="docutils literal"><span class="pre">&#64;objc</span></code>.</li>
+</ul>
+<p class="last">This attribute is inherited (in all contexts).</p>
+</dd>
+<dt><code class="docutils literal"><span class="pre">&#64;nonobjc</span></code></dt>
+<dd><ul class="first simple">
+<li>When applied to methods, properties, subscripts or constructors, override the
+implicit inheritance of <code class="docutils literal"><span class="pre">&#64;objc</span></code>.</li>
+<li>Only valid if the declaration was implicitly <code class="docutils literal"><span class="pre">&#64;objc</span></code> as a result of the
+class or one of the class&#8217;s superclasses being <code class="docutils literal"><span class="pre">&#64;obj</span></code> &#8211; not permitted on
+protocol conformances.</li>
+<li>It is permitted to override a <code class="docutils literal"><span class="pre">&#64;nonobjc</span></code> method with a method marked as
+<code class="docutils literal"><span class="pre">&#64;objc</span></code>; overriding an <code class="docutils literal"><span class="pre">&#64;objc</span></code> (or implicitly <code class="docutils literal"><span class="pre">&#64;objc</span></code>) method with a
+<code class="docutils literal"><span class="pre">&#64;nonobjc</span></code> method is not allowed.</li>
+<li>It is an error to combine <code class="docutils literal"><span class="pre">&#64;nonobjc</span></code> with <code class="docutils literal"><span class="pre">dynamic</span></code>, <code class="docutils literal"><span class="pre">&#64;IBOutlet</span></code> or
+<code class="docutils literal"><span class="pre">&#64;NSManaged</span></code>.</li>
+</ul>
+<p class="last">This attribute is inherited.</p>
+</dd>
+<dt><code class="docutils literal"><span class="pre">&#64;IBOutlet</span></code></dt>
+<dd><p class="first">Can only be applied to properties. This marks the property as being exposed
+as an outlet in Interface Builder. <strong>In most cases,</strong>
+<a class="reference external" href="http://developer.apple.com/library/mac/documentation/Cocoa/Conceptual/LoadingResources/CocoaNibs/CocoaNibs.html#//apple_ref/doc/uid/10000051i-CH4-SW6">outlets should be weak properties</a>.</p>
+<p><em>The simplest implementation of this is to have</em> <code class="docutils literal"><span class="pre">&#64;IBOutlet</span></code> <em>cause an</em>
+<em>Objective-C getter and setter to be emitted, but this is</em> not <em>part of</em>
+<code class="docutils literal"><span class="pre">&#64;IBOutlet</span></code>&#8216;s <em>contract.</em></p>
+<p class="last">This attribute is inherited.</p>
+</dd>
+<dt><code class="docutils literal"><span class="pre">&#64;IBAction</span></code></dt>
+<dd><p class="first">Can only be applied to methods, which must have a signature matching the
+requirements for target/action methods on the current platform.
+This marks the method as being a potential action in Interface Builder.</p>
+<p><em>The simplest implementation of this is to have</em> <code class="docutils literal"><span class="pre">&#64;IBAction</span></code> <em>imply</em>
+<code class="docutils literal"><span class="pre">&#64;objc</span></code>, <em>and this may be the</em> only <em>viable implementation given how the</em>
+<em>responder chain works. For example, a window&#8217;s delegate is part of the</em>
+<em>responder chain, even though it does not subclass</em> <code class="docutils literal"><span class="pre">NSResponder</span></code> <em>and may</em>
+<em>not be an Objective-C class at all. Still, this is</em> not <em>part of</em>
+<code class="docutils literal"><span class="pre">&#64;IBAction</span></code>&#8216;s <em>contract.</em></p>
+<p class="last">This attribute is inherited.</p>
+</dd>
+</dl>
+<table class="docutils footnote" frame="void" id="id10" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id9">[5]</a></td><td>I&#8217;m not really sure what to do about uniquing Objective-C class names.
+Maybe eventually [objc] will take an optional argument specifying the
+Objective-C-equivalent name.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="level-1-message-passing">
+<h2><a class="toc-backref" href="#id29">Level 1: Message-passing</a><a class="headerlink" href="#level-1-message-passing" title="Permalink to this headline">¶</a></h2>
+<p><em>Assuming an object is known to be a Swift object or an Objective-C object at
+compile-time, what does it take to send a message from one to the other?</em></p>
+<div class="section" id="arc">
+<h3><a class="toc-backref" href="#id30">ARC</a><a class="headerlink" href="#arc" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><p>By default, objects are passed to and returned from Objective-C methods as +0
+(i.e. non-owned objects). The caller does not have to do anything to release
+returned objects, though if they wish to retain them they may be able to steal
+them out of the top autorelease pool. (In practice, the caller <em>does</em> retain
+the arguments for the duration of the method anyway, unless it can be proven
+that nothing interferes with the lifetime of the object between the load and
+the call.)</p>
+<p>Objective-C methods from certain method families do return +1 objects, as do
+methods explicitly annotated with the <code class="docutils literal"><span class="pre">ns_returns_retained</span></code> attribute.</p>
+<p>All Swift class objects (i.e. as opposed to structs) are returned as +1 (i.e.
+owned objects). The caller is responsible for releasing them.</p>
+</div></blockquote>
+<p>Swift methods that are exposed as Objective-C methods will have a wrapper
+function (thunk) that is responsible for retaining all (object) arguments and
+autoreleasing the return value.</p>
+<p><em>Swift methods will **not*</em> be exposed as* <code class="docutils literal"><span class="pre">ns_returns_retained</span></code> because they
+should behave like Objective-C methods when called through an* <code class="docutils literal"><span class="pre">id</span></code>.</p>
+</div>
+<div class="section" id="arguments">
+<h3><a class="toc-backref" href="#id31">Arguments</a><a class="headerlink" href="#arguments" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><p>Objective-C currently requires that the first argument be <code class="docutils literal"><span class="pre">self</span></code> and the
+second be <code class="docutils literal"><span class="pre">_cmd</span></code>. The explicit arguments to a method come after <code class="docutils literal"><span class="pre">_cmd</span></code>.</p>
+<p>Swift only requires that the first argument be <code class="docutils literal"><span class="pre">self</span></code>. The explicit
+arguments come after <code class="docutils literal"><span class="pre">self</span></code>.</p>
+</div></blockquote>
+<p>The thunk mentioned above can shift all arguments over...which doesn&#8217;t really
+cost anything extra since we already have to retain all the arguments.</p>
+</div>
+<div class="section" id="output-parameters">
+<h3><a class="toc-backref" href="#id32">Output Parameters</a><a class="headerlink" href="#output-parameters" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><p>Because Objective-C does not have tuples, returning multiple values is
+accomplished through the use of pointer-to-object-pointer parameters, such as
+<code class="docutils literal"><span class="pre">NSError</span> <span class="pre">**</span></code>. Additionally, objects returned through these parameters are
+conventionally autoreleased, though ARC allows this to be specified
+explicitly.</p>
+<p>Swift has tuples and does not have pointers, so the natural way to return
+multiple values is to return a tuple. The retain-count issue is different
+here: with ARC, the tuple owns the objects in it, and the caller owns the
+tuple.</p>
+<p>Swift currently also has <code class="docutils literal"><span class="pre">[inout]</span></code> arguments. Whether or not these will be
+exposed to users and/or used for Objective-C out parameters is still
+undecided.</p>
+</div></blockquote>
+<p><em>This issue has not been resolved, but it only affects certain API.</em></p>
+</div>
+<div class="section" id="messaging-nil">
+<h3><a class="toc-backref" href="#id33">Messaging <code class="docutils literal"><span class="pre">nil</span></code></a><a class="headerlink" href="#messaging-nil" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><p>In Objective-C, the result of messaging <code class="docutils literal"><span class="pre">nil</span></code> is defined to be a zero-filled
+value of the return type. For methods that return an object, the return value
+is also <code class="docutils literal"><span class="pre">nil</span></code>. Methods that return non-POD C++ objects attempt to
+default-construct the object if the receiver is <code class="docutils literal"><span class="pre">nil</span></code>.</p>
+<p>In Swift, messaging <code class="docutils literal"><span class="pre">nil</span></code> is undefined, and hoped to be defined away by the
+type system through liberal use of some <code class="docutils literal"><span class="pre">Optional</span></code> type.</p>
+<ul class="simple">
+<li>I&#8217;ve seen other languages explicitly request the Objective-C behavior using
+<code class="docutils literal"><span class="pre">foo.?bar()</span></code>, though that&#8217;s not the prettiest syntax in the world.
+-Jordan</li>
+</ul>
+</div></blockquote>
+<p>As long as the implementation of <code class="docutils literal"><span class="pre">Optional</span></code> is layout-compatible with an
+object pointer, and an absent <code class="docutils literal"><span class="pre">Optional</span></code> is represented with a null pointer,
+this will Just Work™.</p>
+</div>
+<div class="section" id="overloading">
+<h3><a class="toc-backref" href="#id34">Overloading</a><a class="headerlink" href="#overloading" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><p>In Objective-C, methods cannot be overloaded.</p>
+<p>In Swift, methods can have the exact same name but take arguments of different
+types.</p>
+<p>Note that in Swift, all parameters after the first are part of the method
+name, unless using the &#8220;selector syntax&#8221; for defining methods:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>// 1. foo:baz:
+func foo(Int bar, Int baz);
+
+// 2. foo:qux:
+func foo(Int bar, Int qux);
+
+// 3. foo:qux: (same as above)
+func foo(Int bar) qux(Int quux);
+
+// 4. foo:baz: (but different type!)
+func foo(Int bar, UnicodeScalar baz);
+
+a.foo(1, 2)      // ambiguous in Swift (#1 or #2?)
+a.foo(1, baz=2)  // calls #1
+a.foo(1, qux=2)  // calls #2/3 (the same method)
+a.foo(1, &#39;C&#39;)    // calls #4, not ambiguous in Swift!
+
+[a foo:1 baz:2]; // ambiguous in Objective-C (#1 or #4?)
+[a foo:1 qux:2]; // calls #2/3 (the same method)
+</pre></div>
+</div>
+</div></blockquote>
+<p>The Swift compiler should not let both #1 and #4 be exported to Objective-C.
+It should already warn about the ambiguity between #1 and #2 without using
+named parameters.</p>
+</div>
+</div>
+<div class="section" id="level-2-messaging-id">
+<h2><a class="toc-backref" href="#id35">Level 2: Messaging <code class="docutils literal"><span class="pre">id</span></code></a><a class="headerlink" href="#level-2-messaging-id" title="Permalink to this headline">¶</a></h2>
+<p><em>If a Swift object can be referenced with</em> <code class="docutils literal"><span class="pre">id</span></code>, <em>how do you send messages to</em>
+<em>it?</em></p>
+<p>Note: the answer might be &#8220;Swift objects can&#8217;t generally be referenced with
+<code class="docutils literal"><span class="pre">id</span></code>&#8221;.</p>
+<div class="section" id="isa-pointers">
+<h3><a class="toc-backref" href="#id36"><code class="docutils literal"><span class="pre">isa</span></code> Pointers</a><a class="headerlink" href="#isa-pointers" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><p>The first word of every Objective-C object is a pointer to its class.</p>
+<p>We might want to use a more compact representation for Swift objects...</p>
+</div></blockquote>
+<p>...but we can&#8217;t; see below.</p>
+</div>
+<div class="section" id="method-lookup">
+<h3><a class="toc-backref" href="#id37">Method Lookup</a><a class="headerlink" href="#method-lookup" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><p>Objective-C performs method lookup by searching a sequence of maps for a
+given key, called a <em>selector</em>. Selectors are pointer-sized and uniqued
+across an entire process, so dynamically-loaded methods with the same name as
+an existing method will have an identical selector. Each map in the sequence
+refers to the set of methods added by a category (or the original class). If
+the lookup fails, the search is repeated for the superclass.</p>
+<p>Swift performs method lookup by vtable. In order to make these vtables
+non-fragile, the offset into a vtable for a given message is stored as a
+global variable. Rather than chaining searches through different message
+lists to account for inheritance and categories, the container for each
+method is known at compile-time. So the final lookup for a given method looks
+something like this:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">vtable</span><span class="p">[</span><span class="n">SUBCLASS_OFFSET</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">METHOD_OFFSET</span><span class="p">]</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>Swift class objects will have <code class="docutils literal"><span class="pre">isa</span></code> pointers, and those <code class="docutils literal"><span class="pre">isa</span></code> pointers will
+have an Objective-C method list at the very least, and probably a method cache
+as well. The methods in this list will refer to the Objective-C-compatible
+wrappers around Swift methods described above.</p>
+<p>The other words in the <code class="docutils literal"><span class="pre">isa</span></code> structure may not be used in the same way as they
+are in Objective-C; only <code class="docutils literal"><span class="pre">objc_msgSend</span></code> has to avoid special-casing Swift
+objects. Most of the other runtime functions can probably do a check to see if
+they are dealing with a Swift class, and if so fail nicely.</p>
+</div>
+</div>
+<div class="section" id="level-3a-adopting-objective-c-protocols-in-swift">
+<h2><a class="toc-backref" href="#id38">Level 3a: Adopting Objective-C Protocols in Swift</a><a class="headerlink" href="#level-3a-adopting-objective-c-protocols-in-swift" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>Bare minimum for implementing an AppKit/UIKit app in Swift.</li>
+<li>Essentially the same as emitting any other Objective-C methods, plus making
+<code class="docutils literal"><span class="pre">-conformsToProtocol:</span></code> and <code class="docutils literal"><span class="pre">+conformsToProtocol:</span></code> work properly.</li>
+</ul>
+</div>
+<div class="section" id="level-3b-adopting-swift-protocols-in-objective-c">
+<h2><a class="toc-backref" href="#id39">Level 3b: Adopting Swift Protocols in Objective-C</a><a class="headerlink" href="#level-3b-adopting-swift-protocols-in-objective-c" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>Requires generating both Swift and Objective-C entry points from Clang.</li>
+<li>Requires generating Swift protocol vtables.</li>
+</ul>
+<p><em>Note: including protocol implementations is essentially the same as implicitly
+adding an extension (section 5a).</em></p>
+</div>
+<div class="section" id="level-4a-subclassing-objective-c-classes-in-swift">
+<h2><a class="toc-backref" href="#id40">Level 4a: Subclassing Objective-C Classes in Swift</a><a class="headerlink" href="#level-4a-subclassing-objective-c-classes-in-swift" title="Permalink to this headline">¶</a></h2>
+<p><em>To be written.</em></p>
+<ul class="simple">
+<li>Basically necessary for implementing an AppKit/UIKit app in Swift.</li>
+<li>Requires generating Objective-C-compatible method lists.</li>
+<li>When a new method is marked as API, does it automatically get the Objective-C
+calling conventions by default? (See &#8220;Tradeoffs&#8221; section.)</li>
+</ul>
+</div>
+<div class="section" id="level-4b-subclassing-swift-classes-in-objective-c">
+<h2><a class="toc-backref" href="#id41">Level 4b: Subclassing Swift Classes in Objective-C</a><a class="headerlink" href="#level-4b-subclassing-swift-classes-in-objective-c" title="Permalink to this headline">¶</a></h2>
+<p><em>To be written.</em></p>
+<ul>
+<li><p class="first">May require generating Swift vtables.</p>
+<p>Alternative: if a method is exposed for overriding, it only gets an
+Objective-C entry point. (Downsides: performance, other platforms will hate
+us.)</p>
+<p>Alternative: only Swift classes with an Objective-C class in their hierarchy
+can be subclassed in Objective-C. Any overridden methods must be exposed as
+Objective-C already. (Downsides: framework authors could forget to inherit
+from NSObject, Swift code is penalized ahead of time.)</p>
+<p>Alternative: only Swift classes with an Objective-C class in their hierarchy
+are <em>visible</em> in Objective-C. All other Swift objects are opaque.
+(Downsides: same as above.)</p>
+</li>
+</ul>
+</div>
+<div class="section" id="level-5a-adding-extensions-to-objective-c-classes-in-swift">
+<h2><a class="toc-backref" href="#id42">Level 5a: Adding Extensions to Objective-C Classes in Swift</a><a class="headerlink" href="#level-5a-adding-extensions-to-objective-c-classes-in-swift" title="Permalink to this headline">¶</a></h2>
+<p><em>To be written.</em></p>
+<ul class="simple">
+<li>May require generating Objective-C-compatible method lists.</li>
+<li>Less clear what the <em>default</em> calling convention should be for new methods.</li>
+</ul>
+</div>
+<div class="section" id="level-5b-adding-categories-to-swift-classes-in-objective-c">
+<h2><a class="toc-backref" href="#id43">Level 5b: Adding Categories to Swift Classes in Objective-C</a><a class="headerlink" href="#level-5b-adding-categories-to-swift-classes-in-objective-c" title="Permalink to this headline">¶</a></h2>
+<p><em>To be written.</em></p>
+<ul class="simple">
+<li>Does not actually <em>require</em> generating Swift vtables. But we could if we
+wanted to expose Swift entry points for these methods as well.</li>
+<li>Does require an Objective-C-compatible <code class="docutils literal"><span class="pre">isa</span></code> to attach the new method list
+to.</li>
+</ul>
+</div>
+<div class="section" id="level-6-dynamic-subclassing">
+<h2><a class="toc-backref" href="#id44">Level 6: Dynamic Subclassing</a><a class="headerlink" href="#level-6-dynamic-subclassing" title="Permalink to this headline">¶</a></h2>
+<p><em>To be written, but probably not an issue...it&#8217;s mostly the same as statically
+subclassing, right?</em></p>
+</div>
+<div class="section" id="level-7-method-swizzling">
+<h2><a class="toc-backref" href="#id45">Level 7: Method Swizzling</a><a class="headerlink" href="#level-7-method-swizzling" title="Permalink to this headline">¶</a></h2>
+<p>I&#8217;m okay with just saying &#8220;no&#8221; to this one.</p>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

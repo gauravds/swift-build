@@ -1,0 +1,1246 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>The Swift Calling Convention &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>The Swift Calling Convention</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="the-swift-calling-convention">
+<span id="callingconvention"></span><h1><a class="toc-backref" href="#id1">The Swift Calling Convention</a><a class="headerlink" href="#the-swift-calling-convention" title="Permalink to this headline">¶</a></h1>
+<div class="contents topic" id="contents">
+<p class="topic-title first">Contents</p>
+<ul class="simple">
+<li><a class="reference internal" href="#the-swift-calling-convention" id="id1">The Swift Calling Convention</a><ul>
+<li><a class="reference internal" href="#high-level-semantic-conventions" id="id2">High-level semantic conventions</a><ul>
+<li><a class="reference internal" href="#pass-by-reference" id="id3">Pass-by-reference</a></li>
+<li><a class="reference internal" href="#pass-by-value" id="id4">Pass-by-value</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#ownership-transfer-conventions" id="id5">Ownership transfer conventions</a><ul>
+<li><a class="reference internal" href="#pass-by-reference-arguments" id="id6">Pass-by-reference arguments</a></li>
+<li><a class="reference internal" href="#pass-by-value-arguments" id="id7">Pass-by-value arguments</a><ul>
+<li><a class="reference internal" href="#responsibility" id="id8">Responsibility</a></li>
+<li><a class="reference internal" href="#known-conventions" id="id9">Known conventions</a></li>
+<li><a class="reference internal" href="#analysis" id="id10">Analysis</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#result-values" id="id11">Result values</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#physical-conventions" id="id12">Physical conventions</a><ul>
+<li><a class="reference internal" href="#aggregate-results" id="id13">Aggregate results</a></li>
+<li><a class="reference internal" href="#implicit-parameters" id="id14">Implicit parameters</a><ul>
+<li><a class="reference internal" href="#closures" id="id15">Closures</a></li>
+<li><a class="reference internal" href="#self" id="id16"><cite>self</cite></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#error-handling" id="id17">Error handling</a></li>
+<li><a class="reference internal" href="#default-argument-generators" id="id18">Default argument generators</a></li>
+<li><a class="reference internal" href="#arm32" id="id19">ARM32</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#function-signature-lowering" id="id20">Function signature lowering</a><ul>
+<li><a class="reference internal" href="#semantic-lowering" id="id21">Semantic lowering</a></li>
+<li><a class="reference internal" href="#physical-lowering" id="id22">Physical lowering</a><ul>
+<li><a class="reference internal" href="#general-expansion-algorithm" id="id23">General expansion algorithm</a><ul>
+<li><a class="reference internal" href="#typed-layouts" id="id24">Typed layouts</a></li>
+<li><a class="reference internal" href="#forming-a-legal-type-sequence" id="id25">Forming a legal type sequence</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#deconstruction-and-reconstruction" id="id26">Deconstruction and Reconstruction</a></li>
+<li><a class="reference internal" href="#forming-a-c-function-signature" id="id27">Forming a C function signature</a><ul>
+<li><a class="reference internal" href="#results" id="id28">Results</a></li>
+<li><a class="reference internal" href="#parameters" id="id29">Parameters</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<p>This whitepaper discusses the Swift calling convention, at least as we
+want it to be.</p>
+<p>It&#8217;s a basic assumption in this paper that Swift shouldn&#8217;t make an
+implicit promise to exactly match the default platform calling
+convention.  That is, if a C or Objective-C programmer manages to derive the
+address of a Swift function, we don&#8217;t have to promise that an obvious
+translation of the type of that function will be correctly callable
+from C.  For example, this wouldn&#8217;t be guaranteed to work:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>// In Swift:
+func foo(x: Int, y: Double) -&gt; MyClass { ... }
+
+// In Objective-C:
+extern id _TF4main3fooFTSiSd_CS_7MyClass(intptr_t x, double y);
+</pre></div>
+</div>
+<p>We do sometimes need to be able to match C conventions, both to use
+them and to generate implementations of them, but that level of
+compatibility should be opt-in and site-specific.  If Swift would
+benefit from internally using a better convention than C/Objective-C uses,
+and switching to that convention doesn&#8217;t damage the dynamic abilities
+of our target platforms (debugging, dtrace, stack traces, unwinding,
+etc.), there should be nothing preventing us from doing so.  (If we
+did want to guarantee compatibility on this level, this paper would be
+a lot shorter!)</p>
+<p>Function call rules in high-level languages have three major
+components, each operating on a different abstraction level:</p>
+<ul class="simple">
+<li>the high-level semantics of the call (pass-by-reference
+vs. pass-by-value),</li>
+<li>the ownership and validity conventions about argument and result
+values (&#8220;+0&#8221; vs. &#8220;+1&#8221;, etc.), and</li>
+<li>the &#8220;physical&#8221; representation conventions of how values are actually
+communicated between functions (in registers, on the stack, etc.).</li>
+</ul>
+<p>We&#8217;ll tackle each of these in turn, then conclude with a detailed
+discussion of function signature lowering.</p>
+<div class="section" id="high-level-semantic-conventions">
+<h2><a class="toc-backref" href="#id2">High-level semantic conventions</a><a class="headerlink" href="#high-level-semantic-conventions" title="Permalink to this headline">¶</a></h2>
+<p>The major division in argument passing conventions between languages
+is between pass-by-reference and pass-by-value languages.  It&#8217;s a
+distinction that only really makes sense in languages with the concept
+of an l-value, but Swift does, so it&#8217;s pertinent.</p>
+<p>In general, the terms &#8220;pass-by-X&#8221; and &#8220;call-by-X&#8221; are used
+interchangeably.  It&#8217;s unfortunate.  We&#8217;ll prefer &#8220;pass-by-X&#8221; for
+consistency and to emphasize that these conventions are
+argument-specific.</p>
+<div class="section" id="pass-by-reference">
+<h3><a class="toc-backref" href="#id3">Pass-by-reference</a><a class="headerlink" href="#pass-by-reference" title="Permalink to this headline">¶</a></h3>
+<p>In pass-by-reference (also called pass-by-name or pass-by-address), if
+<cite>A</cite> is an l-value expression, <cite>foo(A)</cite> is passed some sort of opaque
+reference through which the original l-value can be modified.  If <cite>A</cite>
+is not an l-value, the language may prohibit this, or (if
+pass-by-reference is the default convention) it may pass a temporary
+variable containing the result of <cite>A</cite>.</p>
+<p>Don&#8217;t confuse pass-by-reference with the concept of a <em>reference
+type</em>.  A reference type is a type whose value is a reference to a
+different object; for example, a pointer type in C, or a class type in
+Java or Swift.  A variable of reference type can be passed by value
+(copying the reference itself) or by reference (passing the variable
+itself, allowing it to be changed to refer to a different object).
+Note that references in C++ are a generalization of pass-by-reference,
+not really a reference type; in C++, a variable of reference type
+behaves completely unlike any other variable in the language.</p>
+<p>Also, don&#8217;t confuse pass-by-reference with the physical convention of
+passing an argument value indirectly.  In pass-by-reference, what&#8217;s
+logically being passed is a reference to a tangible, user-accessible
+object; changes to the original object will be visible in the
+reference, and changes to the reference will be reflected in the
+original object.  In an indirect physical convention, the argument is
+still logically an independent value, no longer associated with the
+original object (if there was one).</p>
+<p>If every object in the language is stored in addressable memory,
+pass-by-reference can be easily implemented by simply passing the
+address of the object.  If an l-value can have more structure than
+just a single, independently-addressable object, more information may
+be required from the caller.  For example, an array argument in
+FORTRAN can be a row or column vector from a matrix, and so arrays are
+generally passed as both an address and a stride.  C and C++ do have
+unaddressable l-values because of bitfields, but they forbid passing
+bitfields by reference (in C++) or taking their address (in either
+language), which greatly simplifies pointer and reference types in
+those languages.</p>
+<p>FORTRAN is the last remaining example of a language that defaults to
+pass-by-reference.  Early FORTRAN implementations famously passed
+constants by passing the address of mutable global memory initialized
+to the constant; if the callee modified its parameter (illegal under
+the standard, but...), it literally changed the constant for future
+uses.  FORTRAN now allows procedures to explicitly take arguments by
+value and explicitly declare that arguments must be l-values.</p>
+<p>However, many languages do allow parameters to be explicitly marked as
+pass-by-reference.  As mentioned for C++, sometimes only certain kinds
+of l-values are allowed.</p>
+<p>Swift allows parameters to be marked as pass-by-reference with
+<cite>inout</cite>.  Arbitrary l-values can be passed.  The Swift convention is
+to always pass an address; if the parameter is not addressable, it
+must be materialized into a temporary and then written back.  See the
+accessors proposal for more details about the high-level semantics of
+<cite>inout</cite> arguments.</p>
+</div>
+<div class="section" id="pass-by-value">
+<h3><a class="toc-backref" href="#id4">Pass-by-value</a><a class="headerlink" href="#pass-by-value" title="Permalink to this headline">¶</a></h3>
+<p>In pass-by-value, if <cite>A</cite> is an l-value expression, <cite>foo(A)</cite> copies the
+current value there.  Any modifications <cite>foo</cite> makes to its parameter
+are made to this copy, not to the original l-value.</p>
+<p>Most modern languages are pass-by-value, with specific functions able
+to opt in to pass-by-reference semantics.  This is exactly what Swift
+does.</p>
+<p>There&#8217;s not much room for variation in the high-level semantics of
+passing arguments by value; all the variation is in the ownership and
+physical conventions.</p>
+</div>
+</div>
+<div class="section" id="ownership-transfer-conventions">
+<h2><a class="toc-backref" href="#id5">Ownership transfer conventions</a><a class="headerlink" href="#ownership-transfer-conventions" title="Permalink to this headline">¶</a></h2>
+<p>Arguments and results that require cleanup, like an Objective-C object
+reference or a non-POD C++ object, raise two questions about
+responsibility: who is responsible for cleaning it up, and when?</p>
+<p>These questions arise even when the cleanup is explicit in code.  C&#8217;s
+<cite>strdup</cite> function returns newly-allocated memory which the caller is
+responsible for freeing, but <cite>strtok</cite> does not.  Objective-C has
+standard naming conventions that describe which functions return
+objects that the caller is responsible for releasing, and outside of
+ARC these must be followed manually.  Of course, conventions designed
+to be implemented by programmers are often designed around the
+simplicity of that implementation, rather than necessarily being more
+efficient.</p>
+<div class="section" id="pass-by-reference-arguments">
+<h3><a class="toc-backref" href="#id6">Pass-by-reference arguments</a><a class="headerlink" href="#pass-by-reference-arguments" title="Permalink to this headline">¶</a></h3>
+<p>Pass-by-reference arguments generally don&#8217;t involve a <em>transfer</em> of
+ownership.  It&#8217;s assumed that the caller will ensure that the referent
+is valid at the time of the call, and that the callee will ensure that
+the referent is still valid at the time of return.</p>
+<p>FORTRAN does actually allow parameters to be tagged as out-parameters,
+where the caller doesn&#8217;t guarantee the validity of the argument before
+the call.  Objective-C has something similar, where an indirect method
+argument can be marked <cite>out</cite>; ARC takes advantage of this with
+autoreleasing parameters to avoid a copy into the writeback temporary.
+Neither of these are something we semantically care about supporting
+in Swift.</p>
+<p>There is one other theoretically interesting convention question here:
+the argument has to be valid before the call and after the call, but
+does it have to valid during the call?  Swift&#8217;s answer to this is
+generally &#8220;yes&#8221;.  Swift does have <cite>inout</cite> aliasing rules that allow a
+certain amount of optimization, but the compiler is forbidden from
+exploiting these rules in any way that could cause memory corruption
+(at least in the absence of race conditions).  So Swift has to ensure
+that an <cite>inout</cite> argument is valid whenever it does something
+(including calling an opaque function) that could potentially access
+the original l-value.</p>
+<p>If Swift allowed local variables to be captured through <cite>inout</cite>
+parameters, and therefore needed to pass an implicit owner parameter
+along with an address, this owner parameter would behave like a
+pass-by-value argument and could use any of the conventions listed
+below.  However, the optimal convention for this is obvious: it should
+be <cite>guaranteed</cite>, since captures are very unlikely and callers are
+almost always expected to use the value of an <cite>inout</cite> variable
+afterwards.</p>
+</div>
+<div class="section" id="pass-by-value-arguments">
+<h3><a class="toc-backref" href="#id7">Pass-by-value arguments</a><a class="headerlink" href="#pass-by-value-arguments" title="Permalink to this headline">¶</a></h3>
+<p>All conventions for this have performance trade-offs.</p>
+<p>We&#8217;re only going to discuss <em>static</em> conventions, where the transfer
+is picked at compile time.  It&#8217;s possible to have a <em>dynamic</em>
+convention, where the caller passes a flag indicating whether it&#8217;s
+okay to directly take responsibility for the value, and the callee can
+(conceptually) return a flag indicating whether it actually did take
+responsibility for it.  If copying is extremely expensive, that can be
+worthwhile; otherwise, the code cost may overwhelm any other benefits.</p>
+<p>This discussion will ignore one particular impact of these conventions
+on code size.  If a function has many callers, conventions that
+require more code in the caller are worse, all else aside.  If a
+single call site has many possible targets, conventions that require
+more code in the callee are worse, all else aside.  It&#8217;s not really
+reasonable to decide this in advance for unknown code; we could maybe
+make rules about code calling system APIs, except that system APIs are
+by definition locked down, and we can&#8217;t change them.  It&#8217;s a
+reasonable thing to consider changing with PGO, though.</p>
+<div class="section" id="responsibility">
+<h4><a class="toc-backref" href="#id8">Responsibility</a><a class="headerlink" href="#responsibility" title="Permalink to this headline">¶</a></h4>
+<p>A common refrain in this performance analysis will be whether a
+function has responsibility for a value.  A function has to get a
+value from <em>somewhere</em>:</p>
+<ul>
+<li><p class="first">A caller is usually responsible for the return values it receives:
+the callee generated the value and the caller is responsible for
+destroying it.  Any other convention has to rely on heavily
+restricting what kind of value can be returned.  (If you&#8217;re thinking
+about Objective-C autoreleased results, just accept this for now;
+we&#8217;ll talk about that later.)</p>
+</li>
+<li><p class="first">A function isn&#8217;t necessarily responsible for a value it loads from
+memory.  Ignoring race conditions, the function may be able to
+immediately use the value without taking any specific action to keep
+it valid.</p>
+</li>
+<li><p class="first">A callee may or may not be responsible for a value passed as a
+parameter, depending on the convention it was passed with.</p>
+</li>
+<li><p class="first">A function might come from a source that doesn&#8217;t necessarily make
+the function responsible, but if the function takes an action which
+invalidates the source before using the value, the function has to
+take action to keep the value valid.  At that point, the function
+has responsibility for the value despite its original source.</p>
+<p>For example, a function <cite>foo()</cite> might load a reference <cite>r</cite> from a
+global variable <cite>x</cite>, call an unknown function <cite>bar()</cite>, and then use
+<cite>r</cite> in some way.  If <cite>bar()</cite> can&#8217;t possibly overwrite <cite>x</cite>, <cite>foo()</cite>
+doesn&#8217;t have to do anything to keep <cite>r</cite> alive across the call;
+otherwise it does (e.g. by retaining it in a refcounted
+environment).  This is a situation where humans are often much
+smarter than compilers.  Of course, it&#8217;s also a situation where
+humans are sometimes insufficiently conservative.</p>
+</li>
+</ul>
+<p>A function may also require responsibility for a value as part of its
+operation:</p>
+<ul class="simple">
+<li>Since a variable is always responsible for the current value it
+stores, a function which stores a value into memory must first gain
+responsibility for that value.</li>
+<li>A callee normally transfers responsibility for its return value to
+its caller; therefore it must gain responsibility for its return
+value before returning it.</li>
+<li>A caller may need to gain responsibility for a value before passing
+it as an argument, depending on the parameter&#8217;s ownership-transfer
+convention.</li>
+</ul>
+</div>
+<div class="section" id="known-conventions">
+<h4><a class="toc-backref" href="#id9">Known conventions</a><a class="headerlink" href="#known-conventions" title="Permalink to this headline">¶</a></h4>
+<p>There are three static parameter conventions for ownership worth
+considering here:</p>
+<ul>
+<li><p class="first">The caller may transfer responsibility for the value to the callee.
+In SIL, we call this an <strong>owned</strong> parameter.</p>
+<p>This is optimal if the caller has responsibility for the value and
+doesn&#8217;t need it after the call.  This is an extremely common
+situation; for example, it comes up whenever a call result is
+immediately used an argument.  By giving the callee responsibility
+for the value, this convention allows the callee to use the value at
+a later point without taking any extra action to keep it alive.</p>
+<p>The flip side is that this convention requires a lot of extra work
+when a single value is used multiple times in the caller.  For
+example, a value passed in every iteration of a loop will need to be
+copied/retained/whatever each time.</p>
+</li>
+<li><p class="first">The caller may provide the value without any responsibility on
+either side.  In SIL, we call this an <strong>unowned</strong> parameter.  The
+value is guaranteed to be valid at the moment of the call, and in
+the absence of race conditions, that guarantee can be assumed to
+continue unless the callee does something that might invalidate it.
+As discussed above, humans are often much smarter than computers
+about knowing when that&#8217;s possible.</p>
+<p>This is optimal if the caller can acquire the value without
+responsibility and the callee doesn&#8217;t require responsibility of it.
+In very simple code &#8212; e.g., loading values from an array and
+passing them to a comparator function which just reads a few fields
+from each and returns &#8212; this can be extremely efficient.</p>
+<p>Unfortunately, this convention is completely undermined if either
+side has to do anything that forces it to take action to keep the
+value alive.  Also, if that happens on the caller side, the
+convention can keep values alive longer than is necessary.  It&#8217;s
+very easy for both sides of the convention to end up doing extra
+work because of this.</p>
+</li>
+<li><p class="first">The caller may assert responsibility for the value.  In SIL, we call
+this a <strong>guaranteed</strong> parameter.  The callee can rely on the value
+staying valid for the duration of the call.</p>
+<p>This is optimal if the caller needs to use the value after the call
+and either has responsibility for it or has a guarantee like this
+for it.  Therefore, this convention is particularly nice when a
+value is likely to be forwarded by value a great deal.</p>
+<p>However, this convention does generally keep values alive longer
+than is necessary, since the outermost function which passed it as
+an argument will generally be forced to hold a reference for the
+duration.  By the same mechanism, in refcounted systems, this
+convention tends to cause values to have multiple retains active at
+once; for example, if a copy-on-write array is created in one
+function, passed to another, stored in a mutable variable, and then
+modified, the callee will see a reference count of 2 and be forced
+to do a structural copy.  This can occur even if the caller
+literally constructed the array for the sole and immediate purpose
+of passing it to the callee.</p>
+</li>
+</ul>
+</div>
+<div class="section" id="analysis">
+<h4><a class="toc-backref" href="#id10">Analysis</a><a class="headerlink" href="#analysis" title="Permalink to this headline">¶</a></h4>
+<p>Objective-C generally uses the unowned convention for object-pointer
+parameters.  It is possible to mark a parameter as being consumed,
+which is basically the owned convention.  As a special case, in ARC we
+assume that callers are responsible for keeping <cite>self</cite> values alive
+(including in blocks), which is effectively the <cite>guaranteed</cite>
+convention.</p>
+<p><cite>unowned</cite> causes a lot of problems without really solving any, in my
+experience looking at ARC-generated code and optimizer output.  A
+human can take advantage of it, but the compiler is so frequently
+blocked.  There are many common idioms (like chains of functions that
+just add default arguments at each step) have really awful performance
+because the compiler is adding retains and releases at every single
+level.  It&#8217;s just not a good convention to adopt by default.  However,
+we might want to consider allowing specific function parameters to opt
+into it; sort comparators are a particularly interesting candidate
+for this.  <cite>unowned</cite> is very similar to C++&#8217;s <cite>const &amp;</cite> for things
+like that.</p>
+<p><cite>guaranteed</cite> is good for some things, but it causes a lot of silly
+code bloat when values are really only used in one place, which is
+quite common.  The liveness / refcounting issues are also pretty
+problematic.  But there is one example that&#8217;s very nice for
+<cite>guaranteed</cite>: <cite>self</cite>.  It&#8217;s quite common for clients of a type to call
+multiple methods on a single value, or for methods to dispatch to
+multiple other methods, which are exactly the situations where
+<cite>guaranteed</cite> excels.  And it&#8217;s relatively uncommon (but not
+unimaginable) for a non-mutating method on a copy-on-write struct to
+suddenly store <cite>self</cite> aside and start mutating that copy.</p>
+<p><cite>owned</cite> is a good default for other parameters.  It has some minor
+performance disadvantages (unnecessary retains if you have an
+unoptimizable call in a loop) and some minor code size benefits (in
+common straight-line code), but frankly, both of those points pale in
+importance to the ability to transfer copy-on-write structures around
+without spuriously increasing reference counts.  It doesn&#8217;t take too
+many unnecessary structural copies before any amount of
+reference-counting traffic (especially the Swift-native
+reference-counting used in copy-on-write structures) is basically
+irrelevant in comparison.</p>
+</div>
+</div>
+<div class="section" id="result-values">
+<h3><a class="toc-backref" href="#id11">Result values</a><a class="headerlink" href="#result-values" title="Permalink to this headline">¶</a></h3>
+<p>There&#8217;s no major semantic split in result conventions like that
+between pass-by-reference and pass-by-value.  In most languages, a
+function has to return a value (or nothing).  There are languages like
+C++ where functions can return references, but that&#8217;s inherently
+limited, because the reference has to refer to something that exists
+outside the function.  If Swift ever adds a similar language
+mechanism, it&#8217;ll have to be memory-safe and extremely opaque, and
+it&#8217;ll be easy to just think of that as a kind of weird value result.
+So we&#8217;ll just consider value results here.</p>
+<p>Value results raise some of the same ownership-transfer questions as
+value arguments.  There&#8217;s one major limitation: just like a
+by-reference result, an actual <cite>unowned</cite> convention is inherently
+limited, because something else other than the result value must be
+keeping it valid.  So that&#8217;s off the table for Swift.</p>
+<p>What Objective-C does is something more dynamic.  Most APIs in
+Objective-C give you a very ephemeral guarantee about the validity of
+the result: it&#8217;s valid now, but you shouldn&#8217;t count on it being valid
+indefinitely later.  This might be because the result is actually
+owned by some other object somewhere, or it might be because the
+result has been placed in the autorelease pool, a thread-local data
+structure which will (when explicitly drained by something up the call
+chain) eventually release that&#8217;s been put into it.  This autorelease
+pool can be a major source of spurious memory growth, and in classic
+manual reference-counting it was important to drain it fairly
+frequently.  ARC&#8217;s response to this convention was to add an
+optimization which attempts to prevent things from ending up in the
+autorelease pool; the net effect of this optimization is that ARC ends
+up with an owned reference regardless of whether the value was
+autoreleased.  So in effect, from ARC&#8217;s perspective, these APIs still
+return an owned reference, mediated through some extra runtime calls
+to undo the damage of the convention.</p>
+<p>So there&#8217;s really no compelling alternative to an owned return
+convention as the default in Swift.</p>
+</div>
+</div>
+<div class="section" id="physical-conventions">
+<h2><a class="toc-backref" href="#id12">Physical conventions</a><a class="headerlink" href="#physical-conventions" title="Permalink to this headline">¶</a></h2>
+<p>The lowest abstraction level for a calling convention is the actual
+&#8220;physical&#8221; rules for the call:</p>
+<ul class="simple">
+<li>where the caller should place argument values in registers and
+memory before the call,</li>
+<li>how the callee should pass back the return values in registers
+and/or memory after the call, and</li>
+<li>what invariants hold about registers and memory over the call.</li>
+</ul>
+<p>In theory, all of these could be changed in the Swift ABI.  In
+practice, it&#8217;s best to avoid changes to the invariant rules, because
+those rules could complicate Swift-to-C interoperation:</p>
+<ul class="simple">
+<li>Assuming a higher stack alignment would require dynamic realignment
+whenever Swift code is called from C.</li>
+<li>Assuming a different set of callee-saved registers would require
+additional saves and restores when either Swift code calls C or is
+called from C, depending on the exact change.  That would then
+inhibit some kinds of tail call.</li>
+</ul>
+<p>So we will limit ourselves to considering the rules for allocating
+parameters and results to registers.  Our platform C ABIs are usually
+quite good at this, and it&#8217;s fair to ask why Swift shouldn&#8217;t just use
+C&#8217;s rules.  There are three general answers:</p>
+<ul class="simple">
+<li>Platform C ABIs are specified in terms of the C type system, and the
+Swift type system allows things to be expressed which don&#8217;t have
+direct analogues in C (for example, enums with payloads).</li>
+<li>The layout of structures in Swift does not necessarily match their
+layout in C, which means that the C rules don&#8217;t necessarily cover
+all the cases in Swift.</li>
+<li>Swift places a larger emphasis on first-class structs than C does.
+C ABIs often fail to allocate even small structs to registers, or
+use inefficient registers for them, and we would like to be somewhat
+more aggressive than that.</li>
+</ul>
+<p>Accordingly, the Swift ABI is defined largely in terms of lowering: a
+Swift function signature is translated to a C function signature with
+all the aggregate arguments and results eliminated (possibly by
+deciding to pass them indirectly).  This lowering will be described in
+detail in the final section of this whitepaper.</p>
+<p>However, there are some specific circumstances where we&#8217;d like to
+deviate from the platform ABI:</p>
+<div class="section" id="aggregate-results">
+<h3><a class="toc-backref" href="#id13">Aggregate results</a><a class="headerlink" href="#aggregate-results" title="Permalink to this headline">¶</a></h3>
+<p>As mentioned above, Swift puts a lot of focus on first-class value
+types.  As part of this, it&#8217;s very valuable to be able to return
+common value types fully in registers instead of indirectly.  The
+magic number here is three: it&#8217;s very common for copy-on-write value
+types to want about three pointers&#8217; worth of data, because that&#8217;s just
+enough for some sort of owner pointer plus a begin/end pair.</p>
+<p>Unfortunately, many common C ABIs fall slightly short of that.  Even
+those ABIs that do allow small structs to be returned in registers
+tend to only allow two pointers&#8217; worth.  So in general, Swift would
+benefit from a very slightly-tweaked calling convention that allocates
+one or two more registers to the result.</p>
+</div>
+<div class="section" id="implicit-parameters">
+<h3><a class="toc-backref" href="#id14">Implicit parameters</a><a class="headerlink" href="#implicit-parameters" title="Permalink to this headline">¶</a></h3>
+<p>There are several language features in Swift which require implicit
+parameters:</p>
+<div class="section" id="closures">
+<h4><a class="toc-backref" href="#id15">Closures</a><a class="headerlink" href="#closures" title="Permalink to this headline">¶</a></h4>
+<p>Swift&#8217;s function types are &#8220;thick&#8221; by default, meaning that a function
+value carries an optional context object which is implicitly passed to
+the function when it is called.  This context object is
+reference-counted, and it should be passed <cite>guaranteed</cite> for
+straightforward reasons:</p>
+<ul class="simple">
+<li>It&#8217;s not uncommon for closures to be called many times, in which
+case an <cite>owned</cite> convention would be unnecessarily expensive.</li>
+<li>While it&#8217;s easy to imagine a closure which would want to take
+responsibility for its captured values, giving it responsibility for
+a retain of the context object doesn&#8217;t generally allow that.  The
+closure would only be able to take ownership of the captured values
+if it had responsibility for a <em>unique</em> reference to the context.
+So the closure would have to be written to do different things based
+on the uniqueness of the reference, and it would have to be able to
+tear down and deallocate the context object after stealing values
+from it.  The optimization just isn&#8217;t worth it.</li>
+<li>It&#8217;s usually straightforward for the caller to guarantee the
+validity of the context reference; worst case, a single extra
+Swift-native retain/release is pretty cheap.  Meanwhile, not having
+that guarantee would force many closure functions to retain their
+contexts, since many closures do multiple things with values from
+the context object.  So <cite>unowned</cite> would not be a good convention.</li>
+</ul>
+<p>Many functions don&#8217;t actually need a context, however; they are
+naturally &#8220;thin&#8221;.  It would be best if it were possible to construct a
+thick function directly from a thin function without having to
+introduce a thunk just to move parameters around the missing context
+parameter.  In the worst case, a thunk would actually require the
+allocation of a context object just to store the original function
+pointer; but that&#8217;s only necessary when converting from a completely
+opaque function value.  When the source function is known statically,
+which is far more likely, the thunk can just be a global function
+which immediately calls the target with the correctly shuffled
+arguments.  Still, it&#8217;d be better to be able to avoid creating such
+thunks entirely.</p>
+<p>In order to reliably avoid creating thunks, it must be possible for
+code invoking an opaque thick function to pass the context pointer in
+a way that can be safely and implicitly ignored if the function
+happens to actually be thin.  There are two ways to achieve this:</p>
+<ul>
+<li><p class="first">The context can be passed as the final parameter.  In most C calling
+conventions, extra arguments can be safely ignored; this is because
+most C calling conventions support variadic arguments, and such
+conventions inherently can&#8217;t rely on the callee knowing the extent
+of the arguments.</p>
+<p>However, this is sub-optimal because the context is often used
+repeatedly in a closure, especially at the beginning, and putting it
+at the end of the argument list makes it more likely to be passed on
+the stack.</p>
+</li>
+<li><p class="first">The context can be passed in a register outside of the normal
+argument sequence.  Some ABIs actually even reserve a register for
+this purpose; for example, on x86-64 it&#8217;s <cite>%r10</cite>.  Neither of the
+ARM ABIs do, however.</p>
+</li>
+</ul>
+<p>Having an out-of-band register would be the best solution.</p>
+<p>(Surprisingly, the ownership transfer convention for the context
+doesn&#8217;t actually matter here.  You might think that an <cite>owned</cite>
+convention would be prohibited, since the callee would fail to release
+the context and would therefore leak it.  However, a thin function
+should always have a <cite>nil</cite> context, so this would be harmless.)</p>
+<p>Either solution works acceptably with curried partial application,
+since the inner parameters can be left in place while transforming the
+context into the outer parameters.  However, an <cite>owned</cite> convention
+would either prevent the uncurrying forwarder from tail-calling the
+main function or force all the arguments to be spilled.  Neither is
+really acceptable; one more argument against an <cite>owned</cite> convention.
+(This is another example where <cite>guaranteed</cite> works quite nicely, since
+the guarantees are straightforward to extend to the main function.)</p>
+</div>
+<div class="section" id="self">
+<h4><a class="toc-backref" href="#id16"><cite>self</cite></a><a class="headerlink" href="#self" title="Permalink to this headline">¶</a></h4>
+<p>Methods (both static and instance) require a <cite>self</cite> parameter.  In all
+of these cases, it&#8217;s reasonable to expect that <cite>self</cite> will used
+frequently, so it&#8217;s best to pass it in a register.  Also, many methods
+call other methods on the same object, so it&#8217;s also best if the
+register storing <cite>self</cite> is stable across different method signatures.</p>
+<p>In static methods on value types, <cite>self</cite> doesn&#8217;t require any dynamic
+information: there&#8217;s only one value of the metatype, and there&#8217;s
+usually no point in passing it.</p>
+<p>In static methods on class types, <cite>self</cite> is a reference to the class
+metadata, a single pointer.  This is necessary because it could
+actually be the class object of a subclass.</p>
+<p>In instance methods on class types, <cite>self</cite> is a reference to the
+instance, again a single pointer.</p>
+<p>In mutating instance methods on value types, <cite>self</cite> is the address of
+an object.</p>
+<p>In non-mutating instance methods on value types, <cite>self</cite> is a value; it
+may require multiple registers, or none, or it may need to be passed
+indirectly.</p>
+<p>All of these cases except mutating instance methods on value types can
+be partially applied to create a function closure whose type is the
+formal type of the method.  That is, if class <cite>A</cite> has a method
+declared <cite>func foo(x: Int) -&gt; Double</cite>, then <cite>A.foo</cite> yields a function
+of type <cite>(Int) -&gt; Double</cite>.  Assuming that we continue to feel that
+this is a useful language feature, it&#8217;s worth considered how we could
+support it efficiently.  The expenses associated with a partial
+application are (1) the allocation of a context object and (2) needing
+to introduce a thunk to forward to the original function.  All else
+aside, we can avoid the allocation if the representation of <cite>self</cite> is
+compatible with the representation of a context object reference; this
+is essentially true only if <cite>self</cite> is a class instance using Swift
+reference counting.  Avoiding the thunk is possible only if we
+successfully avoided the allocation (since otherwise a thunk is
+required in order to extract the correct <cite>self</cite> value from the
+allocated context object) and <cite>self</cite> is passed in exactly the same
+manner as a closure context would be.</p>
+<p>It&#8217;s unclear whether making this more efficient would really be
+worthwhile on its own, but if we do support an out-of-band context
+parameter, taking advantage of it for methods is essentially trivial.</p>
+</div>
+</div>
+<div class="section" id="error-handling">
+<h3><a class="toc-backref" href="#id17">Error handling</a><a class="headerlink" href="#error-handling" title="Permalink to this headline">¶</a></h3>
+<p>The calling convention implications of Swift&#8217;s error handling design
+aren&#8217;t yet settled.  It may involve extra parameters; it may involve
+extra return values.  Considerations:</p>
+<ul>
+<li><p class="first">Callers will generally need to immediately check for an error.
+Being able to quickly check a register would be extremely
+convenient.</p>
+</li>
+<li><p class="first">If the error is returned as a component of the result value, it
+shouldn&#8217;t be physically combined with the normal result.  If the
+normal result is returned in registers, it would be unfortunate to
+have to do complicated logic to test for error.  If the normal
+result is returned indirectly, contorting the indirect result with
+the error would likely prevent the caller from evaluating the call
+in-place.</p>
+</li>
+<li><p class="first">It would be very convenient to be able to trivially turn a function
+which can&#8217;t produce an error into a function which can.  This is an
+operation that we expect higher-order code to have do frequently, if
+it isn&#8217;t completely inlined away.  For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="c1">// foo() expects its argument to follow the conventions of a</span>
+<span class="c1">// function that&#39;s capable of throwing.</span>
+<span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span><span class="w"> </span><span class="p">()</span><span class="nf"> throws</span><span class="o"> -&gt; </span><span class="p">())</span><span class="nf"> throwsIf</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span>
+
+<span class="c1">// Here we&#39;re passing foo() a function that can&#39;t throw; this is</span>
+<span class="c1">// allowed by the subtyping rules of the language.  We&#39;d like to be</span>
+<span class="c1">// able to do this without having to introduce a thunk that maps</span>
+<span class="c1">// between the conventions.</span>
+<span class="kd">func </span><span class="nf">bar</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span><span class="w"> </span><span class="p">()</span><span class="o"> -&gt; </span><span class="p">()) {</span>
+<span class="w">  </span><span class="n">foo</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</li>
+</ul>
+<p>We&#8217;ll consider two ways to satisfy this.</p>
+<p>The first is to pass a pointer argument that doesn&#8217;t interfere with
+the normal argument sequence.  The caller would initialize the memory
+to a zero value.  If the callee is a throwing function, it would be
+expected to write the error value into this argument; otherwise, it
+would naturally ignore it.  Of course, the caller then has to load
+from memory to see whether there&#8217;s an error.  This would also either
+consume yet another register not in the normal argument sequence or
+have to be placed at the end of the argument list, making it more
+likely to be passed on the stack.</p>
+<p>The second is basically the same idea, but using a register that&#8217;s
+otherwise callee-save.  The caller would initialize the register to a
+zero value.  A throwing function would write the error into it; a
+non-throwing function would consider it callee-save and naturally
+preserve it.  It would then be extremely easy to check it for an
+error.  Of course, this would take away a callee-save register in the
+caller when calling throwing functions.  Also, if the caller itself
+isn&#8217;t throwing, it would have to save and restore that register.</p>
+<p>Both solutions would allow tail calls, and the zero store could be
+eliminated for direct calls to known functions that can throw.  The
+second is the clearly superior solution, but definitely requires more
+work in the backend.</p>
+</div>
+<div class="section" id="default-argument-generators">
+<h3><a class="toc-backref" href="#id18">Default argument generators</a><a class="headerlink" href="#default-argument-generators" title="Permalink to this headline">¶</a></h3>
+<p>By default, Swift is resilient about default arguments and treats them
+as essentially one part of the implementation of the function.  This
+means that, in general, a caller using a default argument must call a
+function to emit the argument, instead of simply inlining that
+emission directly into the call.</p>
+<p>These default argument generation functions are unlike any other
+because they have very precise information about how their result will
+be used: it will be placed into a specific position in specific
+argument list.  The only reason the caller would ever want to do
+anything else with the result is if it needs to spill the value before
+emitting the call.</p>
+<p>Therefore, in principle, it would be really nice if it were possible
+to tell these functions to return in a very specific way, e.g. to
+return two values in the second and third argument registers, or to
+return a value at a specific location relative to the stack pointer
+(although this might be excessively constraining; it would be
+reasonable to simply opt into an indirect return instead).  The
+function should also preserve earlier argument registers (although
+this could be tricky if the default argument generator is in a generic
+context and therefore needs to be passed type-argument information).</p>
+<p>This enhancement is very easy to postpone because it doesn&#8217;t affect
+any basic language mechanics.  The generators are always called
+directly, and they&#8217;re inherently attached to a declaration, so it&#8217;s
+quite easy to take any particular generator and compatibly enhance it
+with a better convention.</p>
+</div>
+<div class="section" id="arm32">
+<h3><a class="toc-backref" href="#id19">ARM32</a><a class="headerlink" href="#arm32" title="Permalink to this headline">¶</a></h3>
+<p>Most of the platforms we support have pretty good C calling
+conventions.  The exceptions are i386 (for the iOS simulator) and
+ARM32 (for iOS).  We really, really don&#8217;t care about i386, but iOS on
+ARM32 is still an important platform.  Switching to a better physical
+calling convention (only for calls from Swift to Swift, of course)
+would be a major improvement.</p>
+<p>It would be great if this were as simple as flipping a switch, but
+unfortunately the obvious convention to switch to (AAPCS-VFP) has a
+slightly different set of callee-save registers: iOS treats <cite>r9</cite> as a
+scratch register.  So we&#8217;d really want a variant of AAPCS-VFP that did
+the same.  We&#8217;d also need to make sure that SJ/LJ exceptions weren&#8217;t
+disturbed by this calling convention; we aren&#8217;t really <em>supporting</em>
+exception propagation through Swift frames, but completely breaking
+propagation would be unfortunate, and we may need to be able to
+<em>catch</em> exceptions.</p>
+<p>So this would also require some amount of additional support from the
+backend.</p>
+</div>
+</div>
+<div class="section" id="function-signature-lowering">
+<h2><a class="toc-backref" href="#id20">Function signature lowering</a><a class="headerlink" href="#function-signature-lowering" title="Permalink to this headline">¶</a></h2>
+<p>Function signatures in Swift are lowered in two phases.</p>
+<div class="section" id="semantic-lowering">
+<h3><a class="toc-backref" href="#id21">Semantic lowering</a><a class="headerlink" href="#semantic-lowering" title="Permalink to this headline">¶</a></h3>
+<p>The first phase is a high-level semantic lowering, which does a number
+of things:</p>
+<ul>
+<li><p class="first">It determines a high-level calling convention: specifically, whether
+the function must match the C calling convention or the Swift
+calling convention.</p>
+</li>
+<li><p class="first">It decides the types of the parameters:</p>
+<ul class="simple">
+<li>Functions exported for the purposes of C or Objective-C may need
+to use bridged types rather than Swift&#8217;s native types.  For
+example, a function that formally returns Swift&#8217;s <cite>String</cite> type
+may be bridged to return an <cite>NSString</cite> reference instead.</li>
+<li>Functions which are values, not simply immediately called, may
+need their types lowered to follow to match a specific generic
+abstraction pattern.  This applies to functions that are
+parameters or results of the outer function signature.</li>
+</ul>
+</li>
+<li><p class="first">It identifies specific arguments and results which <em>must</em> be passed
+indirectly:</p>
+<ul class="simple">
+<li>Some types are inherently address-only:<ul>
+<li>The address of a weak reference must be registered with the
+runtime at all times; therefore, any <cite>struct</cite> with a weak field
+must always be passed indirectly.</li>
+<li>An existential type (if not class-bounded) may contain an
+inherently address-only value, or its layout may be sensitive to
+its current address.</li>
+<li>A value type containing an inherently address-only type as a
+field or case payload becomes itself inherently address-only.</li>
+</ul>
+</li>
+<li>Some types must be treated as address-only because their layout is
+not known statically:<ul>
+<li>The layout of a resilient value type may change in a later
+release; the type may even become inherently address-only by
+adding a weak reference.</li>
+<li>In a generic context, the layout of a type may be dependent on a
+type parameter.  The type parameter might even be inherently
+address-only at runtime.</li>
+<li>A value type containing a type whose layout isn&#8217;t known
+statically itself generally will not have a layout that can be
+known statically.</li>
+</ul>
+</li>
+<li>Other types must be passed or returned indirectly because the
+function type uses an abstraction pattern that requires it.  For
+example, a generic <cite>map</cite> function expects a function that takes a
+<cite>T</cite> and returns a <cite>U</cite>; the generic implementation of <cite>map</cite> will
+expect these values to be passed indirectly because their layout
+isn&#8217;t statically known.  Therefore, the signature of a function
+intended to be passed as this argument must pass them indirectly,
+even if they are actually known statically to be non-address-only
+types like (e.g.) <cite>Int</cite> and <cite>Float</cite>.</li>
+</ul>
+</li>
+<li><p class="first">It expands tuples in the parameter and result types.  This is done
+at this level both because it is affected by abstraction patterns
+and because different tuple elements may use different ownership
+conventions.  (This is most likely for imported APIs, where it&#8217;s the
+tuple elements that correspond to specific C or Objective-C parameters.)</p>
+<p>This completely eliminates top-level tuple types from the function
+signature except when they are a target of abstraction and thus are
+passed indirectly.  (A function with type <cite>(Float, Int) -&gt; Float</cite>
+can be abstracted as <cite>(T) -&gt; U</cite>, where <cite>T == (Float, Int)</cite>.)</p>
+</li>
+<li><p class="first">It determines ownership conventions for all parameters and results.</p>
+</li>
+</ul>
+<p>After this phase, a function type consists of an abstract calling
+convention, a list of parameters, and a list of results.  A parameter
+is a type, a flag for indirectness, and an ownership convention.  A
+result is a type, a flag for indirectness, and an ownership
+convention.  (Results need ownership conventions only for non-Swift
+calling conventions.)  Types will not be tuples unless they are
+indirect.</p>
+<p>Semantic lowering may also need to mark certain parameters and results
+as special, for the purposes of the special-case physical treatments
+of <cite>self</cite>, closure contexts, and error results.</p>
+</div>
+<div class="section" id="physical-lowering">
+<h3><a class="toc-backref" href="#id22">Physical lowering</a><a class="headerlink" href="#physical-lowering" title="Permalink to this headline">¶</a></h3>
+<p>The second phase of lowering translates a function type produced by
+semantic lowering into a C function signature.  If the function
+involves a parameter or result with special physical treatment,
+physical lowering initially ignores this value, then adds in the
+special treatment as agreed upon with the backend.</p>
+<div class="section" id="general-expansion-algorithm">
+<h4><a class="toc-backref" href="#id23">General expansion algorithm</a><a class="headerlink" href="#general-expansion-algorithm" title="Permalink to this headline">¶</a></h4>
+<p>Central to the operation of the physical-lowering algorithm is the
+<strong>generic expansion algorithm</strong>.  This algorithm turns any
+non-address-only Swift type in a sequence of zero or more <strong>legal
+type</strong>, where a legal type is either:</p>
+<ul class="simple">
+<li>an integer type, with a power-of-two size no larger than the maximum
+integer size supported by C on the target,</li>
+<li>a floating-point type supported by the target, or</li>
+<li>a vector type supported by the target.</li>
+</ul>
+<p>Obviously, this is target-specific.  The target also specifies a
+maximum voluntary integer size.  The legal type sequence only contains
+vector types or integer types larger than the maximum voluntary size
+when the type was explicit in the input.</p>
+<p>Pointers are represented as integers in the legal type sequence.  We
+assume there&#8217;s never a reason to differentiate them in the ABI as long
+as the effect of address spaces on pointer size is taken into account.
+If that&#8217;s not true, this algorithm should be adjusted.</p>
+<p>The result of the algorithm also associates each legal type with an
+offset.  This information is sufficient to reconstruct an object in
+memory from a series of values and vice-versa.</p>
+<p>The algorithm proceeds in two steps.</p>
+<div class="section" id="typed-layouts">
+<h5><a class="toc-backref" href="#id24">Typed layouts</a><a class="headerlink" href="#typed-layouts" title="Permalink to this headline">¶</a></h5>
+<p>First, the type is recursively analyzed to produce a <strong>typed layout</strong>.
+A typed layout associates ranges of bytes with either (1) a legal type
+(whose storage size must match the size of the associated byte
+range), (2) the special type <strong>opaque</strong>, or (3) the special type
+<strong>empty</strong>.  Adjacent ranges mapped to <strong>opaque</strong> or <strong>empty</strong> can be
+combined.</p>
+<p>For most of the types in Swift, this process is obvious: they either
+correspond to an obvious legal type (e.g. thick metatypes are
+pointer-sized integers), or to an obvious sequence of scalars
+(e.g. class existentials are a sequence of pointer-sized integers).
+Only a few cases remain:</p>
+<ul>
+<li><p class="first">Integer types that are not legal types should be mapped as opaque.</p>
+</li>
+<li><p class="first">Vector types that are not legal types should be broken into smaller
+vectors, if their size is an even multiple of a legal vector type,
+or else broken into their components.  (This rule may need some
+tinkering.)</p>
+</li>
+<li><p class="first">Tuples and structs are mapped by merging the typed layouts of the
+fields, as padded out to the extents of the aggregate with
+empty-mapped ranges.  Note that, if fields do not overlap, this is
+equivalent to concatenating the typed layouts of the fields, in
+address order, mapping internal padding to empty.  Bit-fields should
+map the bits they occupy to opaque.</p>
+<p>For example, given the following struct type:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>struct FlaggedPair {
+  var flag: Bool
+  var pair: (MyClass, Float)
+}
+</pre></div>
+</div>
+<p>If Swift performs naive, C-like layout of this structure, and this
+is a 64-bit platform, typed layout is mapped as follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="no">FlaggedPair</span><span class="p">.</span><span class="n">flag</span><span class="w"> </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="w"> </span><span class="n">i1</span><span class="p">, </span><span class="w">                       </span><span class="p">]</span>
+<span class="no">FlaggedPair</span><span class="p">.</span><span class="n">pair</span><span class="w"> </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="w">       </span><span class="mi">8</span><span class="o">-</span><span class="mi">15</span><span class="p">:</span><span class="w"> </span><span class="n">i64</span><span class="p">, </span><span class="mi">16</span><span class="o">-</span><span class="mi">19</span><span class="p">:</span><span class="w"> </span><span class="n">float</span><span class="p">]</span>
+<span class="n">FlaggedPair</span><span class="w">      </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="w"> </span><span class="n">i1</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">-</span><span class="mi">15</span><span class="p">:</span><span class="w"> </span><span class="n">i64</span><span class="p">,</span><span class="w"> </span><span class="mi">16</span><span class="o">-</span><span class="mi">19</span><span class="p">:</span><span class="w"> </span><span class="n">float</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>If Swift instead allocates <cite>flag</cite> into the spare (little-endian) low
+bits of <cite>pair.0</cite>, the typed layout map would be:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="no">FlaggedPair</span><span class="p">.</span><span class="n">flag</span><span class="w"> </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="w"> </span><span class="n">i1</span><span class="w">                   </span><span class="p">]</span>
+<span class="no">FlaggedPair</span><span class="p">.</span><span class="n">pair</span><span class="w"> </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">i64</span><span class="p">, </span><span class="w">   </span><span class="mi">8</span><span class="o">-</span><span class="mi">11</span><span class="p">:</span><span class="w"> </span><span class="n">float</span><span class="p">]</span>
+<span class="n">FlaggedPair</span><span class="w">      </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">-</span><span class="mi">11</span><span class="p">:</span><span class="w"> </span><span class="n">float</span><span class="p">]</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Unions (imported from C) are mapped by merging the typed layouts of
+the fields, as padded out to the extents of the aggregate with
+empty-mapped ranges.  This will often result in a fully-opaque
+mapping.</p>
+</li>
+<li><p class="first">Enums are mapped by merging the typed layouts of the cases, as
+padded out to the extents of the aggregate with empty-mapped ranges.
+A case&#8217;s typed layout consists of the typed layout of the case&#8217;s
+directly-stored payload (if any), merged with the typed layout for
+its discriminator.  We assume that checking for a discriminator
+involves a series of comparisons of bits extracted from
+non-overlapping ranges of the value; the typed layout of a
+discriminator maps all these bits to opaque and the rest to empty.</p>
+<p>For example, given the following enum type:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">enum</span><span class="w"> </span><span class="n">Sum</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Yes</span><span class="p">(</span><span class="n">MyClass</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">No</span><span class="p">(</span><span class="n">Float</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">Maybe</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>If Swift, in its infinite wisdom, decided to lay this out
+sequentially, and to use invalid pointer values the class to
+indicate that the other cases are present, the layout would look as
+follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">Sum</span><span class="p">.</span><span class="no">Yes</span><span class="p">.</span><span class="n">payload</span><span class="w">        </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">i64</span><span class="w">                </span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="no">Yes</span><span class="p">.</span><span class="n">discriminator</span><span class="w">  </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="w">             </span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="n">Yes</span><span class="w">                </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="w">             </span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="no">No</span><span class="p">.</span><span class="n">payload</span><span class="w">         </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="w">             </span><span class="mi">8</span><span class="o">-</span><span class="mi">11</span><span class="p">:</span><span class="w"> </span><span class="n">float</span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="no">No</span><span class="p">.</span><span class="n">discriminator</span><span class="w">   </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="w">             </span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="n">No</span><span class="w">                 </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">-</span><span class="mi">11</span><span class="p">:</span><span class="w"> </span><span class="n">float</span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="n">Maybe</span><span class="w">              </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="w">             </span><span class="p">]</span>
+<span class="n">Sum</span><span class="w">                    </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">-</span><span class="mi">11</span><span class="p">:</span><span class="w"> </span><span class="n">float</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>If Swift instead chose to just use a discriminator byte, the layout
+would look as follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">Sum</span><span class="p">.</span><span class="no">Yes</span><span class="p">.</span><span class="n">payload</span><span class="w">        </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">i64</span><span class="w">             </span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="no">Yes</span><span class="p">.</span><span class="n">discriminator</span><span class="w">  </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="w">            </span><span class="mi">8</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="n">Yes</span><span class="w">                </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">i64</span><span class="p">,</span><span class="w">   </span><span class="mi">8</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="no">No</span><span class="p">.</span><span class="n">payload</span><span class="w">         </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">3</span><span class="p">:</span><span class="w"> </span><span class="n">float</span><span class="w">           </span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="no">No</span><span class="p">.</span><span class="n">discriminator</span><span class="w">   </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="w">            </span><span class="mi">8</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="n">No</span><span class="w">                 </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">3</span><span class="p">:</span><span class="w"> </span><span class="n">float</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="n">Maybe</span><span class="w">              </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="w">            </span><span class="mi">8</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">]</span>
+<span class="n">Sum</span><span class="w">                    </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">8</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="w">          </span><span class="p">]</span>
+</pre></div>
+</div>
+<p>If Swift chose to use spare low (little-endian) bits in the class
+pointer, and to offset the float to make this possible, the layout
+would look as follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">Sum</span><span class="p">.</span><span class="no">Yes</span><span class="p">.</span><span class="n">payload</span><span class="w">        </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">i64</span><span class="w">             </span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="no">Yes</span><span class="p">.</span><span class="n">discriminator</span><span class="w">  </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="w">            </span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="n">Yes</span><span class="w">                </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="w">          </span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="no">No</span><span class="p">.</span><span class="n">payload</span><span class="w">         </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="w">           </span><span class="mi">4</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">float</span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="no">No</span><span class="p">.</span><span class="n">discriminator</span><span class="w">   </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="w">            </span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="n">No</span><span class="w">                 </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">float</span><span class="p">]</span>
+<span class="n">Sum</span><span class="p">.</span><span class="n">Maybe</span><span class="w">              </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="w">            </span><span class="p">]</span>
+<span class="n">Sum</span><span class="w">                    </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="w">          </span><span class="p">]</span>
+</pre></div>
+</div>
+</li>
+</ul>
+<p>The merge algorithm for typed layouts is as follows.  Consider two
+typed layouts <cite>L</cite> and <cite>R</cite>.  A range from <cite>L</cite> is said to <em>conflict</em>
+with a range from <cite>R</cite> if they intersect and they are mapped as
+different non-empty types.  If two ranges conflict, and either range
+is mapped to a vector, replace it with mapped ranges for the vector
+elements.  If two ranges conflict, and neither range is mapped to a
+vector, map them both to opaque, combining them with adjacent opaque
+ranges as necessary.  If a range is mapped to a non-empty type, and
+the bytes in the range are all mapped as empty in the other map, add
+that range-mapping to the other map.  <cite>L</cite> and <cite>R</cite> should now match
+perfectly; this is the result of the merge.  Note that this algorithm
+is both associative and commutative.</p>
+</div>
+<div class="section" id="forming-a-legal-type-sequence">
+<h5><a class="toc-backref" href="#id25">Forming a legal type sequence</a><a class="headerlink" href="#forming-a-legal-type-sequence" title="Permalink to this headline">¶</a></h5>
+<p>Once the typed layout is constructed, it can be turned into a legal
+type sequence.</p>
+<p>Note that this transformation is sensitive to the offsets of ranges in
+the complete type.  It&#8217;s possible that the simplifications described
+here could be integrated directly into the construction of the typed
+layout without changing the results, but that&#8217;s not yet proven.</p>
+<p>In all of these examples, the maximum voluntary integer size is 4
+(<cite>i32</cite>) unless otherwise specified.</p>
+<p>If any range is mapped as a non-empty, non-opaque type, but its start
+offset is not a multiple of its natural alignment, remap it as opaque.
+For these purposes, the natural alignment of an integer type is the
+minimum of its size and the maximum voluntary integer size; the
+natural alignment of any other type is its C ABI type.  Combine
+adjacent opaque ranges.</p>
+<p>For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="p">[</span><span class="mi">1</span><span class="o">-</span><span class="mi">2</span><span class="p">:</span><span class="w"> </span><span class="n">i16</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">:</span><span class="w"> </span><span class="n">i8</span><span class="p">,</span><span class="w"> </span><span class="mi">6</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">i16</span><span class="p">]</span><span class="w">  </span><span class="o">==&gt;</span><span class="w">  </span><span class="p">[</span><span class="mi">1</span><span class="o">-</span><span class="mi">2</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">:</span><span class="w"> </span><span class="n">i8</span><span class="p">,</span><span class="w"> </span><span class="mi">6</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">i16</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>If any range is mapped as an integer type that is not larger than the
+maximum voluntary size, remap it as opaque.  Combine adjacent opaque
+ranges.</p>
+<p>For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="p">[</span><span class="mi">1</span><span class="o">-</span><span class="mi">2</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">:</span><span class="w"> </span><span class="n">i8</span><span class="p">,</span><span class="w"> </span><span class="mi">6</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">i16</span><span class="p">]</span><span class="w">  </span><span class="o">==&gt;</span><span class="w">  </span><span class="p">[</span><span class="mi">1</span><span class="o">-</span><span class="mi">2</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">,</span><span class="w"> </span><span class="mi">6</span><span class="o">-</span><span class="mi">7</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">]</span>
+<span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">3</span><span class="p">:</span><span class="w"> </span><span class="n">i32</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="o">-</span><span class="mi">11</span><span class="p">:</span><span class="w"> </span><span class="n">i64</span><span class="p">,</span><span class="w"> </span><span class="mi">12</span><span class="o">-</span><span class="mi">13</span><span class="p">:</span><span class="w"> </span><span class="n">i16</span><span class="p">]</span><span class="w">  </span><span class="o">==&gt;</span><span class="w">  </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">3</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="o">-</span><span class="mi">11</span><span class="p">:</span><span class="w"> </span><span class="n">i64</span><span class="p">,</span><span class="w"> </span><span class="mi">12</span><span class="o">-</span><span class="mi">13</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>An <em>aligned storage unit</em> is an N-byte-aligned range of N bytes, where
+N is a power of 2 no greater than the maximum voluntary integer size.
+A <em>maximal</em> aligned storage unit has a size equal to the maximum
+voluntary integer size.</p>
+<p>Note that any remaining ranges mapped as integers must fully occupy
+multiple maximal aligned storage units.</p>
+<p>Split all opaque ranges at the boundaries of maximal aligned storage
+units.  From this point on, never combine adjacent opaque ranges
+across these boundaries.</p>
+<p>For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="p">[</span><span class="mi">1</span><span class="o">-</span><span class="mi">6</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">]</span><span class="w">  </span><span class="o">==&gt;</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="o">-</span><span class="mi">3</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="o">-</span><span class="mi">6</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Within each maximal aligned storage unit, find the smallest aligned
+storage unit which contains all the opaque ranges.  Replace the first
+opaque range in the maximal aligned storage unit with a mapping from
+that aligned storage unit to an integer of the aligned storage unit&#8217;s
+size.  Remove any other opaque ranges in the maximal aligned storage
+unit.  Note that this can create overlapping ranges in some cases.
+For this purposes of this calculation, the last maximal aligned
+storage unit should be considered &#8220;full&#8221;, as if the type had an
+infinite amount of empty tail-padding.</p>
+<p>For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="p">[</span><span class="mi">1</span><span class="o">-</span><span class="mi">2</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">]</span><span class="w">  </span><span class="o">==&gt;</span><span class="w">  </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">3</span><span class="p">:</span><span class="w"> </span><span class="n">i32</span><span class="p">]</span>
+<span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">]</span><span class="w">  </span><span class="o">==&gt;</span><span class="w">  </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="w"> </span><span class="n">i16</span><span class="p">]</span>
+<span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">]</span><span class="w">  </span><span class="o">==&gt;</span><span class="w">  </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">3</span><span class="p">:</span><span class="w"> </span><span class="n">i32</span><span class="p">]</span>
+<span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">9</span><span class="p">:</span><span class="w"> </span><span class="n">fp80</span><span class="p">,</span><span class="w"> </span><span class="mi">10</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">]</span><span class="w">  </span><span class="o">==&gt;</span><span class="w">  </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">9</span><span class="p">:</span><span class="w"> </span><span class="n">fp80</span><span class="p">,</span><span class="w"> </span><span class="mi">10</span><span class="p">:</span><span class="w"> </span><span class="n">i8</span><span class="p">]</span>
+
+<span class="c1">// If maximum voluntary size is 8 (i64):</span>
+<span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">9</span><span class="p">:</span><span class="w"> </span><span class="n">fp80</span><span class="p">,</span><span class="w"> </span><span class="mi">11</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">,</span><span class="w"> </span><span class="mi">13</span><span class="p">:</span><span class="w"> </span><span class="n">opaque</span><span class="p">]</span><span class="w">  </span><span class="o">==&gt;</span><span class="w">  </span><span class="p">[</span><span class="mi">0</span><span class="o">-</span><span class="mi">9</span><span class="p">:</span><span class="w"> </span><span class="n">fp80</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">-</span><span class="mi">15</span><span class="p">:</span><span class="w"> </span><span class="n">i64</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>(This assumes that <cite>fp80</cite> is a legal type for illustrative purposes.
+It would probably be a better policy for the actual x86-64 target to
+consider it illegal and treat it as opaque from the start, at least
+when lowering for the Swift calling convention; for C, it is important
+to produce an <cite>fp80</cite> mapping for ABI interoperation with C functions
+that take or return <cite>long double</cite> by value.)</p>
+<p>The final legal type sequence is the sequence of types for the
+non-empty ranges in the map.  The associated offset for each type is
+the offset of the start of the corresponding range.</p>
+<p>Only the final step can introduce overlapping ranges, and this is only
+possible if there&#8217;s a non-integer legal type which:</p>
+<ul class="simple">
+<li>has a natural alignment less than half of the size of the maximum
+voluntary integer size or</li>
+<li>has a store size is not a multiple of half the size of the maximum
+voluntary integer size.</li>
+</ul>
+<p>On our supported platforms, these conditions are only true on x86-64,
+and only of <cite>long double</cite>.</p>
+</div>
+</div>
+<div class="section" id="deconstruction-and-reconstruction">
+<h4><a class="toc-backref" href="#id26">Deconstruction and Reconstruction</a><a class="headerlink" href="#deconstruction-and-reconstruction" title="Permalink to this headline">¶</a></h4>
+<p>Given the address of an object and a legal type sequence for its type,
+it&#8217;s straightforward to load a valid sequence or store the sequence
+back into memory.  For the most part, it&#8217;s sufficient to simply load
+or store each value at its appropriate offset.  There are two
+subtleties:</p>
+<ul class="simple">
+<li>If the legal type sequence had any overlapping ranges, the integer
+values should be stored first to prevent overwriting parts of the
+other values they overlap.</li>
+<li>Care must be taken with the final values in the sequence; integer
+values may extend slightly beyond the ordinary storage size of the
+argument type.  This is usually easy to compensate for.</li>
+</ul>
+<p>The value sequence essentially has the same semantics that the value
+in memory would have: any bits that aren&#8217;t part of the actual
+representation of the original type have a completely unspecified
+value.</p>
+</div>
+<div class="section" id="forming-a-c-function-signature">
+<h4><a class="toc-backref" href="#id27">Forming a C function signature</a><a class="headerlink" href="#forming-a-c-function-signature" title="Permalink to this headline">¶</a></h4>
+<p>As mentioned before, in principle the process of physical lowering
+turns a semantically-lowered Swift function type (in implementation
+terms, a SILFunctionType) into a C function signature, which can then
+be lowered according to the usual rules for the ABI.  This is, in
+fact, what we do when trying to match a C calling convention.
+However, for the native Swift calling convention, because we actively
+want to use more aggressive rules for results, we instead build an
+LLVM function type directly.  We first construct a direct result type
+that we&#8217;re certain the backend knows how to interpret according to our
+more aggressive desired rules, and then we use the expansion algorithm
+to construct a parameter sequence consisting solely of types with
+obvious ABI lowering that the backend can reliably handle.  This
+bypasses the need to consult Clang for our own native calling
+convention.</p>
+<p>We have this generic expansion algorithm, but it&#8217;s important to
+understand that the physical lowering process does not just naively
+use the results of this algorithm.  The expansion algorithm will
+happily expand an arbitrary structure; if that structure is very
+large, the algorithm might turn it into hundreds of values.  It would
+be foolish to pass it as an argument that way; it would use up all the
+argument registers and basically turn into a very inefficient memcpy,
+and if the caller wanted it all in one place, they&#8217;d have to very
+painstakingly reassemble.  It&#8217;s much better to pass large structures
+indirectly.  And with result values, we really just don&#8217;t have a
+choice; there&#8217;s only so many registers you can use before you have to
+give up and return indirectly.  Therefore, even in the Swift native
+convention, the expansion algorithm is basically used as a first pass.
+A second pass then decides whether the expanded sequence is actually
+reasonable to pass directly.</p>
+<p>Recall that one aspect of the semantically-lowered Swift function type
+is whether we should be matching the C calling convention or not.  The
+following algorithm here assumes that the importer and semantic
+lowering have conspired in a very particular way to make that
+possible.  Specifically, we assume is that an imported C function
+type, lowered semantically by Swift, will follow some simple
+structural rules:</p>
+<ul class="simple">
+<li>If there was a by-value <cite>struct</cite> or <cite>union</cite> parameter or result in
+the imported C type, it will correspond to a by-value direct
+parameter or return type in Swift, and the Swift type will be a
+nominal type whose declaration links back to the original C
+declaration.</li>
+<li>Any other parameter or result will be transformed by the importer
+and semantic lowering to a type that the generic expansion algorithm
+will expand to a single legal type whose representation is
+ABI-compatible with the original parameter.  For example, an
+imported pointer type will eventually expand to an integer of
+pointer size.</li>
+<li>There will be at most one result in the lowered Swift type, and it
+will be direct.</li>
+</ul>
+<p>Given this, we go about lowering the function type as follows.  Recall
+that, when matching the C calling convention, we&#8217;re building a C
+function type; but that when matching the Swift native calling
+convention, we&#8217;re building an LLVM function type directly.</p>
+<div class="section" id="results">
+<h5><a class="toc-backref" href="#id28">Results</a><a class="headerlink" href="#results" title="Permalink to this headline">¶</a></h5>
+<p>The first step is to consider the results of the function.</p>
+<p>There&#8217;s a different set of rules here when we&#8217;re matching the C
+calling convention.  If there&#8217;s a single direct result type, and it&#8217;s
+a nominal type imported from Clang, then the result type of the C
+function type is that imported Clang type.  Otherwise, concatenate the
+legal type sequences from the direct results.  If this yields an empty
+sequence, the result type is <cite>void</cite>.  If it yields a single legal
+type, the result type is the corresponding Clang type.  No other could
+actually have come from an imported C declaration, so we don&#8217;t have
+any real compatibility requirements; for the convenience of
+interoperation, this is handled by constructing a new C struct which
+contains the corresponding Clang types for the legal type sequence as
+its fields.</p>
+<p>Otherwise, we are matching the Swift calling convention.  Concatenate
+the legal type sequences from all the direct results.  If
+target-specific logic decides that this is an acceptable collection to
+return directly, construct the appropriate IR result type to convince
+the backend to handle it.  Otherwise, use the <cite>void</cite> IR result type
+and return the &#8220;direct&#8221; results indirectly by passing the address of a
+tuple combining the original direct results (<em>not</em> the types from the
+legal type sequence).</p>
+<p>Finally, any indirect results from the semantically-lowered function
+type are simply added as pointer parameters.</p>
+</div>
+<div class="section" id="parameters">
+<h5><a class="toc-backref" href="#id29">Parameters</a><a class="headerlink" href="#parameters" title="Permalink to this headline">¶</a></h5>
+<p>After all the results are collected, it&#8217;s time to collect the
+parameters.  This is done one at the time, from left to right, adding
+parameters to our physically-lowered type.</p>
+<p>If semantic lowering has decided that we have to pass the parameter
+indirectly, we simply add a pointer to the type.  This covers both
+mandatory-indirect pass-by-value parameters and pass-by-reference
+parameters.  The latter can arise even in C and Objective-C.</p>
+<p>Otherwise, the rules are somewhat different if we&#8217;re matching the C
+calling convention.  If the parameter is a nominal type imported from
+Clang, then we just add the imported Clang type to the Clang function
+type as a parameter.  Otherwise, we derive the legal type sequence for
+the parameter type.  Again, we should only have compatibility
+requirements if the legal type sequence has a single element, but for
+the convenience of interoperation, we collect the corresponding Clang
+types for all of the elements of the sequence.</p>
+<p>Finally, if we&#8217;re matching the Swift calling convention, derive the
+legal type sequence.  If the result appears to be a reasonably small
+and efficient set of parameters, add their corresponding IR types to
+the function type we&#8217;re building; otherwise, ignore the legal type
+sequence and pass the address of the original type indirectly.</p>
+<p>Considerations for whether a legal type sequence is reasonable to pass
+directly:</p>
+<ul class="simple">
+<li>There probably ought to be a maximum size.  Unless it&#8217;s a single
+256-bit vector, it&#8217;s hard to imagine wanting to pass more than, say,
+32 bytes of data as individual values.  The callee may decide that
+it needs to reconstruct the value for some reason, and the larger
+the type gets, the more expensive this is.  It may also be
+reasonable for this cap to be lower on 32-bit targets, but that
+might be dealt with better by the next restriction.</li>
+<li>There should also be a cap on the number of values.  A 32-byte limit
+might be reasonable for passing 4 doubles.  It&#8217;s probably not
+reasonable for passing 8 pointers.  That many values will exhaust
+all the parameter registers for just a single value.  4 is probably
+a reasonable cap here.</li>
+<li>There&#8217;s no reason to require the data to be homogeneous.  If a
+struct contains three floats and a pointer, why force it to be
+passed in memory?</li>
+</ul>
+<p>When all of the parameters have been processed in this manner,
+the function type is complete.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>

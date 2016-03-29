@@ -1,0 +1,945 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>ARC Optimization for Swift &mdash; Swift 3.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 3.0 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 3.0 documentation</span></a></h1>
+        <h2 class="heading"><span>ARC Optimization for Swift</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="arc-optimization-for-swift">
+<h1><a class="toc-backref" href="#id1">ARC Optimization for Swift</a><a class="headerlink" href="#arc-optimization-for-swift" title="Permalink to this headline">¶</a></h1>
+<div class="contents topic" id="contents">
+<p class="topic-title first">Contents</p>
+<ul class="simple">
+<li><a class="reference internal" href="#arc-optimization-for-swift" id="id1">ARC Optimization for Swift</a><ul>
+<li><a class="reference internal" href="#terms" id="id2">Terms</a></li>
+<li><a class="reference internal" href="#reference-counting-instructions" id="id3">Reference Counting Instructions</a></li>
+<li><a class="reference internal" href="#memory-behavior-of-arc-operations" id="id4">Memory Behavior of ARC Operations</a></li>
+<li><a class="reference internal" href="#arc-and-copying" id="id5">ARC and Copying</a></li>
+<li><a class="reference internal" href="#rc-identity" id="id6">RC Identity</a><ul>
+<li><a class="reference internal" href="#definitions" id="id7">Definitions</a></li>
+<li><a class="reference internal" href="#contrasts-with-alias-analysis" id="id8">Contrasts with Alias Analysis</a></li>
+<li><a class="reference internal" href="#what-is-retain-value-and-why-is-it-important" id="id9">what is <code class="docutils literal"><span class="pre">retain_value</span></code> and why is it important</a></li>
+<li><a class="reference internal" href="#conversions" id="id10">Conversions</a></li>
+<li><a class="reference internal" href="#arc-and-enums" id="id11">ARC and Enums</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#copy-on-write-considerations" id="id12">Copy-On-Write Considerations</a><ul>
+<li><a class="reference internal" href="#is-unique-instruction" id="id13">is_unique instruction</a></li>
+<li><a class="reference internal" href="#builtin-isunique" id="id14">Builtin.isUnique</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#semantic-tags" id="id15">Semantic Tags</a><ul>
+<li><a class="reference internal" href="#arc-programtermination-point" id="id16">arc.programtermination_point</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#arc-sequence-optimization" id="id17">ARC Sequence Optimization</a></li>
+<li><a class="reference internal" href="#arc-loop-hoisting" id="id18">ARC Loop Hoisting</a><ul>
+<li><a class="reference internal" href="#abstract" id="id19">Abstract</a></li>
+<li><a class="reference internal" href="#loop-canonicalization" id="id20">Loop Canonicalization</a></li>
+<li><a class="reference internal" href="#motiviation" id="id21">Motiviation</a></li>
+<li><a class="reference internal" href="#correctness" id="id22">Correctness</a></li>
+<li><a class="reference internal" href="#compensating-early-exits-for-lost-dynamic-reference-counts" id="id23">Compensating Early Exits for Lost Dynamic Reference Counts</a></li>
+<li><a class="reference internal" href="#uniqueness-check-complications" id="id24">Uniqueness Check Complications</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="admonition-todo admonition">
+<p class="first admonition-title">TODO</p>
+<p class="last">This is an evolving document on ARC optimization in the swift
+compiler. Please extend it.</p>
+</div>
+<div class="section" id="terms">
+<h2><a class="toc-backref" href="#id2">Terms</a><a class="headerlink" href="#terms" title="Permalink to this headline">¶</a></h2>
+<p>Some terms that are used often times in this document that must be
+defined. These may have more general definitions else where, but we define them
+with enough information for our purposes here:</p>
+<ol class="arabic simple">
+<li>Reference type: This is referring to a retainable pointer, not an aggregate
+that can contain a reference counted value.</li>
+<li>A trivial type: A type for which a retain_value on a value of this type is a
+no-op.</li>
+</ol>
+</div>
+<div class="section" id="reference-counting-instructions">
+<h2><a class="toc-backref" href="#id3">Reference Counting Instructions</a><a class="headerlink" href="#reference-counting-instructions" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>strong_retain</li>
+<li>strong_release</li>
+<li>strong_retain_unowned</li>
+<li>unowned_retain</li>
+<li>unowned_release</li>
+<li>load_weak</li>
+<li>store_weak</li>
+<li>fix_lifetime</li>
+<li>mark_dependence</li>
+<li>is_unique</li>
+<li>is_unique_or_pinned</li>
+<li>copy_block</li>
+</ul>
+</div>
+<div class="section" id="memory-behavior-of-arc-operations">
+<h2><a class="toc-backref" href="#id4">Memory Behavior of ARC Operations</a><a class="headerlink" href="#memory-behavior-of-arc-operations" title="Permalink to this headline">¶</a></h2>
+<p>At SIL level, reference counting and reference checking instructions
+are attributed with MayHaveSideEffects to prevent arbitrary passes
+from reordering them.</p>
+<p>At IR level, retains are marked NoModRef with respect to load and
+store instructions so they don&#8217;t pessimize memory dependence. (Note
+the Retains are still considered to write to memory with respect to
+other calls because getModRefBehavior is not overridden.) Releases
+cannot be marked NoModRef because they can have arbitrary side
+effects. Is_unique calls cannot be marked NoModRef because they cannot
+be reordered with other operations that may modify the reference
+count.</p>
+<div class="admonition-todo admonition">
+<p class="first admonition-title">TODO</p>
+<p class="last">Marking runtime calls with NoModRef in LLVM is misleading (they
+write memory), inconsistent (getModRefBehavior returns Unknown),
+and fragile (e.g. if we inline ARC operations at IR level). To be
+robust and allow stronger optimization, TBAA tags should be used to
+indicate functions that only access object metadata. This would
+also enable more LLVM level optimization in the presence of
+is_unique checks which currently appear to arbitrarily write memory.</p>
+</div>
+</div>
+<div class="section" id="arc-and-copying">
+<h2><a class="toc-backref" href="#id5">ARC and Copying</a><a class="headerlink" href="#arc-and-copying" title="Permalink to this headline">¶</a></h2>
+<p>TODO: Talk about how &#8220;ARC&#8221; and copying fit together. This means going into how
+retaining/releasing is really &#8220;copying&#8221;/&#8221;destroying&#8221; a pointer reference where
+the value that is pointed to does not change means you don&#8217;t have to change the
+bits.</p>
+<p>Talk about how this fits into &#64;owned and &#64;guaranteed parameters.</p>
+</div>
+<div class="section" id="rc-identity">
+<h2><a class="toc-backref" href="#id6">RC Identity</a><a class="headerlink" href="#rc-identity" title="Permalink to this headline">¶</a></h2>
+<p>A core ARC concept in Swift optimization is the concept of <code class="docutils literal"><span class="pre">Reference</span> <span class="pre">Count</span>
+<span class="pre">Identity</span></code> (RC Identity) and RC Identity preserving instructions. In this
+section, we:</p>
+<ol class="arabic simple">
+<li>Define concepts related to RC identity.</li>
+<li>Contrast RC identity analysis with alias analysis.</li>
+<li>Discuss instructions/properties that cause certain instructions which &#8220;seem&#8221;
+to be RC identical to not be so.</li>
+</ol>
+<div class="section" id="definitions">
+<h3><a class="toc-backref" href="#id7">Definitions</a><a class="headerlink" href="#definitions" title="Permalink to this headline">¶</a></h3>
+<p>Let <code class="docutils literal"><span class="pre">I</span></code> be a SIL instruction with n operands and m results. We say that <code class="docutils literal"><span class="pre">I</span></code>
+is a (i,j) RC Identity preserving instruction if performing a <code class="docutils literal"><span class="pre">retain_value</span></code>
+on the ith SSA argument immediately before <code class="docutils literal"><span class="pre">I</span></code> is executed is equivalent to
+performing a <code class="docutils literal"><span class="pre">retain_value</span></code> on the jth SSA result of <code class="docutils literal"><span class="pre">I</span></code> immediately
+following the execution of <code class="docutils literal"><span class="pre">I</span></code>. For example in the following, if:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">retain_value</span><span class="w"> </span><span class="o">%</span><span class="n">x</span>
+<span class="o">%</span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">unary_instruction</span><span class="w"> </span><span class="o">%</span><span class="n">x</span>
+</pre></div>
+</div>
+<p>is equivalent to:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="o">%</span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">unary_instruction</span><span class="w"> </span><span class="o">%</span><span class="n">x</span>
+<span class="n">retain_value</span><span class="w"> </span><span class="o">%</span><span class="n">y</span>
+</pre></div>
+</div>
+<p>then we say that unary_instruction is a (0,0) RC Identity preserving
+instruction. In a case of a unary instruction, we omit (0,0) and just say that
+the instruction is RC Identity preserving.</p>
+<p>TODO: This section defines RC identity only for loadable types. We also need to
+define it for instructions on addresses and instructions that mix addresses and
+values. It should be pretty straight forward to do this.</p>
+<p>Given two SSA values <code class="docutils literal"><span class="pre">%a</span></code>, <code class="docutils literal"><span class="pre">%b</span></code>, we define <code class="docutils literal"><span class="pre">%a</span></code> as immediately RC
+identical to <code class="docutils literal"><span class="pre">%b</span></code> (or <code class="docutils literal"><span class="pre">%a</span> <span class="pre">~rci</span> <span class="pre">%b</span></code>) if there exists an instruction <code class="docutils literal"><span class="pre">I</span></code>
+such that:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">%a</span></code> is the jth result of <code class="docutils literal"><span class="pre">I</span></code>.</li>
+<li><code class="docutils literal"><span class="pre">%b</span></code> is the ith argument of <code class="docutils literal"><span class="pre">I</span></code>.</li>
+<li><code class="docutils literal"><span class="pre">I</span></code> is (i,j) RC identity preserving.</li>
+</ul>
+<p>Due to the nature of SSA form, we can not even speak of symmetry or
+reflexivity. But we do get transitivity! Easily if <code class="docutils literal"><span class="pre">%b</span> <span class="pre">~rci</span> <span class="pre">%a</span></code> and <code class="docutils literal"><span class="pre">%c</span> <span class="pre">~rci</span>
+<span class="pre">%b</span></code>, we must by these two assumptions be able to do the following:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">retain_value</span><span class="w"> </span><span class="o">%</span><span class="n">a</span>
+<span class="o">%</span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">unary_instruction</span><span class="w"> </span><span class="o">%</span><span class="n">a</span>
+<span class="o">%</span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">unary_instruction</span><span class="w"> </span><span class="o">%</span><span class="n">b</span>
+</pre></div>
+</div>
+<p>which by our assumption means that we can perform the following code motion:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="o">%</span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">unary_instruction</span><span class="w"> </span><span class="o">%</span><span class="n">a</span>
+<span class="o">%</span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">unary_instruction</span><span class="w"> </span><span class="o">%</span><span class="n">b</span>
+<span class="n">retain_value</span><span class="w"> </span><span class="o">%</span><span class="n">c</span>
+</pre></div>
+</div>
+<p>our desired result. But we would really like for this operation to be reflexive
+and symmetric. To get around this issue, we define the equivalent relation RC
+identity as follows: We say that <code class="docutils literal"><span class="pre">%a</span> <span class="pre">~rc</span> <span class="pre">%b</span></code> if:</p>
+<ol class="arabic simple">
+<li><code class="docutils literal"><span class="pre">%a</span> <span class="pre">==</span> <span class="pre">%b</span></code></li>
+<li><code class="docutils literal"><span class="pre">%a</span> <span class="pre">~rci</span> <span class="pre">%b</span></code> or <code class="docutils literal"><span class="pre">%b</span> <span class="pre">~rci</span> <span class="pre">%a</span></code>.</li>
+<li>There exists a finite sequence of <code class="docutils literal"><span class="pre">n</span></code> SSA values <code class="docutils literal"><span class="pre">{%a[i]}</span></code> such that:
+a. <code class="docutils literal"><span class="pre">%a</span> <span class="pre">~rci</span> <span class="pre">%a[0]</span></code>
+b. <code class="docutils literal"><span class="pre">%a[i]</span> <span class="pre">~rci</span> <span class="pre">%a[i+1]</span></code> for all <code class="docutils literal"><span class="pre">i</span> <span class="pre">&lt;</span> <span class="pre">n</span></code>.
+c. <code class="docutils literal"><span class="pre">%a[n]</span> <span class="pre">~rci</span> <span class="pre">%b</span></code>.</li>
+</ol>
+<p>These equivalence classes consisting of chains of RC identical values are
+computed via the SILAnalysis called <code class="docutils literal"><span class="pre">RC</span> <span class="pre">Identity</span> <span class="pre">Analysis</span></code>. By performing ARC
+optimization on RC Identical operations, our optimizations are able to operate
+on the level of granularity that we actually care about, ignoring superficial
+changes in SSA form that still yield manipulations of the same reference count.</p>
+<div class="admonition-note admonition">
+<p class="first admonition-title">NOTE</p>
+<p class="last">RCIdentityAnalysis is a flow insensitive analysis. Dataflow that needs to
+be flow sensitive must handle phi nodes in the dataflow itself.</p>
+</div>
+</div>
+<div class="section" id="contrasts-with-alias-analysis">
+<h3><a class="toc-backref" href="#id8">Contrasts with Alias Analysis</a><a class="headerlink" href="#contrasts-with-alias-analysis" title="Permalink to this headline">¶</a></h3>
+<p>A common question is what is the difference in between RC Identity analysis and
+alias analysis. While alias analysis is attempting to determine if two memory
+location are the same, RC identity analysis is attempting to determine if
+reference counting operations on different values would result in the same
+reference count being read or written to.</p>
+<p>Some interesting examples of where RC identity differs from alias analysis are:</p>
+<blockquote>
+<div><ul class="simple">
+<li><code class="docutils literal"><span class="pre">struct</span></code> is an RC identity preserving operation if the <code class="docutils literal"><span class="pre">struct</span></code> literal
+only has one non-trivial operand. This means for instance that any struct
+with one reference counted field used as an owning pointer is RC Identical
+with its owning pointer (a useful property for Arrays).</li>
+<li>An <code class="docutils literal"><span class="pre">enum</span></code> instruction is always RC Identical with the given tuple payload.</li>
+<li>A <code class="docutils literal"><span class="pre">tuple</span></code> instruction is an RC identity preserving operation if the
+<code class="docutils literal"><span class="pre">tuple</span></code> literal has one non-trivial operand.</li>
+<li><code class="docutils literal"><span class="pre">init_class_existential</span></code> is an RC identity preserving operation since
+performing a retain_value on a class existential is equivalent to performing
+a retain_value on the class itself.</li>
+</ul>
+</div></blockquote>
+<p>The corresponding value projection operations have analogous properties.</p>
+<div class="admonition-note admonition">
+<p class="first admonition-title">NOTE</p>
+<p class="last">An important consequence of RC Identity is that value types with only one
+RCIdentity are a simple case for ARC optimization to handle. The ARC
+optimizer relies on other optimizations like SROA, Function Signature Opts,
+and SimplifyCFG (for block arguments) to try and eliminate cases where value
+types have multiple reference counted subtypes. If one has a struct type
+with multiple reference counted sub fields, wrapping the struct in a COW
+data structure (for instance storing the struct in an array of one element)
+will reduce the reference count overhead.</p>
+</div>
+</div>
+<div class="section" id="what-is-retain-value-and-why-is-it-important">
+<h3><a class="toc-backref" href="#id9">what is <code class="docutils literal"><span class="pre">retain_value</span></code> and why is it important</a><a class="headerlink" href="#what-is-retain-value-and-why-is-it-important" title="Permalink to this headline">¶</a></h3>
+<p>Notice in the section above how we defined RC identity using the SIL
+<code class="docutils literal"><span class="pre">retain_value</span></code> instruction. <code class="docutils literal"><span class="pre">retain_value</span></code> and <code class="docutils literal"><span class="pre">release_value</span></code> are the
+catch-all please retain or please release this value at the SIL level. The
+following table is a quick summary of what <code class="docutils literal"><span class="pre">retain_value</span></code> (<code class="docutils literal"><span class="pre">release_value</span></code>)
+does when applied to various types of objects:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="10%" />
+<col width="13%" />
+<col width="77%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Ownership</th>
+<th class="head">Type</th>
+<th class="head">Effect</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>Strong</td>
+<td>Class</td>
+<td>Increment strong ref count of class</td>
+</tr>
+<tr class="row-odd"><td>Any</td>
+<td>Struct/Tuple</td>
+<td>retain_value each field</td>
+</tr>
+<tr class="row-even"><td>Any</td>
+<td>Enum</td>
+<td>switch on the enum and apply retain_value to the enum case&#8217;s payload (if it exists)</td>
+</tr>
+<tr class="row-odd"><td>Unowned</td>
+<td>Class</td>
+<td>Increment the unowned ref count of class</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition-notice admonition">
+<p class="first admonition-title">Notice</p>
+<p class="last">Aggregate value types like struct/tuple/enums&#8217;s definitions are defined
+recursively via retain_value on payloads/fields. This is why operations like
+<code class="docutils literal"><span class="pre">struct_extract</span></code> do not always propagate RC identity.</p>
+</div>
+</div>
+<div class="section" id="conversions">
+<h3><a class="toc-backref" href="#id10">Conversions</a><a class="headerlink" href="#conversions" title="Permalink to this headline">¶</a></h3>
+<p>Conversions are a common operation that propagate RC identity. But not all
+conversions have these properties. In this section, we attempt to explain why
+this is true. The rule for conversions is that a conversion that preserves RC
+identity must have the following properties:</p>
+<ol class="arabic">
+<li><p class="first">Both of its arguments must be non-trivial values with the same ownership
+semantics (i.e. unowned, strong, weak). This means that conversions such as:</p>
+<ul class="simple">
+<li>address_to_pointer</li>
+<li>pointer_to_address</li>
+<li>unchecked_trivial_bitcast</li>
+<li>ref_to_raw_pointer</li>
+<li>raw_pointer_to_ref</li>
+<li>ref_to_unowned</li>
+<li>unowned_to_ref</li>
+<li>ref_to_unmanaged</li>
+<li>unmanaged_to_ref</li>
+</ul>
+<p>The reason why we want the ownership semantics to be the same is that
+whenever there is a change in ownership semantics, we want the programmer to
+explicitly reason about the change in ownership semantics.</p>
+</li>
+<li><p class="first">The instruction must not introduce type aliasing. This disqualifies such
+casts as:</p>
+<ul class="simple">
+<li>unchecked_addr_cast</li>
+<li>unchecked_bitwise_cast</li>
+</ul>
+</li>
+</ol>
+<p>This means in sum that conversions that preserve types and preserve
+non-trivialness are the interesting instructions.</p>
+</div>
+<div class="section" id="arc-and-enums">
+<h3><a class="toc-backref" href="#id11">ARC and Enums</a><a class="headerlink" href="#arc-and-enums" title="Permalink to this headline">¶</a></h3>
+<p>Enum types provide interesting challenges for ARC optimization. This is because
+if there exists one case where an enum is non-trivial, the aggregate type in all
+situations must be treated as if it is non-trivial. An important consideration
+here is that when performing ARC optimization on cases, one has to be very
+careful about ensuring that one only ignores reference count operations on
+values that are able to be proved to be that specific case.</p>
+<div class="admonition-todo admonition">
+<p class="first admonition-title">TODO</p>
+<p class="last">This section needs to be filled out more.</p>
+</div>
+</div>
+</div>
+<div class="section" id="copy-on-write-considerations">
+<h2><a class="toc-backref" href="#id12">Copy-On-Write Considerations</a><a class="headerlink" href="#copy-on-write-considerations" title="Permalink to this headline">¶</a></h2>
+<p>The copy-on-write capabilities of some data structures, such as Array
+and Set, are efficiently implemented via Builtin.isUnique calls which
+lower directly to is_unique instructions in SIL.</p>
+<p>The is_unique instruction takes the address of a reference, and
+although it does not actually change the reference, the reference must
+appear mutable to the optimizer. This forces the optimizer to preserve
+a retain distinct from what&#8217;s required to maintain lifetime for any of
+the reference&#8217;s source-level copies, because the called function is
+allowed to replace the reference, thereby releasing the
+referent. Consider the following sequence of rules:</p>
+<ol class="arabic simple">
+<li>An operation taking the address of a variable is allowed to
+replace the reference held by that variable. The fact that
+is_unique will not actually replace it is opaque to the optimizer.</li>
+<li>If the refcount is 1 when the reference is replaced, the referent
+is deallocated.</li>
+<li>A different source-level variable pointing at the same referent
+must not be changed/invalidated by such a call.</li>
+<li>If such a variable exists, the compiler must guarantee the
+refcount is &gt; 1 going into the call.</li>
+</ol>
+<p>With the is_unique instruction, the variable whose reference is being
+checked for uniqueness appears mutable at the level of an individual
+SIL instruction. After IRGen, is_unique instructions are expanded into
+runtime calls that no longer take the address of the
+variable. Consequently, LLVM-level ARC optimization must be more
+conservative. It must not remove retain/release pairs of this form:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">retain</span><span class="w"> </span><span class="n">X</span>
+<span class="n">retain</span><span class="w"> </span><span class="n">X</span>
+<span class="n">_swift_isUniquelyReferenced</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+<span class="n">release</span><span class="w"> </span><span class="n">X</span>
+<span class="n">release</span><span class="w"> </span><span class="n">X</span>
+</pre></div>
+</div>
+<p>To prevent removal of the apparently redundant inner retain/release
+pair, the LLVM ARC optimizer should model _swift_isUniquelyReferenced
+as a function that may release X, use X, and exit the program (the
+subsequent release instruction does not prove safety).</p>
+<div class="section" id="is-unique-instruction">
+<span id="arcopts-is-unique"></span><h3><a class="toc-backref" href="#id13">is_unique instruction</a><a class="headerlink" href="#is-unique-instruction" title="Permalink to this headline">¶</a></h3>
+<p>As explained above, the SIL-level is_unique instruction enforces the
+semantics of uniqueness checks in the presence of ARC
+optimization. The kind of reference count checking that
+is_unique performs depends on the argument type:</p>
+<blockquote>
+<div><ul class="simple">
+<li>Native object types are directly checked by reading the strong
+reference count:
+(Builtin.NativeObject, known native class reference)</li>
+<li>Objective-C object types require an additional check that the
+dynamic object type uses native swift reference counting:
+(Builtin.UnknownObject, unknown class reference, class existential)</li>
+<li>Bridged object types allow the dynamic object type check to be
+bypassed based on the pointer encoding:
+(Builtin.BridgeObject)</li>
+</ul>
+</div></blockquote>
+<p>Any of the above types may also be wrapped in an optional.  If the
+static argument type is optional, then a null check is also performed.</p>
+<p>Thus, is_unique only returns true for non-null, native swift object
+references with a strong reference count of one.</p>
+<p>is_unique_or_pinned has the same semantics as is_unique except that it
+also returns true if the object is marked pinned (by strong_pin)
+regardless of the reference count. This allows for simultaneous
+non-structural modification of multiple subobjects.</p>
+</div>
+<div class="section" id="builtin-isunique">
+<h3><a class="toc-backref" href="#id14">Builtin.isUnique</a><a class="headerlink" href="#builtin-isunique" title="Permalink to this headline">¶</a></h3>
+<p>Builtin.isUnique and Builtin.isUniqueOrPinned give the standard
+library access to optimization safe uniqueness checking. Because the
+type of reference check is derived from the builtin argument&#8217;s static
+type, the most efficient check is automatically generated. However, in
+some cases, the standard library can dynamically determine that it has
+a native reference even though the static type is a bridge or unknown
+object. Unsafe variants of the builtin are available to allow the
+additional pointer bit mask and dynamic class lookup to be bypassed in
+these cases:</p>
+<ul class="simple">
+<li>isUnique_native : &lt;T&gt; (inout T[?]) -&gt; Int1</li>
+<li>isUniqueOrPinned_native : &lt;T&gt; (inout T[?]) -&gt; Int1</li>
+</ul>
+<p>These builtins perform an implicit cast to NativeObject before
+checking uniqueness. There&#8217;s no way at SIL level to cast the address
+of a reference, so we need to encapsulate this operation as part of
+the builtin.</p>
+</div>
+</div>
+<div class="section" id="semantic-tags">
+<h2><a class="toc-backref" href="#id15">Semantic Tags</a><a class="headerlink" href="#semantic-tags" title="Permalink to this headline">¶</a></h2>
+<p>ARC takes advantage of certain semantic tags. This section documents these
+semantics and their meanings.</p>
+<div class="section" id="arc-programtermination-point">
+<h3><a class="toc-backref" href="#id16">arc.programtermination_point</a><a class="headerlink" href="#arc-programtermination-point" title="Permalink to this headline">¶</a></h3>
+<p>If this semantic tag is applied to a function, then we know that:</p>
+<ul class="simple">
+<li>The function does not touch any reference counted objects.</li>
+<li>After the function is executed, all reference counted objects are leaked
+(most likely in preparation for program termination).</li>
+</ul>
+<p>This allows one, when performing ARC code motion, to ignore blocks that contain
+an apply to this function as long as the block does not have any other side
+effect having instructions.</p>
+</div>
+</div>
+<div class="section" id="arc-sequence-optimization">
+<h2><a class="toc-backref" href="#id17">ARC Sequence Optimization</a><a class="headerlink" href="#arc-sequence-optimization" title="Permalink to this headline">¶</a></h2>
+<p>TODO: Fill this in.</p>
+</div>
+<div class="section" id="arc-loop-hoisting">
+<h2><a class="toc-backref" href="#id18">ARC Loop Hoisting</a><a class="headerlink" href="#arc-loop-hoisting" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="abstract">
+<h3><a class="toc-backref" href="#id19">Abstract</a><a class="headerlink" href="#abstract" title="Permalink to this headline">¶</a></h3>
+<p>This section describes the ARCLoopHoisting algorithm that hoists retains and
+releases out of loops. This is a high level description that justifies the
+correction of the algorithm and describes its design. In the following
+discussion we talk about the algorithm conceptually and show its safety and
+considerations necessary for good performance.</p>
+<div class="admonition-note admonition">
+<p class="first admonition-title">NOTE</p>
+<p class="last">In the following when we refer to &#8220;hoisting&#8221;, we are not just talking about
+upward code motion of retains, but also downward code motion of releases.</p>
+</div>
+</div>
+<div class="section" id="loop-canonicalization">
+<h3><a class="toc-backref" href="#id20">Loop Canonicalization</a><a class="headerlink" href="#loop-canonicalization" title="Permalink to this headline">¶</a></h3>
+<p>In the following we assume that all loops are canonicalized such that:</p>
+<ol class="arabic simple">
+<li>The loop has a pre-header.</li>
+<li>The loop has one backedge.</li>
+<li>All exiting edges have a unique exit block.</li>
+</ol>
+</div>
+<div class="section" id="motiviation">
+<h3><a class="toc-backref" href="#id21">Motiviation</a><a class="headerlink" href="#motiviation" title="Permalink to this headline">¶</a></h3>
+<p>Consider the following simple loop:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">bb0</span><span class="p">:</span>
+<span class="w">  </span><span class="n">br</span><span class="w"> </span><span class="n">bb1</span>
+
+<span class="n">bb1</span><span class="p">:</span>
+<span class="w">  </span><span class="n">retain</span><span class="w"> </span><span class="o">%</span><span class="n">x</span><span class="w">                    </span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+<span class="w">  </span><span class="n">release</span><span class="w"> </span><span class="o">%</span><span class="n">x</span><span class="w">                   </span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="w">  </span><span class="n">cond_br</span><span class="w"> </span><span class="o">..</span><span class="p">.,</span><span class="w"> </span><span class="n">bb1</span><span class="p">,</span><span class="w"> </span><span class="n">bb2</span>
+
+<span class="n">bb2</span><span class="p">:</span>
+<span class="w">  </span><span class="kr">return</span><span class="w"> </span><span class="o">..</span><span class="p">.</span>
+</pre></div>
+</div>
+<p>When it is safe to hoist (1),(2) out of the loop? Imagine if we know the trip
+count of the loop is 3 and completely unroll the loop so the whole function is
+one basic block. In such a case, we know the function looks as follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">bb0</span><span class="p">:</span>
+<span class="w">  </span><span class="p">#</span><span class="w"> </span><span class="n">Loop</span><span class="w"> </span><span class="n">Iteration</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">  </span><span class="n">retain</span><span class="w"> </span><span class="o">%</span><span class="n">x</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+<span class="w">  </span><span class="n">release</span><span class="w"> </span><span class="o">%</span><span class="n">x</span><span class="w">                   </span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+
+<span class="w">  </span><span class="p">#</span><span class="w"> </span><span class="n">Loop</span><span class="w"> </span><span class="n">Iteration</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">  </span><span class="n">retain</span><span class="w"> </span><span class="o">%</span><span class="n">x</span><span class="w">                    </span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+<span class="w">  </span><span class="n">release</span><span class="w"> </span><span class="o">%</span><span class="n">x</span><span class="w">                   </span><span class="p">(</span><span class="mi">6</span><span class="p">)</span>
+
+<span class="w">  </span><span class="p">#</span><span class="w"> </span><span class="n">Loop</span><span class="w"> </span><span class="n">Iteration</span><span class="w"> </span><span class="mi">2</span>
+<span class="w">  </span><span class="n">retain</span><span class="w"> </span><span class="o">%</span><span class="n">x</span><span class="w">                    </span><span class="p">(</span><span class="mi">7</span><span class="p">)</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+<span class="w">  </span><span class="n">release</span><span class="w"> </span><span class="o">%</span><span class="n">x</span>
+
+<span class="w">  </span><span class="kr">return</span><span class="w"> </span><span class="o">..</span><span class="p">.</span>
+</pre></div>
+</div>
+<p>Notice how (3) can be paired with (4) and (5) can be paired with (6). Assume
+that we eliminate those. Then the function looks as follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">bb0</span><span class="p">:</span>
+<span class="w">  </span><span class="p">#</span><span class="w"> </span><span class="n">Loop</span><span class="w"> </span><span class="n">Iteration</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">  </span><span class="n">retain</span><span class="w"> </span><span class="o">%</span><span class="n">x</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+
+<span class="w">  </span><span class="p">#</span><span class="w"> </span><span class="n">Loop</span><span class="w"> </span><span class="n">Iteration</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+
+<span class="w">  </span><span class="p">#</span><span class="w"> </span><span class="n">Loop</span><span class="w"> </span><span class="n">Iteration</span><span class="w"> </span><span class="mi">2</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+<span class="w">  </span><span class="n">release</span><span class="w"> </span><span class="o">%</span><span class="n">x</span>
+
+<span class="w">  </span><span class="kr">return</span><span class="w"> </span><span class="o">..</span><span class="p">.</span>
+</pre></div>
+</div>
+<p>We can then re-roll the loop, yielding the following loop:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span><span class="n">bb0</span><span class="p">:</span>
+<span class="w">  </span><span class="n">retain</span><span class="w"> </span><span class="o">%</span><span class="n">x</span><span class="w">                    </span><span class="p">(</span><span class="mi">8</span><span class="p">)</span>
+<span class="w">  </span><span class="n">br</span><span class="w"> </span><span class="n">bb1</span>
+
+<span class="n">bb1</span><span class="p">:</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+<span class="w">  </span><span class="n">apply</span><span class="w"> </span><span class="o">%</span><span class="n">f</span><span class="p">(</span><span class="o">%</span><span class="n">x</span><span class="p">)</span>
+<span class="w">  </span><span class="n">cond_br</span><span class="w"> </span><span class="o">..</span><span class="p">.,</span><span class="w"> </span><span class="n">bb1</span><span class="p">,</span><span class="w"> </span><span class="n">bb2</span>
+
+<span class="n">bb2</span><span class="p">:</span>
+<span class="w">  </span><span class="n">release</span><span class="w"> </span><span class="o">%</span><span class="n">x</span><span class="w">                   </span><span class="p">(</span><span class="mi">9</span><span class="p">)</span>
+<span class="w">  </span><span class="kr">return</span><span class="w"> </span><span class="o">..</span><span class="p">.</span>
+</pre></div>
+</div>
+<p>Notice that this transformation is equivalent to just hoisting (1) and (2) out
+of the loop in the original example. This form of hoisting is what is termed
+&#8220;ARCLoopHoisting&#8221;. What is key to notice is that even though we are performing
+&#8220;hoisting&#8221; we are actually pairing releases from one iteration with retains in
+the next iteration and then eliminating the pairs. This realization will guide
+our further analysis.</p>
+</div>
+<div class="section" id="correctness">
+<h3><a class="toc-backref" href="#id22">Correctness</a><a class="headerlink" href="#correctness" title="Permalink to this headline">¶</a></h3>
+<p>In this simple loop case, the proof of correctness is very simple to see
+conceptually. But in a more general case, when is safe to perform this
+optimization? We must consider three areas of concern:</p>
+<ol class="arabic simple">
+<li>Are the retains/releases upon the same reference count? This can be found
+conservatively by using RCIdentityAnalysis.</li>
+<li>Can we move retains, releases in the unrolled case as we have specified?
+This is simple since it is always safe to move a retain earlier and a release
+later in the dynamic execution of a program. This can only extend the life of
+a variable which is a legal and generally profitable in terms of allowing for
+this optimization.</li>
+<li>How do we pair all necessary retains/releases to ensure we do not unbalance
+retain/release counts in the loop? Consider a set of retains and a set of
+releases that we wish to hoist out of a loop. We can only hoist the retain,
+release sets out of the loop if all paths in the given loop region from the
+entrance to the backedge.  have exactly one retain or release from this set.</li>
+<li>Any early exits that we must move a retain past or a release by must be
+compensated appropriately. This will be discussed in the next section.</li>
+</ol>
+<p>Assuming that our optimization does all of these things, we should be able to
+hoist with safety.</p>
+</div>
+<div class="section" id="compensating-early-exits-for-lost-dynamic-reference-counts">
+<h3><a class="toc-backref" href="#id23">Compensating Early Exits for Lost Dynamic Reference Counts</a><a class="headerlink" href="#compensating-early-exits-for-lost-dynamic-reference-counts" title="Permalink to this headline">¶</a></h3>
+<p>Lets say that we have the following loop canonicalized SIL:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>bb0(%0 : $Builtin.NativeObject):
+  br bb1
+
+bb1:
+  strong_retain %0 : $Builtin.NativeObject
+  apply %f(%0)
+  apply %f(%0)
+  strong_release %0 : $Builtin.NativeObject
+  cond_br ..., bb2, bb3
+
+bb2:
+  cond_br ..., bb1, bb4
+
+bb3:
+  br bb5
+
+bb4:
+  br bb5
+
+bb6:
+  return ...
+</pre></div>
+</div>
+<p>Can we hoist the retain/release pair here? Lets assume the loop is 3 iterations
+and we completely unroll it. Then we have:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>bb0:
+  strong_retain %0 : $Builtin.NativeObject               (1)
+  apply %f(%0)
+  apply %f(%0)
+  strong_release %0 : $Builtin.NativeObject              (2)
+  cond_br ..., bb1, bb4
+
+bb1: // preds: bb0
+  strong_retain %0 : $Builtin.NativeObject               (3)
+  apply %f(%0)
+  apply %f(%0)
+  strong_release %0 : $Builtin.NativeObject              (4)
+  cond_br ..., bb2, bb4
+
+bb2: // preds: bb1
+  strong_retain %0 : $Builtin.NativeObject               (5)
+  apply %f(%0)
+  apply %f(%0)
+  strong_release %0 : $Builtin.NativeObject              (6)
+  cond_br ..., bb3, bb4
+
+bb3: // preds: bb2
+  br bb5
+
+bb4: // preds: bb0, bb1, bb2
+  br bb5
+
+bb5: // preds: bb3, bb4
+  return ...
+</pre></div>
+</div>
+<p>We want to be able to pair and eliminate (2)/(3) and (4)/(5). In order to do
+that, we need to move (2) from bb0 into bb1 and (4) from bb1 into bb2. In order
+to do this, we need to move a release along all paths into bb4 lest we lose
+dynamic releases along that path. We also sink (6) in order to not have an extra
+release along that path. This then give us:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>bb0:
+  strong_retain %0 : $Builtin.NativeObject               (1)
+
+bb1:
+  apply %f(%0)
+  apply %f(%0)
+  cond_br ..., bb2, bb3
+
+bb2:
+  cond_br ..., bb1, bb4
+
+bb3:
+  strong_release %0 : $Builtin.NativeObject              (6*)
+  br bb5
+
+bb4:
+  strong_release %0 : $Builtin.NativeObject              (7*)
+  br bb5
+
+bb5: // preds: bb3, bb4
+  return ...
+</pre></div>
+</div>
+<p>An easy inductive proof follows.</p>
+<p>What if we have the opposite problem, that of moving a retain past an early
+exit. Consider the following:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>bb0(%0 : $Builtin.NativeObject):
+  br bb1
+
+bb1:
+  cond_br ..., bb2, bb3
+
+bb2:
+  strong_retain %0 : $Builtin.NativeObject
+  apply %f(%0)
+  apply %f(%0)
+  strong_release %0 : $Builtin.NativeObject
+  cond_br ..., bb1, bb4
+
+bb3:
+  br bb5
+
+bb4:
+  br bb5
+
+bb6:
+  return ...
+</pre></div>
+</div>
+<p>Lets unroll this loop:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>bb0(%0 : $Builtin.NativeObject):
+  br bb1
+
+# Iteration 1
+bb1: // preds: bb0
+  cond_br ..., bb2, bb8
+
+bb2: // preds: bb1
+  strong_retain %0 : $Builtin.NativeObject               (1)
+  apply %f(%0)
+  apply %f(%0)
+  strong_release %0 : $Builtin.NativeObject              (2)
+  br bb3
+
+# Iteration 2
+bb3: // preds: bb2
+  cond_br ..., bb4, bb8
+
+bb4: // preds: bb3
+  strong_retain %0 : $Builtin.NativeObject               (3)
+  apply %f(%0)
+  apply %f(%0)
+  strong_release %0 : $Builtin.NativeObject              (4)
+  br bb5
+
+# Iteration 3
+bb5: // preds: bb4
+  cond_br ..., bb6, bb8
+
+bb6: // preds: bb5
+  strong_retain %0 : $Builtin.NativeObject               (5)
+  apply %f(%0)
+  apply %f(%0)
+  strong_release %0 : $Builtin.NativeObject              (6)
+  cond_br ..., bb7, bb8
+
+bb7: // preds: bb6
+  br bb9
+
+bb8: // Preds: bb1, bb3, bb5, bb6
+  br bb9
+
+bb9:
+  return ...
+</pre></div>
+</div>
+<p>First we want to move the retain into the previous iteration. This means that we
+have to move a retain over the cond_br in bb1, bb3, bb5. If we were to do that
+then bb8 would have an extra dynamic retain along that path. In order to fix
+that issue, we need to balance that release by putting a release in bb8. But we
+cannot move a release into bb8 without considering the terminator of bb6 since
+bb6 is also a predecessor of bb8. Luckily, we have (6). Notice that bb7 has one
+predecessor to bb6 so we can safely move 1 release along that path as well. Thus
+we perform that code motion, yielding the following:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>bb0(%0 : $Builtin.NativeObject):
+  br bb1
+
+# Iteration 1
+bb1: // preds: bb0
+  strong_retain %0 : $Builtin.NativeObject               (1)
+  cond_br ..., bb2, bb8
+
+bb2: // preds: bb1
+  apply %f(%0)
+  apply %f(%0)
+  strong_release %0 : $Builtin.NativeObject              (2)
+  br bb3
+
+# Iteration 2
+bb3: // preds: bb2
+  strong_retain %0 : $Builtin.NativeObject               (3)
+  cond_br ..., bb4, bb8
+
+bb4: // preds: bb3
+  apply %f(%0)
+  apply %f(%0)
+  strong_release %0 : $Builtin.NativeObject              (4)
+  br bb5
+
+# Iteration 3
+bb5: // preds: bb4
+  strong_retain %0 : $Builtin.NativeObject               (5)
+  cond_br ..., bb6, bb8
+
+bb6: // preds: bb5
+  apply %f(%0)
+  apply %f(%0)
+  cond_br ..., bb7, bb8
+
+bb7: // preds: bb6
+  strong_release %0 : $Builtin.NativeObject              (7*)
+  br bb9
+
+bb8: // Preds: bb1, bb3, bb5, bb6
+  strong_release %0 : $Builtin.NativeObject              (8*)
+  br bb9
+
+bb9:
+  return ...
+</pre></div>
+</div>
+<p>Then we move (1), (3), (4) into the single predecessor of their parent block and
+eliminate (3), (5) through a pairing with (2), (4) respectively. This yields
+then:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>bb0(%0 : $Builtin.NativeObject):
+  strong_retain %0 : $Builtin.NativeObject               (1)
+  br bb1
+
+# Iteration 1
+bb1: // preds: bb0
+  cond_br ..., bb2, bb8
+
+bb2: // preds: bb1
+  apply %f(%0)
+  apply %f(%0)
+  br bb3
+
+# Iteration 2
+bb3: // preds: bb2
+  cond_br ..., bb4, bb8
+
+bb4: // preds: bb3
+  apply %f(%0)
+  apply %f(%0)
+  br bb5
+
+# Iteration 3
+bb5: // preds: bb4
+  cond_br ..., bb6, bb8
+
+bb6: // preds: bb5
+  apply %f(%0)
+  apply %f(%0)
+  cond_br ..., bb7, bb8
+
+bb7: // preds: bb6
+  strong_release %0 : $Builtin.NativeObject              (7*)
+  br bb9
+
+bb8: // Preds: bb1, bb3, bb5, bb6
+  strong_release %0 : $Builtin.NativeObject              (8*)
+  br bb9
+
+bb9:
+  return ...
+</pre></div>
+</div>
+<p>Then we finish by rerolling the loop:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>bb0(%0 : $Builtin.NativeObject):
+  strong_retain %0 : $Builtin.NativeObject               (1)
+  br bb1
+
+# Iteration 1
+bb1: // preds: bb0
+  cond_br ..., bb2, bb8
+
+bb2:
+  apply %f(%0)
+  apply %f(%0)
+  cond_br bb1, bb7
+
+bb7:
+  strong_release %0 : $Builtin.NativeObject              (7*)
+  br bb9
+
+bb8: // Preds: bb1, bb3, bb5, bb6
+  strong_release %0 : $Builtin.NativeObject              (8*)
+  br bb9
+
+bb9:
+  return ...
+</pre></div>
+</div>
+</div>
+<div class="section" id="uniqueness-check-complications">
+<h3><a class="toc-backref" href="#id24">Uniqueness Check Complications</a><a class="headerlink" href="#uniqueness-check-complications" title="Permalink to this headline">¶</a></h3>
+<p>A final concern that we must consider is if we introduce extra copy on write
+copies through our optimization. To see this, consider the following simple
+IR sequence:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>bb0(%0 : $Builtin.NativeObject):
+  // refcount(%0) == n
+  is_unique %0 : $Builtin.NativeObject
+  // refcount(%0) == n
+  strong_retain %0 : $Builtin.NativeObject
+  // refcount(%0) == n+1
+</pre></div>
+</div>
+<p>If n is not 1, then trivially is_unique will return false. So assume that n is 1
+for our purposes so no copy is occurring here. Thus we have:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>bb0(%0 : $Builtin.NativeObject):
+  // refcount(%0) == 1
+  is_unique %0 : $Builtin.NativeObject
+  // refcount(%0) == 1
+  strong_retain %0 : $Builtin.NativeObject
+  // refcount(%0) == 2
+</pre></div>
+</div>
+<p>Now imagine that we move the strong_retain before the is_unique. Then we have:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span></span>bb0(%0 : $Builtin.NativeObject):
+  // refcount(%0) == 1
+  strong_retain %0 : $Builtin.NativeObject
+  // refcount(%0) == 2
+  is_unique %0 : $Builtin.NativeObject
+</pre></div>
+</div>
+<p>Thus is_unique is guaranteed to return false introducing a copy that was not
+needed. We wish to avoid that if it is at all possible.</p>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Apple Inc.
+      Last updated on 2016-03-24.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+    </div>
+  </body>
+</html>
