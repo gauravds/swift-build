@@ -5,7 +5,7 @@ Step 1. Use `swift-clone-all.sh` for download all essential repo
 
 Step 2. Run `swift-build.sh` for always compiling your own swift. (For cmd changes use `.bash_profile`)
 
-Step 3. Every time need to fetch the latest repos of apple/swift so for that purpuse use swift-fetch-all.sh
+Step 3. Every time need to fetch the latest repos of apple/swift so for that purpuse use `swift-fetch-all.sh`
 
 `Python 3 is required`
 
