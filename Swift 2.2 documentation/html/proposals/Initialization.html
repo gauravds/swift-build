@@ -1,0 +1,414 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Initialization &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Initialization</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="initialization">
+<h1><a class="toc-backref" href="#id1">Initialization</a><a class="headerlink" href="#initialization" title="Permalink to this headline">¶</a></h1>
+<div class="contents topic" id="contents">
+<p class="topic-title first">Contents</p>
+<ul class="simple">
+<li><a class="reference internal" href="#initialization" id="id1">Initialization</a><ul>
+<li><a class="reference internal" href="#superclass-delegation" id="id2">Superclass Delegation</a></li>
+<li><a class="reference internal" href="#peer-delegation" id="id3">Peer Delegation</a></li>
+<li><a class="reference internal" href="#initializer-inheritance" id="id4">Initializer Inheritance</a></li>
+<li><a class="reference internal" href="#virtual-initializers" id="id5">Virtual Initializers</a></li>
+<li><a class="reference internal" href="#initializers-in-protocols" id="id6">Initializers in Protocols</a></li>
+<li><a class="reference internal" href="#objective-c-interoperability" id="id7">Objective-C Interoperability</a><ul>
+<li><a class="reference internal" href="#objective-c-entrypoints" id="id8">Objective-C Entrypoints</a></li>
+<li><a class="reference internal" href="#objective-c-restrictions" id="id9">Objective-C Restrictions</a></li>
+<li><a class="reference internal" href="#remaining-soundness-holes" id="id10">Remaining Soundness Holes</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="superclass-delegation">
+<h2><a class="toc-backref" href="#id2">Superclass Delegation</a><a class="headerlink" href="#superclass-delegation" title="Permalink to this headline">¶</a></h2>
+<p>The initializer for a class that has a superclass must ensure that its
+superclass subobject gets initialized. The typical way to do so is
+through the use of superclass delegation:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class A {
+  var x: Int
+
+  init(x: Int) {
+    self.x = x
+  }
+}
+
+class B : A {
+  var value: String
+
+  init() {
+    value = &quot;Hello&quot;
+    super.init(5) // superclass delegation
+  }
+}
+</pre></div>
+</div>
+<p>Swift implements two-phase initialization, which requires that all of
+the instance variables of the subclass be initialized (either within
+the class or within the initializer) before delegating to the
+superclass initializer with <code class="docutils literal"><span class="pre">super.init</span></code>.</p>
+<p>If the superclass is a Swift class, superclass delegation is a direct
+call to the named initializer in the superclass. If the superclass is
+an Objective-C class, superclass delegation uses dynamic dispatch via
+<code class="docutils literal"><span class="pre">objc_msgSendSuper</span></code> (and its variants).</p>
+</div>
+<div class="section" id="peer-delegation">
+<h2><a class="toc-backref" href="#id3">Peer Delegation</a><a class="headerlink" href="#peer-delegation" title="Permalink to this headline">¶</a></h2>
+<p>An initializer can delegate to one of its peer initializers, which
+then takes responsibility for initializing this subobject and any
+superclass subobjects:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">extension </span><span class="nc">A</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">init </span><span class="nf">fromString</span><span class="p">(</span><span class="n">s</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">) {</span>
+<span class="w">    </span><span class="bp">self</span><span class="p">.</span><span class="n">init</span><span class="p">(</span><span class="no">Int</span><span class="p">(</span><span class="n">s</span><span class="p">))</span><span class="w"> </span><span class="c1">// peer delegation to init(Int)</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>One cannot access any of the instance variables of <code class="docutils literal"><span class="pre">self</span></code> nor invoke
+any instance methods on <code class="docutils literal"><span class="pre">self</span></code> before delegating to the peer
+initializer, because the object has not yet been
+constructed. Additionally, one cannot initialize the instance
+variables of <code class="docutils literal"><span class="pre">self</span></code>, prior to delegating to the peer, because doing
+so would lead to double initializations.</p>
+<p>Peer delegation is always a direct call to the named initializer, and
+always calls an initializer defined for the same type as the
+delegating initializer. Despite the syntactic similarities, this is
+very different from Objective-C&#8217;s <code class="docutils literal"><span class="pre">[self</span> <span class="pre">init...]</span></code>, which can call
+methods in either the superclass or subclass.</p>
+<p>Peer delegation is primarily useful when providing convenience
+initializers without having to duplicate initialization code. However,
+peer delegation is also the only viable way to implement an
+initializer for a type within an extension that resides in a different
+resilience domain than the definition of the type itself. For example,
+consider the following extension of <code class="docutils literal"><span class="pre">A</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">extension </span><span class="nc">A</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">init</span><span class="p">(</span><span class="n">i</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="w">    </span><span class="c1">// initialize x</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>If this extension is in a different resilience domain than the
+definition of <code class="docutils literal"><span class="pre">A</span></code>, there is no way to ensure that this initializer
+is initializing all of the instance variables of <code class="docutils literal"><span class="pre">A</span></code>: new instance
+variables could be added to <code class="docutils literal"><span class="pre">A</span></code> in a future version (these would not
+be properly initialized) and existing instance variables could become
+computed properties (these would be initialized when they shouldn&#8217;t
+be).</p>
+</div>
+<div class="section" id="initializer-inheritance">
+<h2><a class="toc-backref" href="#id4">Initializer Inheritance</a><a class="headerlink" href="#initializer-inheritance" title="Permalink to this headline">¶</a></h2>
+<p>Initializers are <em>not</em> inherited by default. Each subclass takes
+responsibility for its own initialization by declaring the
+initializers one can use to create it. To make a superclass&#8217;s
+initializer available in a subclass, one can re-declare the
+initializer and then use superclass delegation to call it:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">class </span><span class="nc">C</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">A</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">var </span><span class="nv">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;Hello&quot;</span>
+
+<span class="w">  </span><span class="n">init</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">super</span><span class="p">.</span><span class="n">init</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="w"> </span><span class="c1">// superclass delegation</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Although <code class="docutils literal"><span class="pre">C</span></code>&#8216;s initializer has the same parameters as <code class="docutils literal"><span class="pre">A</span></code>&#8216;s
+initializer, it does not &#8220;override&#8221; <code class="docutils literal"><span class="pre">A</span></code>&#8216;s initializer because there
+is no dynamic dispatch for initializers (but see below).</p>
+<p>We could syntax-optimize initializer inheritance if this becomes
+onerous. DaveA provides a reasonable suggestion:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class C : A {
+  var value = &quot;Hello&quot;
+
+  @inherit init(Int)
+}
+</pre></div>
+</div>
+<p><em>Note</em>: one can only inherit an initializer into a class <code class="docutils literal"><span class="pre">C</span></code> if all
+of the instance variables in that class have in-class initializers.</p>
+</div>
+<div class="section" id="virtual-initializers">
+<h2><a class="toc-backref" href="#id5">Virtual Initializers</a><a class="headerlink" href="#virtual-initializers" title="Permalink to this headline">¶</a></h2>
+<p>The initializer model above only safely permits initialization when we
+statically know the type of the complete object being initialized. For
+example, this permits the construction <code class="docutils literal"><span class="pre">A(5)</span></code> but not the
+following:</p>
+<div class="highlight-swift"><div class="highlight"><pre>func createAnA(aClass: A.metatype) -&gt; A {
+  return aClass(5) // error: no complete initializer accepting an ``Int``
+}
+</pre></div>
+</div>
+<p>The issue here is that, while <code class="docutils literal"><span class="pre">A</span></code> has an initializer accepting an
+<code class="docutils literal"><span class="pre">Int</span></code>, it&#8217;s not guaranteed that an arbitrary subclass of <code class="docutils literal"><span class="pre">A</span></code> will
+have such an initializer. Even if we had that guarantee, there
+wouldn&#8217;t necessarily be any way to call the initializer, because (as
+noted above), there is no dynamic dispatch for initializers.</p>
+<p>This is an unacceptable limitation for a few reasons. The most obvious
+reason is that <code class="docutils literal"><span class="pre">NSCoding</span></code> depends on dynamic dispatch to
+<code class="docutils literal"><span class="pre">-initWithCoder:</span></code> to deserialize an object of a class type that is
+dynamically determined, and Swift classes must safely support this
+paradigm. To address this limitation, we can add the <code class="docutils literal"><span class="pre">virtual</span></code>
+attribute to turn an initializer into a virtual initializer:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class A {
+  @virtual init(x: Int) { ... }
+}
+</pre></div>
+</div>
+<p>Virtual initializers can be invoked when constructing an object using
+an arbitrary value of metatype type (as in the <code class="docutils literal"><span class="pre">createAnA</span></code> example
+above), using dynamic dispatch. Therefore, we need to ensure that a
+virtual initializer is always a complete object initializer, which
+requires that every subclass provide a definition for each virtual
+initializer defined in its superclass. For example, the following
+class definition would be ill-formed:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class D : A {
+  var floating: Double
+}
+</pre></div>
+</div>
+<p>because <code class="docutils literal"><span class="pre">D</span></code> does not provide an initializer accepting an <code class="docutils literal"><span class="pre">Int</span></code>. To
+address this issue, one would add:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class D : A {
+  var floating: Double
+
+  @virtual init(x: Int) {
+    floating = 3.14159
+    super.init(x)
+  }
+}
+</pre></div>
+</div>
+<p>As a convenience, the compiler could synthesize virtual initializer
+definitions when all of the instance variables in the subclass have
+in-class initializers:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class D2 : A {
+  var floating = 3.14159
+
+  /* compiler-synthesized */
+  @virtual init(x: Int) {
+    super.init(x)
+  }
+}
+</pre></div>
+</div>
+<p>This looks a lot like inherited initializers, and can eliminate some
+boilerplate for simple subclasses. The primary downside is that the
+synthesized implementation might not be the right one, e.g., it will
+almost surely be wrong for an inherited <code class="docutils literal"><span class="pre">-initWithCoder:</span></code>. I don&#8217;t
+think this is worth doing.</p>
+<p><em>Note</em>: as a somewhat unfortunate side effect of the terminology, the
+initializers for structs and enums are considered to be virtual,
+because they are guaranteed to be complete object initializers. If
+this bothers us, we could use the term (and attribute) &#8220;complete&#8221;
+instead of &#8220;virtual&#8221;. I&#8217;d prefer to stick with &#8220;virtual&#8221; and accept
+the corner case.</p>
+</div>
+<div class="section" id="initializers-in-protocols">
+<h2><a class="toc-backref" href="#id6">Initializers in Protocols</a><a class="headerlink" href="#initializers-in-protocols" title="Permalink to this headline">¶</a></h2>
+<p>We currently ban initializers in protocols because we didn&#8217;t have an
+implementation model for them. Protocols, whether used via generics or
+via existentials, use dynamic dispatch through the witness table. More
+importantly, one of the important aspects of protocols is that, when a
+given class <code class="docutils literal"><span class="pre">A</span></code> conforms to a protocol <code class="docutils literal"><span class="pre">P</span></code>, all of the subclasses
+of <code class="docutils literal"><span class="pre">A</span></code> also conform to <code class="docutils literal"><span class="pre">P</span></code>. This property interacts directly with
+initializers:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">protocol </span><span class="nc">NSCoding</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">init </span><span class="nf">withCoder</span><span class="p">(</span><span class="n">coder</span><span class="p">:</span><span class="w"> </span><span class="n">NSCoder</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="kd">class </span><span class="nc">A</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">NSCoding</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">init </span><span class="nf">withCoder</span><span class="p">(</span><span class="n">coder</span><span class="p">:</span><span class="w"> </span><span class="n">NSCoder</span><span class="p">) {</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">class </span><span class="nc">B</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">A</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// conforms to NSCoding?</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Here, <code class="docutils literal"><span class="pre">A</span></code> appears to conform to <code class="docutils literal"><span class="pre">NSCoding</span></code> because it provides a
+matching initializer. <code class="docutils literal"><span class="pre">B</span></code> should conform to <code class="docutils literal"><span class="pre">NSCoding</span></code>, because it
+should inherit its conformance from <code class="docutils literal"><span class="pre">A</span></code>, but the lack of an
+<code class="docutils literal"><span class="pre">initWithCoder:</span></code> initializer causes problems. The fix here is to
+require that the witness be a virtual initializer, which guarantees
+that all of the subclasses will have the same initializer. Thus, the
+definition of <code class="docutils literal"><span class="pre">A</span></code> above will be ill-formed unless <code class="docutils literal"><span class="pre">initWithCoder:</span></code>
+is made virtual:</p>
+<div class="highlight-swift"><div class="highlight"><pre>protocol NSCoding {
+  init withCoder(coder: NSCoder)
+}
+
+class A : NSCoding {
+  @virtual init withCoder(coder: NSCoder) { /* ... */ }
+}
+
+class B : A {
+  // either error (due to missing initWithCoder) or synthesized initWithCoder:
+}
+</pre></div>
+</div>
+<p>As noted earlier, the initializers of structs and enums are considered
+virtual.</p>
+</div>
+<div class="section" id="objective-c-interoperability">
+<h2><a class="toc-backref" href="#id7">Objective-C Interoperability</a><a class="headerlink" href="#objective-c-interoperability" title="Permalink to this headline">¶</a></h2>
+<p>The initialization model described above guarantees that objects are
+properly initialized before they are used, covering all of the major
+use cases for initialization while maintaining soundness. Objective-C
+has a very different initialization model with which Swift must
+interoperate.</p>
+<div class="section" id="objective-c-entrypoints">
+<h3><a class="toc-backref" href="#id8">Objective-C Entrypoints</a><a class="headerlink" href="#objective-c-entrypoints" title="Permalink to this headline">¶</a></h3>
+<p>Each Swift initializer definition produces a corresponding Objective-C
+init method. The existence of this init method allows object
+construction from Objective-C (both directly via <code class="docutils literal"><span class="pre">[[A</span> <span class="pre">alloc]</span>
+<span class="pre">init:5]</span></code> and indirectly via, e.g., <code class="docutils literal"><span class="pre">[obj</span> <span class="pre">initWithCoder:coder]</span></code>)
+and initialization of the superclass subobject when an Objective-C class
+inherits from a Swift class (e.g., <code class="docutils literal"><span class="pre">[super</span> <span class="pre">initWithCoder:coder]</span></code>).</p>
+<p>Note that, while Swift&#8217;s initializers are not inherited and cannot
+override, this is only true <em>in Swift code</em>. If a subclass defines an
+initializer with the same Objective-C selector as an initializer in
+its superclass, the Objective-C init method produced for the former
+will override the Objective-C init method produced for the
+latter.</p>
+</div>
+<div class="section" id="objective-c-restrictions">
+<h3><a class="toc-backref" href="#id9">Objective-C Restrictions</a><a class="headerlink" href="#objective-c-restrictions" title="Permalink to this headline">¶</a></h3>
+<p>The emission of Objective-C init methods for Swift initializers open
+up a few soundness problems, illustrated here:</p>
+<div class="highlight-swift"><div class="highlight"><pre>@interface A
+@end
+
+@implementation A
+- init {
+  return [self initWithInt:5];
+}
+
+- initWithInt:(int)x {
+  // initialize me
+}
+
+- initWithString:(NSString *)s {
+  // initialize me
+}
+@end
+
+class B1 : A {
+  var dict: NSDictionary
+
+  init withInt(x: Int) {
+    dict = []
+    super.init() // loops forever, initializing dict repeatedly
+  }
+}
+
+class B2 : A {
+}
+
+@interface C : B2
+@end
+
+@implementation C
+@end
+
+void getCFromString(NSString *str) {
+  return [C initWithString:str]; // doesn&#39;t initialize B&#39;s dict ivar
+}
+</pre></div>
+</div>
+<p>The first problem, with <code class="docutils literal"><span class="pre">B1</span></code>, comes from <code class="docutils literal"><span class="pre">A</span></code>&#8216;s dispatched
+delegation to <code class="docutils literal"><span class="pre">-initWithInt:</span></code>, which is overridden by <code class="docutils literal"><span class="pre">B1</span></code>&#8216;s
+initializer with the same selector. We can address this problem by
+enforcing that superclass delegation to an Objective-C superclass
+initializer refer to a designated initializer of that superclass when
+that class has at least one initializer marked as a designated
+initializer.</p>
+<p>The second problem, with <code class="docutils literal"><span class="pre">C</span></code>, comes from Objective-C&#8217;s implicit
+inheritance of initializers. We can address this problem by specifying
+that init methods in Objective-C are never visible through Swift
+classes, making the message send <code class="docutils literal"><span class="pre">[C</span> <span class="pre">initWithString:str]</span></code>
+ill-formed. This is a relatively small Clang-side change.</p>
+</div>
+<div class="section" id="remaining-soundness-holes">
+<h3><a class="toc-backref" href="#id10">Remaining Soundness Holes</a><a class="headerlink" href="#remaining-soundness-holes" title="Permalink to this headline">¶</a></h3>
+<p>Neither of the above &#8220;fixes&#8221; are complete. The first depends entirely
+on the adoption of a not-yet-implemented Clang attribute to mark the
+designated initializers for Objective-C classes, while the second is
+(almost trivially) defeated by passing the <code class="docutils literal"><span class="pre">-initWithString:</span></code>
+message to an object of type <code class="docutils literal"><span class="pre">id</span></code> or using some other dynamic
+reflection.</p>
+<p>If we want to close these holes tighter, we could stop emitting
+Objective-C init methods for Swift initializers. Instead, we would
+fake the init method declarations when importing Swift modules into
+Clang, and teach Clang&#8217;s CodeGen to emit calls directly to the Swift
+initializers. It would still not be perfect (e.g., some variant of the
+problem with <code class="docutils literal"><span class="pre">C</span></code> would persist), but it would be closer. I suspect
+that this is far more work than it is worth, and that the &#8220;fixes&#8221;
+described above are sufficient.</p>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

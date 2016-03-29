@@ -1,0 +1,864 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Unified Function Syntax via Selector Splitting &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../../_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="../../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../../index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Unified Function Syntax via Selector Splitting</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="unified-function-syntax-via-selector-splitting">
+<h1><a class="toc-backref" href="#id1">Unified Function Syntax via Selector Splitting</a><a class="headerlink" href="#unified-function-syntax-via-selector-splitting" title="Permalink to this headline">¶</a></h1>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This document was used in planning Swift 1.0; it has not been kept
+up to date and does not describe the current or planned behavior of Swift. In
+particular, we experimented with preposition-based splitting and decided
+against it.</p>
+</div>
+<div class="contents topic" id="contents">
+<p class="topic-title first">Contents</p>
+<ul class="simple">
+<li><a class="reference internal" href="#unified-function-syntax-via-selector-splitting" id="id1">Unified Function Syntax via Selector Splitting</a><ul>
+<li><a class="reference internal" href="#cocoa-selectors" id="id2">Cocoa Selectors</a></li>
+<li><a class="reference internal" href="#splitting-selectors-at-prepositions" id="id3">Splitting Selectors at Prepositions</a></li>
+<li><a class="reference internal" href="#calling-syntax" id="id4">Calling Syntax</a></li>
+<li><a class="reference internal" href="#declaration-syntax" id="id5">Declaration Syntax</a></li>
+<li><a class="reference internal" href="#method-names" id="id6">Method Names</a></li>
+<li><a class="reference internal" href="#initializers" id="id7">Initializers</a></li>
+<li><a class="reference internal" href="#handling-poor-mappings" id="id8">Handling Poor Mappings</a></li>
+<li><a class="reference internal" href="#optionality-and-ordering-of-keyword-arguments" id="id9">Optionality and Ordering of Keyword Arguments</a></li>
+<li><a class="reference internal" href="#removing-with-and-for-from-argument-names" id="id10">Removing <code class="docutils literal"><span class="pre">with</span></code> and <code class="docutils literal"><span class="pre">for</span></code> from Argument Names</a></li>
+<li><a class="reference internal" href="#which-prepositions" id="id11">Which Prepositions?</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="cocoa-selectors">
+<h2><a class="toc-backref" href="#id2">Cocoa Selectors</a><a class="headerlink" href="#cocoa-selectors" title="Permalink to this headline">¶</a></h2>
+<p>A Cocoa selector is intended to convey what a method does or produces
+as well as what its various arguments are. For example,
+<code class="docutils literal"><span class="pre">NSTableView</span></code> has the following method:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">void</span><span class="p">)</span><span class="n">moveRowAtIndex</span><span class="p">:(</span><span class="n">NSInteger</span><span class="p">)</span><span class="n">oldIndex</span><span class="w"> </span><span class="n">toIndex</span><span class="p">:(</span><span class="n">NSInteger</span><span class="p">)</span><span class="n">newIndex</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>Note that there are three pieces of information in the selector
+<code class="docutils literal"><span class="pre">moveRowAtIndex:toIndex:</span></code>:</p>
+<ol class="arabic simple">
+<li>What the method is doing (&#8220;moving a row&#8221;).</li>
+<li>What the first argument is (&#8220;the index of the row we&#8217;re moving&#8221;).</li>
+<li>What the second argument is (&#8220;the index we&#8217;re moving to&#8221;).</li>
+</ol>
+<p>However, there are only two selector pieces: &#8220;moveRowAtIndex&#8221; and
+&#8220;toIndex&#8221;. The first selector piece is conveying both #1 and #2, and
+it reads well in English because the preposition &#8220;at&#8221; separates the
+action (<code class="docutils literal"><span class="pre">moveRow</span></code>) from the first argument (<code class="docutils literal"><span class="pre">AtIndex</span></code>), while the
+second selector piece conveys #3. Cocoa conventions in this area are
+fairly strong, where the first selector piece describes what the
+operation is doing or produces, and well as what the first argument
+is, and subsequent selector pieces describe the remaining arguments.</p>
+</div>
+<div class="section" id="splitting-selectors-at-prepositions">
+<h2><a class="toc-backref" href="#id3">Splitting Selectors at Prepositions</a><a class="headerlink" href="#splitting-selectors-at-prepositions" title="Permalink to this headline">¶</a></h2>
+<p>When importing an Objective-C selector, split the first selector piece
+into a base method name and a first argument name. The actual split
+will occur just before the last preposition in the selector piece,
+using camelCase word boundaries to identify words. The resulting
+method name is:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">moveRow</span><span class="p">(</span><span class="n">atIndex</span><span class="p">:</span><span class="n">toIndex</span><span class="p">:)</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal"><span class="pre">moveRow</span></code> is the base name, <code class="docutils literal"><span class="pre">atIndex</span></code> is the name of the
+first argument (note that the &#8216;a&#8217; has been automatically lowercased),
+and <code class="docutils literal"><span class="pre">toIndex</span></code> is the name of the second argument.</p>
+<p>In the (fairly rare) case where there are two prepositions in the
+initial selector, splitting at the last preposition improves the
+likelihood of a better split, because the last prepositional phrase is
+more likely to pertain to the first argument. For example,
+<code class="docutils literal"><span class="pre">appendBezierPathWithArcFromPoint:toPoint:radius:</span></code> becomes:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">appendBezierPathWithArc</span><span class="p">(</span><span class="n">fromPoint</span><span class="p">:</span><span class="n">toPoint</span><span class="p">:</span><span class="n">radius</span><span class="p">:)</span>
+</pre></div>
+</div>
+<p>If there are no prepositions within the first selector piece, the
+entire first selector piece becomes the base name, and the first
+argument is unnamed. For example <code class="docutils literal"><span class="pre">UIView</span></code>&#8216;s
+<code class="docutils literal"><span class="pre">insertSubview:atIndex:</span></code> becomes:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">insertSubview</span><span class="p">(</span><span class="n">_</span><span class="p">:</span><span class="n">atIndex</span><span class="p">:)</span>
+</pre></div>
+</div>
+<p>where &#8216;_&#8217; is a placeholder for an argument with no name.</p>
+</div>
+<div class="section" id="calling-syntax">
+<h2><a class="toc-backref" href="#id4">Calling Syntax</a><a class="headerlink" href="#calling-syntax" title="Permalink to this headline">¶</a></h2>
+<p>By splitting selectors into a base name and argument names, Swift&#8217;s
+keyword-argument calling syntax works naturally:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">tableView</span><span class="p">.</span><span class="n">moveRow</span><span class="p">(</span><span class="n">atIndex</span><span class="p">:</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">toIndex</span><span class="p">:</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="n">view</span><span class="p">.</span><span class="n">insertSubview</span><span class="p">(</span><span class="n">someView</span><span class="p">,</span><span class="w"> </span><span class="n">atIndex</span><span class="p">:</span><span class="w"> </span><span class="n">i</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The syntax generalizes naturally to global and local functions that
+have no object argument, i.e.,:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="no">NSMakeRange</span><span class="p">(</span><span class="n">location</span><span class="p">:</span><span class="w"> </span><span class="n">loc</span><span class="p">,</span><span class="w"> </span><span class="n">length</span><span class="p">:</span><span class="w"> </span><span class="n">len</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>assuming that we had argument names for C functions or a Swift overlay
+that provided them. It also nicely handles cases where argument names
+aren&#8217;t available, e.g.,:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="no">NSMakeRange</span><span class="p">(</span><span class="n">loc</span><span class="p">,</span><span class="w"> </span><span class="n">len</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>as well as variadic methods:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="no">NSString</span><span class="p">.</span><span class="n">string</span><span class="p">(</span><span class="n">withFormat</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;%@ : %@&quot;</span><span class="p">, </span><span class="n">key</span><span class="p">, </span><span class="n">value</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="declaration-syntax">
+<h2><a class="toc-backref" href="#id5">Declaration Syntax</a><a class="headerlink" href="#declaration-syntax" title="Permalink to this headline">¶</a></h2>
+<p>The existing &#8220;selector-style&#8221; declaration syntax can be extended to
+better support declaring functions with separate base names and first
+argument names, i.e.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">moveRow atIndex</span><span class="p">(</span><span class="n">Int</span><span class="p">)</span><span class="nf"> toIndex</span><span class="p">(</span><span class="n">Int</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>However, this declaration looks very little like the call site, which
+uses a parenthesized argument list, commas, and colons. Let&#8217;s
+eliminate the &#8220;selector-style&#8221; declaration syntax entirely. We can use
+the existing (&#8220;tuple-style&#8221;) declaration syntax to mirror the call
+syntax directly:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">moveRow</span><span class="p">(</span><span class="n">atIndex</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">, </span><span class="n">toIndex</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Now, sometimes the argument name that works well at the call site
+doesn&#8217;t work well for the body of the function. For example, splitting
+the selector for <code class="docutils literal"><span class="pre">UIView</span></code>&#8216;s <code class="docutils literal"><span class="pre">contentHuggingPriorityForAxis:</span></code>
+results in:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">contentHuggingPriority</span><span class="p">(</span><span class="n">forAxis</span><span class="p">:</span><span class="w"> </span><span class="n">UILayoutConstraintAxis</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">UILayoutPriority</span>
+</pre></div>
+</div>
+<p>The name <code class="docutils literal"><span class="pre">forAxis</span></code> works well at the call site, but not within the
+function body. So, we allow one to specify the name of the parameter
+for the body of the function:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">contentHuggingPriority</span><span class="p">(</span><span class="n">forAxis</span><span class="w"> </span><span class="n">axis</span><span class="p">:</span><span class="w"> </span><span class="n">UILayoutConstraintAxis</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">UILayoutPriority</span><span class="p"> {</span>
+<span class="w">  </span><span class="c1">// use &#39;axis&#39; in the body</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>One can use &#8216;_&#8217; in either the argument or parameter name position to
+specify that there is no name. For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre>func f(_ a: Int)  // no argument name; parameter name is &#39;a&#39;
+func g(b _: Int)  // argument name is &#39;b&#39;; no parameter name
+</pre></div>
+</div>
+<p>The first function doesn&#8217;t support keyword arguments; it is what an
+imported C or C++ function would use. The second function supports a
+keyword argument (<code class="docutils literal"><span class="pre">b</span></code>), but the parameter is not named (and
+therefore cannot be used) within the body. The second form is fairly
+uncommon, and will presumably only to be used for backward
+compatibility.</p>
+</div>
+<div class="section" id="method-names">
+<h2><a class="toc-backref" href="#id6">Method Names</a><a class="headerlink" href="#method-names" title="Permalink to this headline">¶</a></h2>
+<p>The name of a method in this scheme is determined by the base name and
+the names of each of the arguments, and is written as:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">basename</span><span class="p">(</span><span class="n">param1</span><span class="p">:</span><span class="n">param2</span><span class="p">:</span><span class="n">param3</span><span class="p">:)</span>
+</pre></div>
+</div>
+<p>to mirror the form of declarations and calls, with types, arguments,
+and commas omitted. In code, one can refer to the name of a function
+just by its basename, if the context provides enough information to
+uniquely determine the method. For example, when uncurrying a method
+reference to a variable of specified type:</p>
+<div class="highlight-swift"><div class="highlight"><pre>let f: (UILayoutConstraintAxis) -&gt; UILayoutPriority = view.contentHuggingPriority
+</pre></div>
+</div>
+<p>To refer to the complete method name, place the method name in
+backticks, as in this reference to an optional method in a delegate:</p>
+<div class="highlight-swift"><div class="highlight"><pre>if let method = delegate.`tableView(_:viewForTableColumn:row:)` {
+  // ...
+}
+</pre></div>
+</div>
+</div>
+<div class="section" id="initializers">
+<h2><a class="toc-backref" href="#id7">Initializers</a><a class="headerlink" href="#initializers" title="Permalink to this headline">¶</a></h2>
+<p>Objective-C <code class="docutils literal"><span class="pre">init</span></code> methods correspond to initializers in
+Swift. Swift splits the selector name after the <code class="docutils literal"><span class="pre">init</span></code>. For example,
+<code class="docutils literal"><span class="pre">NSView</span></code>&#8216;s <code class="docutils literal"><span class="pre">initWithFrame:</span></code> method becomes the initializer:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">init</span><span class="p">(</span><span class="n">withFrame</span><span class="p">:</span><span class="w"> </span><span class="n">NSRect</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>There is a degenerate case here where the <code class="docutils literal"><span class="pre">init</span></code> method has
+additional words following <code class="docutils literal"><span class="pre">init</span></code>, but there is no argument with
+which to associate the information, such as with
+<code class="docutils literal"><span class="pre">initForIncrementalLoad</span></code>. This is currently handled by adding an
+empty tuple parameter to store the name, i.e.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">init</span><span class="p">(</span><span class="n">forIncrementalLoad</span><span class="p">:())</span>
+</pre></div>
+</div>
+<p>which requires the somewhat unfortunate initialization syntax:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="no">NSBitmapImageRep</span><span class="p">(</span><span class="n">forIncrementalLoad</span><span class="p">:())</span>
+</pre></div>
+</div>
+<p>Fortunately, this is a relatively isolated problem: Cocoa and Cocoa
+Touch contain only four selectors of this form:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">initForIncrementalLoad</span>
+<span class="n">initListDescriptor</span>
+<span class="n">initRecordDescriptor</span>
+<span class="n">initToMemory</span>
+</pre></div>
+</div>
+<p>With a number that small, it&#8217;s easy enough to provide overlays.</p>
+</div>
+<div class="section" id="handling-poor-mappings">
+<h2><a class="toc-backref" href="#id8">Handling Poor Mappings</a><a class="headerlink" href="#handling-poor-mappings" title="Permalink to this headline">¶</a></h2>
+<p>The split-at-last-preposition heuristic works well for a significant
+number of selectors, but it is not perfect. Therefore, we will
+introduce an attribute into Objective-C that allows one to specify the
+Swift method name for that Objective-C API. For example, by default,
+the <code class="docutils literal"><span class="pre">NSURL</span></code> method <code class="docutils literal"><span class="pre">+bookmarkDataWithContentsOfURL:error:</span></code> will
+come into Swift as:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class func bookmarkDataWithContents(ofURL bookmarkFileURL: NSURL, inout error: NSError) -&gt; NSData
+</pre></div>
+</div>
+<p>However, one can provide a different mapping with the <code class="docutils literal"><span class="pre">method_name</span></code>
+attribute:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">NSData</span><span class="w"> </span><span class="o">*</span><span class="p">)</span><span class="n">bookmarkDataWithContentsOfURL</span><span class="p">:(</span><span class="n">NSURL</span><span class="w"> </span><span class="o">*</span><span class="p">)</span><span class="n">bookmarkFileURL</span><span class="w"> </span><span class="n">error</span><span class="p">:(</span><span class="n">NSError</span><span class="w"> </span><span class="o">**</span><span class="p">)</span><span class="n">error</span><span class="w"> </span><span class="n">__attribute__</span><span class="p">((</span><span class="n">method_name</span><span class="p">(</span><span class="n">bookmarkData</span><span class="p">(</span><span class="n">withContentsOfURL</span><span class="p">:</span><span class="n">error</span><span class="p">:))))</span>
+</pre></div>
+</div>
+<p>This attribute specifies the Swift method name corresponding to that
+selector. Presumably, the <code class="docutils literal"><span class="pre">method_name</span></code> attribute will be wrapped in
+a macro supplied by Foundation, i.e.,:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="p">#</span><span class="n">define</span><span class="w"> </span><span class="no">NS_METHOD_NAME</span><span class="p">(</span><span class="n">Name</span><span class="p">)</span><span class="w"> </span><span class="n">__attribute__</span><span class="p">((</span><span class="n">method_name</span><span class="p">(</span><span class="n">Name</span><span class="p">)))</span>
+</pre></div>
+</div>
+<p>For 1.0, it is not feasible to mark up the Objective-C headers in the
+various SDKs. Therefore, the compiler will contain a list of mapping
+from Objective-C selectors to Swift method names. Post-1.0, we can
+migrate these mappings to the headers.</p>
+<p>A mapping in the other direction is also important, allowing one to
+associate a specific Objective-C selector with a method. For example,
+a Boolean property:</p>
+<div class="highlight-swift"><div class="highlight"><pre>var enabled: Bool {
+  @objc(isEnabled) get {
+    // ...
+  }
+
+  set {
+    // ...
+  }
+}
+</pre></div>
+</div>
+</div>
+<div class="section" id="optionality-and-ordering-of-keyword-arguments">
+<h2><a class="toc-backref" href="#id9">Optionality and Ordering of Keyword Arguments</a><a class="headerlink" href="#optionality-and-ordering-of-keyword-arguments" title="Permalink to this headline">¶</a></h2>
+<p>A number of programming languages have keyword arguments in one form
+or another, including Ada, C#, Fortran 95, Lua, OCaml,
+Perl 6, Python, and Ruby. Objective-C and Smalltalk&#8217;s use of selectors
+is roughly equivalent, in the sense that the arguments get names.
+The languages with keyword arguments (but not Objective-C and
+Smalltalk) all allow re-ordering of
+arguments at the call site, and many allow one to
+provide arguments positionally without their associated name at the
+call site. However, Cocoa APIs were designed based on the
+understanding that they would not be re-ordered, and the sentence
+structure of some selectors depends on that. To that end, a new
+attribute <code class="docutils literal"><span class="pre">call_arguments(strict)</span></code> can be placed on any function and
+indicates that keyword arguments are required and cannot be reordered
+in calls to that function, i.e.:</p>
+<div class="highlight-swift"><div class="highlight"><pre>@call_arguments(strict)
+func moveRow(atIndex:Int, toIndex:Int)
+</pre></div>
+</div>
+<p>Swift&#8217;s Objective-C importer will automatically add this to all
+imported Objective-C methods, so that Cocoa APIs will retain their
+sentence structure.</p>
+</div>
+<div class="section" id="removing-with-and-for-from-argument-names">
+<h2><a class="toc-backref" href="#id10">Removing <code class="docutils literal"><span class="pre">with</span></code> and <code class="docutils literal"><span class="pre">for</span></code> from Argument Names</a><a class="headerlink" href="#removing-with-and-for-from-argument-names" title="Permalink to this headline">¶</a></h2>
+<p>The prepositions <code class="docutils literal"><span class="pre">with</span></code> and <code class="docutils literal"><span class="pre">for</span></code> are commonly used in the first
+selector piece to separate the action or result of a method from the
+first argument, but don&#8217;t themselves convey much information at either
+the call or declaration site. For example, <code class="docutils literal"><span class="pre">NSColor</span></code>&#8216;s
+<code class="docutils literal"><span class="pre">colorWithRed:green:blue:alpha:</span></code> is called as:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="no">NSColor</span><span class="p">.</span><span class="n">color</span><span class="p">(</span><span class="n">withRed</span><span class="p">:</span><span class="w"> </span><span class="mf">0.5</span><span class="p">, </span><span class="n">green</span><span class="p">:</span><span class="w"> </span><span class="mf">0.5</span><span class="p">, </span><span class="n">blue</span><span class="p">:</span><span class="w"> </span><span class="mf">0.5</span><span class="p">, </span><span class="n">alpha</span><span class="p">:</span><span class="w"> </span><span class="mf">1.0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">with</span></code> in this case feels spurious and makes <code class="docutils literal"><span class="pre">withRed</span></code> feel
+out of sync with <code class="docutils literal"><span class="pre">green</span></code>, <code class="docutils literal"><span class="pre">blue</span></code>, and <code class="docutils literal"><span class="pre">alpha</span></code>. Therefore, we
+will remove the <code class="docutils literal"><span class="pre">with</span></code> (or <code class="docutils literal"><span class="pre">for</span></code>) from any argument name, so that
+this call becomes:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="no">NSColor</span><span class="p">.</span><span class="n">color</span><span class="p">(</span><span class="n">red</span><span class="p">:</span><span class="w"> </span><span class="mf">0.5</span><span class="p">, </span><span class="n">green</span><span class="p">:</span><span class="w"> </span><span class="mf">0.5</span><span class="p">, </span><span class="n">blue</span><span class="p">:</span><span class="w"> </span><span class="mf">0.5</span><span class="p">, </span><span class="n">alpha</span><span class="p">:</span><span class="w"> </span><span class="mf">1.0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In addition to improving the call site, this eliminates the need to
+rename parameters as often at the declaration site, i.e., this:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class func color(withRed red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) -&gt; NSColor
+</pre></div>
+</div>
+<p>becomes:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class func color(red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) -&gt; NSColor
+</pre></div>
+</div>
+<p>Note that we only perform this removal for <code class="docutils literal"><span class="pre">with</span></code> and <code class="docutils literal"><span class="pre">for</span></code>; other
+prepositions tend to have important meaning associated with them, and
+are therefore not removed. For example, consider calls to the
+<code class="docutils literal"><span class="pre">NSImage</span></code> method <code class="docutils literal"><span class="pre">-drawInRect:fromRect:operation:fraction:</span></code> with
+the leading prepositions retained and removed, respectively:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">image</span><span class="p">.</span><span class="n">draw</span><span class="p">(</span><span class="n">inRect</span><span class="p">:</span><span class="w"> </span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">fromRect</span><span class="p">:</span><span class="w"> </span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">operation</span><span class="p">:</span><span class="w"> </span><span class="n">op</span><span class="p">,</span><span class="w"> </span><span class="n">fraction</span><span class="p">:</span><span class="w"> </span><span class="mf">0.5</span><span class="p">)</span>
+<span class="n">image</span><span class="p">.</span><span class="n">draw</span><span class="p">(</span><span class="n">rect</span><span class="p">:</span><span class="w"> </span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">rect</span><span class="p">:</span><span class="w"> </span><span class="n">y</span><span class="p">,</span><span class="w"> </span><span class="n">operation</span><span class="p">:</span><span class="w"> </span><span class="n">op</span><span class="p">,</span><span class="w"> </span><span class="n">fraction</span><span class="p">:</span><span class="w"> </span><span class="mf">0.5</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here, dropping the leading prepositions is actively harmful, because
+we&#8217;ve lost the directionality provided by <code class="docutils literal"><span class="pre">in</span></code> and <code class="docutils literal"><span class="pre">from</span></code> in the
+first two arguments. <code class="docutils literal"><span class="pre">with</span></code> and <code class="docutils literal"><span class="pre">for</span></code> do not have this problem.</p>
+<p>The second concern with dropping <code class="docutils literal"><span class="pre">with</span></code> and <code class="docutils literal"><span class="pre">for</span></code> is that we need
+to either specify or infer the prepositions when declaring a
+method. For example, consider the following initializer:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">init</span><span class="p">(</span><span class="n">frame</span><span class="p">:</span><span class="w"> </span><span class="n">CGRect</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>How would the compiler know to insert the preposition &#8220;with&#8221; into the
+name when computing the selector, so that this maps to
+<code class="docutils literal"><span class="pre">initWithFrame:</span></code>? In many cases, where we&#8217;re overriding a method or
+initializer from a superclass or we are implementing a method to conform
+to a protocol, the selector can be deduced from method/initializer in
+the superclass or protocol. In those cases where new API is being
+defined in Swift where the selector requires a preposition, one would
+use the <code class="docutils literal"><span class="pre">objc</span></code> attribute with a selector:</p>
+<div class="highlight-swift"><div class="highlight"><pre>@objc(initWithFrame:)
+init(frame: CGRect)
+</pre></div>
+</div>
+<p>Imported Objective-C methods would have the appropriate <code class="docutils literal"><span class="pre">objc</span></code>
+attribute attached to them automatically.</p>
+</div>
+<div class="section" id="which-prepositions">
+<h2><a class="toc-backref" href="#id11">Which Prepositions?</a><a class="headerlink" href="#which-prepositions" title="Permalink to this headline">¶</a></h2>
+<p>English has a large number of prepositions, and many of those words
+also have other rules as adjectives, adverbs, and so on. The following
+list, taken from <a class="reference external" href="http://www.englishclub.com/grammar/prepositions-list.htm">The English Club</a>, with poetic, archaic, and non-US
+forms removed, provided the starting point for the list of
+prepositions used in splitting. The <strong>bolded</strong> prepositions are used
+to split; notes indicate whether Cocoa uses this preposition as a
+preposition in any of its selectors, as well as any special
+circumstances that affect inclusion or exclusion from the list.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="26%" />
+<col width="15%" />
+<col width="15%" />
+<col width="45%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>Preposition</td>
+<td>In Cocoa?</td>
+<td>Dropped?</td>
+<td>Notes</td>
+</tr>
+<tr class="row-even"><td>Aboard</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>About</td>
+<td>No*</td>
+<td>&nbsp;</td>
+<td>Used as an adjective</td>
+</tr>
+<tr class="row-even"><td><strong>Above</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Across</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td><strong>After</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Against</td>
+<td>Yes*</td>
+<td>&nbsp;</td>
+<td>Misleading when split</td>
+</tr>
+<tr class="row-even"><td><strong>Along</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td><strong>Alongside</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Amid</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Among</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Anti</td>
+<td>No*</td>
+<td>&nbsp;</td>
+<td>Used as an adjective</td>
+</tr>
+<tr class="row-odd"><td>Around</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td><strong>As</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Astride</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td><strong>At</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Bar</td>
+<td>No*</td>
+<td>&nbsp;</td>
+<td>Used as a noun</td>
+</tr>
+<tr class="row-even"><td>Barring</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td><strong>Before</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Behind</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td><strong>Below</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Beneath</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Beside</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Besides</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Between</td>
+<td>Yes</td>
+<td>&nbsp;</td>
+<td>Not amenable to parameters</td>
+</tr>
+<tr class="row-even"><td>Beyond</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>But</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td><strong>By</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Circa</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Concerning</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Considering</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Counting</td>
+<td>No*</td>
+<td>&nbsp;</td>
+<td>Used as an adjective</td>
+</tr>
+<tr class="row-odd"><td>Cum</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Despite</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Down</td>
+<td>No*</td>
+<td>&nbsp;</td>
+<td>Used as a noun</td>
+</tr>
+<tr class="row-even"><td>During</td>
+<td>Yes*</td>
+<td>&nbsp;</td>
+<td>Misleading when split</td>
+</tr>
+<tr class="row-odd"><td>Except</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Excepting</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Excluding</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td><strong>Following</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td><strong>For</strong></td>
+<td>Yes</td>
+<td><strong>Yes</strong></td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td><strong>From</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td><strong>Given</strong></td>
+<td>Yes*</td>
+<td>No</td>
+<td>Never splits a selector</td>
+</tr>
+<tr class="row-even"><td><strong>In</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td><strong>Including</strong></td>
+<td>Yes*</td>
+<td>No</td>
+<td>Never splits a selector</td>
+</tr>
+<tr class="row-even"><td><strong>Inside</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td><strong>Into</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Less</td>
+<td>No*</td>
+<td>&nbsp;</td>
+<td>Always &#8220;less than&#8221;</td>
+</tr>
+<tr class="row-odd"><td>Like</td>
+<td>Yes*</td>
+<td>&nbsp;</td>
+<td>Misleading when split</td>
+</tr>
+<tr class="row-even"><td>Minus</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Near</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Notwithstanding</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td><strong>Of</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Off</td>
+<td>No*</td>
+<td>&nbsp;</td>
+<td>Used as a noun</td>
+</tr>
+<tr class="row-odd"><td><strong>On</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Onto</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Opposite</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Out</td>
+<td>No*</td>
+<td>&nbsp;</td>
+<td>Used as an adverb</td>
+</tr>
+<tr class="row-odd"><td>Outside</td>
+<td>Yes*</td>
+<td>&nbsp;</td>
+<td>Misleading when split</td>
+</tr>
+<tr class="row-even"><td>Over</td>
+<td>No*</td>
+<td>&nbsp;</td>
+<td>Used as an adverb</td>
+</tr>
+<tr class="row-odd"><td>Past</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Pending</td>
+<td>No*</td>
+<td>&nbsp;</td>
+<td>Used as an adjective</td>
+</tr>
+<tr class="row-odd"><td>Per</td>
+<td>Yes*</td>
+<td>&nbsp;</td>
+<td>Misleading to split</td>
+</tr>
+<tr class="row-even"><td>Plus</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>Used as an adjective</td>
+</tr>
+<tr class="row-odd"><td>Pro</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Regarding</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Respecting</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Round</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Save</td>
+<td>No*</td>
+<td>&nbsp;</td>
+<td>Used as adjective, verb</td>
+</tr>
+<tr class="row-even"><td>Saving</td>
+<td>No*</td>
+<td>&nbsp;</td>
+<td>Used as adjective</td>
+</tr>
+<tr class="row-odd"><td><strong>Since</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Than</td>
+<td>No*</td>
+<td>&nbsp;</td>
+<td>Always &#8220;greater than&#8221;</td>
+</tr>
+<tr class="row-odd"><td>Through</td>
+<td>Yes*</td>
+<td>&nbsp;</td>
+<td>Misleading when split</td>
+</tr>
+<tr class="row-even"><td>Throughout</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td><strong>To</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Toward</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Towards</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Under</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Underneath</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Unlike</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td><strong>Until</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td>Unto</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Up</td>
+<td>No*</td>
+<td>&nbsp;</td>
+<td>Used as adjective</td>
+</tr>
+<tr class="row-even"><td>Upon</td>
+<td>Yes*</td>
+<td>&nbsp;</td>
+<td>Misleading when split</td>
+</tr>
+<tr class="row-odd"><td>Versus</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td><strong>Via</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td><strong>With</strong></td>
+<td>Yes</td>
+<td><strong>Yes</strong></td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-even"><td><strong>Within</strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>&nbsp;</td>
+</tr>
+<tr class="row-odd"><td>Without</td>
+<td>Yes*</td>
+<td>&nbsp;</td>
+<td>Misleading when split</td>
+</tr>
+<tr class="row-even"><td>Worth</td>
+<td>No</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

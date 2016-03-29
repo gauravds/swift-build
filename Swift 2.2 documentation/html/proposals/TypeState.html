@@ -1,0 +1,194 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>General Type State Notes &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>General Type State Notes</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="general-type-state-notes">
+<h1>General Type State Notes<a class="headerlink" href="#general-type-state-notes" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="immutability">
+<h2>Immutability<a class="headerlink" href="#immutability" title="Permalink to this headline">¶</a></h2>
+<p>Using Typestate to control immutability requires recursive immutability
+propagation (just like sending a value in a message does a recursive deep copy).
+This brings up interesting questions:</p>
+<ol class="arabic simple">
+<li>should types be able to opt-in or out of Immutabilizability?</li>
+<li>It seems that &#8216;int&#8217; shouldn&#8217;t be bloated by tracking the possibility of
+immutabilizability.</li>
+<li>We can reserve a bit in the object header for reference types to indicate
+&#8220;has become immutable&#8221;.</li>
+<li>If a type opts-out of immutabilization (either explicitly or implicitly) then
+a recursive type derived from it can only be immutabilized if the type is
+explicitly marked immutable.  For example, you could only turn a struct
+immutable if it contained &#8220;const int&#8217;s&#8221;?  Or is this really only true for
+reference types?  It seems that the immutability of a value-type element can
+follow the immutability of the containing object.  Array slices need a
+pointer to the containing object for more than just the refcount it seems.</li>
+</ol>
+</div>
+<div class="section" id="typestate-gc-arc">
+<h2>Typestate + GC + ARC<a class="headerlink" href="#typestate-gc-arc" title="Permalink to this headline">¶</a></h2>
+<p>A random email from Mike Ferris.  DVTInvalidation models a type state, one which
+requires recursive transitive propagation just like immutable does:</p>
+<p>&#8220;For what it is worth, Xcode 4 has a general DVTInvalidation protocol that many
+of our objects adopt.  This was a hard-won lesson dealing with GC where just
+because something is ready to be collected does not mean it will be immediately.</p>
+<p>We use this to clean up held resources and as a statement of intent that this
+object is now &#8220;done&#8221;.  Many of our objects that conform to this protocol also
+assert validity in key external entry points to attempt to enforce that once
+they&#8217;re invalid, no one should be talking to them.</p>
+<p>In a couple cases we have found single-ownership to be insufficient and, in
+those cases, we do have, essentially, ref-counting of validity.  But in the vast
+majority of cases, there is a single owner who _should_ be controlling the
+useful lifetime of these objects.  And anyone else keeping them alive after that
+useful lifetime is basically in error (and is in a position to be caught by our
+validity assertions.)</p>
+<p>At some point I am sure we&#8217;ll be switching to ARC and, as we do, the forcing
+function that caused us to adopt the DVTInvalidation pattern may fall by the
+wayside (i.e. the arbitrary latency between ready to be collected and
+collected).  But I doubt we would consider not having the protocol as we do
+this.  It has been useful in many ways to formalize this notion if only because
+it forces more rigorous consideration of ownership models and gives us a
+pragmatic way to enforce them.</p>
+<p>The one thing that has been a challenge is that adoption of DVTInvalidation is
+somewhat viral.  If you own an object that in invalidate-able, then you pretty
+much have to be invalidate-able yourself (or have an equivalent guaranteed
+trigger to be sure you&#8217;ll eventually invalidate the object)...  Over time, more
+and more of our classes wind up adopting this protocol.  I am not sure that&#8217;s a
+bad thing, but it has been an observed effect of having this pattern.&#8221;</p>
+</div>
+<div class="section" id="plaid-language-notes">
+<h2>Plaid Language notes<a class="headerlink" href="#plaid-language-notes" title="Permalink to this headline">¶</a></h2>
+<p><a class="reference external" href="http://plaid-lang.org/">http://plaid-lang.org/</a> aka <a class="reference external" href="http://www.cs.cmu.edu/~aldrich/plaid/">http://www.cs.cmu.edu/~aldrich/plaid/</a></p>
+<p>This paper uses the hybrid dynamic/static approach I chatted to Ted about (which
+attaches dynamic tags to values, which the optimizer then tries to remove). This
+moves the approach from &#8220;crazy theory&#8221; to &#8220;has at least been implemented
+somewhere once&#8221;: <a class="reference external" href="http://www.cs.cmu.edu/~aldrich/papers/plaid-oopsla11.pdf">http://www.cs.cmu.edu/~aldrich/papers/plaid-oopsla11.pdf</a></p>
+<p>It allows typestate changes to change representation.  It sounds to me like
+conjoined discriminated unions + type state.</p>
+<p>Cute typestate example: the state transition from egg, to caterpillar, to pupae,
+to butterfly.</p>
+<p>It only allows data types with finite/enumerable typestates.</p>
+<p>It defines typestates with syntax that looks like it is defining types:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">state</span><span class="w"> </span><span class="n">File</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">val</span><span class="w"> </span><span class="n">filename</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">state</span><span class="w"> </span><span class="n">OpenFile</span><span class="w"> </span><span class="n">case</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">File</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">val</span><span class="w"> </span><span class="n">filePtr</span><span class="p">;</span>
+<span class="w">  </span><span class="n">method</span><span class="w"> </span><span class="n">read</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">..</span><span class="p">.</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="n">method</span><span class="w"> </span><span class="n">close</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">ClosedFile</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">state</span><span class="w"> </span><span class="n">ClosedFile</span><span class="w"> </span><span class="n">case</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">File</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">method</span><span class="w"> </span><span class="n">open</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">OpenFile</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Makes it really seem like a discriminated union.  The stated reason to do this
+is to avoid having &#8220;null pointers&#8221; and other invalid data around when in a state
+where it is not valid.  It seems that another reasonable approach would be to
+tag data members as only being valid in some states.  Both have tradeoffs.
+Doing either of them would be a great way to avoid having to declare stuff
+&#8220;optional/?&#8221; just because of typestate, and even permits other types that don&#8217;t
+have a handy sentinel.  It is still useful to define unconditional data, and
+still useful to allow size-optimization by deriving state from a field (&#8220;-1 is a
+closed file state&#8221; - at least if we don&#8217;t have good integer size bounds, which
+we do want anyway).</p>
+<p>It strikes me that typestate declarations themselves (e.g. a type can be in the
+&#8220;open&#8221; or &#8220;closed&#8221; state) should be independently declared from types and should
+have the same sort of visibility controls as types.  I should be able to declare
+a protocol/java interface along the lines of:</p>
+<div class="highlight-swift"><div class="highlight"><pre>protocol fileproto {
+  open(...) closed;
+  close(...) opened;
+}
+</pre></div>
+</div>
+<p>using &#8220;public&#8221; closed/opened states.  Insert fragility concerns here.</p>
+<p>It supports multidimensional typestate, where a class can transition in multiple
+dimensions without having to manually manage a matrix of states.  This seems
+particularly useful in cases where you have inheritance.  A base class may
+define its own set of states.  A derived class will have those states, plus
+additional dimensions if they wanted.  For example, an NSView could be visible
+or not, while a NSButton derived class could be Normal or Pressed Down, etc.</p>
+<p>Generics: &#8220;mechanisms like type parameterization need to be duplicated for
+typestate, so that we can talk not only about a list of files, but also about a
+list of <em>open</em> files&#8221;.</p>
+<p>You should be allowed to declare typestate transitions on &#8220;self&#8221; any any by-ref
+arguments/ret values on functions.  In Plaid syntax:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">public</span><span class="w"> </span><span class="n">void</span><span class="w"> </span><span class="n">open</span><span class="p">()</span><span class="w"> </span><span class="p">[</span><span class="n">ClosedFile</span><span class="o">&gt;&gt;</span><span class="n">OpenFile</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>should be a precondition that &#8216;self&#8217; starts out in the ClosedFile state and a
+postcondition that it ends up in the OpenFile state.  The implementation could
+be checked against this contract.</p>
+<p>Their onward2009 paper contains the usual set of aliasing restrictions and
+conflation of immutable with something-not-typestate that I come to expect from
+the field.</p>
+<p>Their examples remind me that discriminated unions should be allowed to have a
+&#8216;base class&#8217;: data that is common and available across all the slices.  Changing
+to another slice should not change this stuff.</p>
+<p>&#8216;instate&#8217; is the keyword they choose to use for a dynamic state test.</p>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

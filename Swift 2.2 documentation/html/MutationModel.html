@@ -1,0 +1,368 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Immutability and Read-Only Methods &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Immutability and Read-Only Methods</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <style>
+table.docutils td, table.docutils th {
+    border: 1px solid #aaa;
+}
+</style><div class="section" id="immutability-and-read-only-methods">
+<h1>Immutability and Read-Only Methods<a class="headerlink" href="#immutability-and-read-only-methods" title="Permalink to this headline">¶</a></h1>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Abstract:</th><td class="field-body">Swift programmers can already express the concept of
+read-only properties and subscripts, and can express their
+intention to write on a function parameter.  However, the
+model is incomplete, which currently leads to the compiler
+to accept (and silently drop) mutations made by methods of
+these read-only entities.  This proposal completes the
+model, and additionally allows the user to declare truly
+immutable data.</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="the-problem">
+<h2>The Problem<a class="headerlink" href="#the-problem" title="Permalink to this headline">¶</a></h2>
+<p>Consider:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class Window {
+
+  var title: String { // title is not writable
+    get {
+      return somethingComputed()
+    }
+  }
+}
+
+var w = Window()
+w.title += &quot; (parenthesized remark)”
+</pre></div>
+</div>
+<p>What do we do with this?  Since <code class="docutils literal"><span class="pre">+=</span></code> has an <code class="docutils literal"><span class="pre">inout</span></code> first
+argument, we detect this situation statically (hopefully one day we’ll
+have a better error message):</p>
+<div class="highlight-swift"><div class="highlight"><pre>&lt;REPL Input&gt;:1:9: error: expression does not type-check
+w.title += &quot; (parenthesized remark)&quot;
+~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+</pre></div>
+</div>
+<p>Great.  Now what about this? <a class="footnote-reference" href="#append" id="id1">[1]</a></p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">w</span><span class="p">.</span><span class="n">title</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="s">&quot; (fool the compiler)&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Today, we allow it, but since there’s no way to implement the
+write-back onto <code class="docutils literal"><span class="pre">w.title</span></code>, the changes are silently dropped.</p>
+</div>
+<div class="section" id="unsatisfying-approaches">
+<h2>Unsatisfying Approaches<a class="headerlink" href="#unsatisfying-approaches" title="Permalink to this headline">¶</a></h2>
+<p>We considered three alternatives to the current proposal, none of
+which were considered satisfactory:</p>
+<ol class="arabic simple">
+<li>Ban method calls on read-only properties of value type</li>
+<li>Ban read-only properties of value type</li>
+<li>Status quo: silently drop the effects of some method calls</li>
+</ol>
+<p>For rationales explaining why these approaches were rejected, please
+refer to earlier versions of this document.</p>
+</div>
+<div class="section" id="proposed-solution">
+<h2>Proposed Solution<a class="headerlink" href="#proposed-solution" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="terminology">
+<h3>Terminology<a class="headerlink" href="#terminology" title="Permalink to this headline">¶</a></h3>
+<p>Classes and generic parameters that conform to a protocol attributed
+<code class="docutils literal"><span class="pre">&#64;class_protocol</span></code> are called <strong>reference types</strong>.  All other types
+are <strong>value types</strong>.</p>
+</div>
+<div class="section" id="mutating-and-read-only-methods">
+<h3>Mutating and Read-Only Methods<a class="headerlink" href="#mutating-and-read-only-methods" title="Permalink to this headline">¶</a></h3>
+<p>A method attributed with <code class="docutils literal"><span class="pre">inout</span></code> is considered <strong>mutating</strong>.
+Otherwise, it is considered <strong>read-only</strong>.</p>
+<pre class="literal-block">
+struct Number {
+  init(x: Int) { name = x.toString() }
+
+  func getValue() {              // read-only method
+    return Int(name)
+  }
+  <strong>mutating</strong> func increment() {  // mutating method
+    name = (Int(name)+1).toString()
+  }
+  var name: String
+}
+</pre>
+<p>The implicit <code class="docutils literal"><span class="pre">self</span></code> parameter of a struct or enum method is semantically an
+<code class="docutils literal"><span class="pre">inout</span></code> parameter if and only if the method is attributed with
+<code class="docutils literal"><span class="pre">mutating</span></code>.  Read-only methods do not “write back” onto their target
+objects.</p>
+<p>A program that applies the <code class="docutils literal"><span class="pre">mutating</span></code> to a method of a
+class—or of a protocol attributed with <code class="docutils literal"><span class="pre">&#64;class_protocol</span></code>—is
+ill-formed.  [Note: it is logically consistent to think of all methods
+of classes as read-only, even though they may in fact modify instance
+variables, because they never “write back” onto the source reference.]</p>
+</div>
+<div class="section" id="mutating-operations">
+<h3>Mutating Operations<a class="headerlink" href="#mutating-operations" title="Permalink to this headline">¶</a></h3>
+<p>The following are considered <strong>mutating operations</strong> on an lvalue</p>
+<ol class="arabic simple">
+<li>Assignment to the lvalue</li>
+<li>Taking its address</li>
+</ol>
+<p>Remember that the following operations all take an lvalue&#8217;s address
+implicitly:</p>
+<ul>
+<li><p class="first">passing it to a mutating method:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">Number</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+<span class="n">x</span><span class="p">.</span><span class="n">increment</span><span class="p">()</span><span class="w">         </span><span class="c1">// mutating operation</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">passing it to a function attributed with <code class="docutils literal"><span class="pre">&#64;assignment</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">31</span>
+<span class="n">y</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">3</span><span class="w">                </span><span class="c1">// mutating operation</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">assigning to a subscript or property (including an instance
+variable) of a value type:</p>
+<div class="highlight-swift"><div class="highlight"><pre>x._i = 3             // mutating operation
+var z: Array&lt;Int&gt; = [1000]
+z[0] = 2             // mutating operation
+</pre></div>
+</div>
+</li>
+</ul>
+</div>
+<div class="section" id="binding-for-rvalues">
+<h3>Binding for Rvalues<a class="headerlink" href="#binding-for-rvalues" title="Permalink to this headline">¶</a></h3>
+<p>Just as <code class="docutils literal"><span class="pre">var</span></code> declares a name for an lvalue, <code class="docutils literal"><span class="pre">let</span></code> now gives a
+name to an rvalue:</p>
+<pre class="literal-block">
+var clay = 42
+<strong>let</strong> stone = clay + 100 // stone can now be used as an rvalue
+</pre>
+<p>The grammar rules for <code class="docutils literal"><span class="pre">let</span></code> are identical to those for <code class="docutils literal"><span class="pre">var</span></code>.</p>
+</div>
+<div class="section" id="properties-and-subscripts">
+<h3>Properties and Subscripts<a class="headerlink" href="#properties-and-subscripts" title="Permalink to this headline">¶</a></h3>
+<p>A subscript or property access expression is an rvalue if</p>
+<ul class="simple">
+<li>the property or subscript has no <code class="docutils literal"><span class="pre">set</span></code> clause</li>
+<li>the target of the property or subscript expression is an rvalue of
+value type</li>
+</ul>
+<p>For example, consider this extension to our <code class="docutils literal"><span class="pre">Number</span></code> struct:</p>
+<pre class="literal-block">
+extension Number {
+  var readOnlyValue: Int { return getValue()  }
+
+  var writableValue: Int {
+    get {
+     return getValue()
+    }
+    <strong>set(x)</strong> {
+      name = x.toString()
+    }
+  }
+
+  subscript(n: Int) -&gt; String { return name }
+  subscript(n: String) -&gt; Int {
+    get {
+      return 42
+    }
+    <strong>set(x)</strong> {
+      name = x.toString()
+    }
+  }
+}
+</pre>
+<p>Also imagine we have a class called <code class="docutils literal"><span class="pre">CNumber</span></code> defined exactly the
+same way as <code class="docutils literal"><span class="pre">Number</span></code> (except that it&#8217;s a class).  Then, the
+following table holds:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="28%" />
+<col width="43%" />
+<col width="30%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head"><blockquote class="first">
+<div>Declaration:</div></blockquote>
+<p class="last">Expression</p>
+</th>
+<th class="head"><div class="first last highlight-swift"><div class="highlight"><pre><span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">Number</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span><span class="w">  </span><span class="c1">// this</span>
+<span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">CNumber</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span><span class="w"> </span><span class="c1">// or this</span>
+<span class="kd">let </span><span class="nv">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">CNumber</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span><span class="w"> </span><span class="c1">// or this</span>
+</pre></div>
+</div>
+</th>
+<th class="head"><div class="first last highlight-swift"><div class="highlight"><pre><span class="kd">let </span><span class="nv">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">Number</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+</pre></div>
+</div>
+</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><code class="docutils literal"><span class="pre">x.readOnlyValue</span></code></td>
+<td rowspan="2"><strong>rvalue</strong> (no <code class="docutils literal"><span class="pre">set</span></code> clause)</td>
+<td rowspan="5"><strong>rvalue</strong> (target is an
+rvalue of value type)</td>
+</tr>
+<tr class="row-odd"><td><code class="docutils literal"><span class="pre">x[3]</span></code></td>
+</tr>
+<tr class="row-even"><td><code class="docutils literal"><span class="pre">x.writeableValue</span></code></td>
+<td rowspan="2"><strong>lvalue</strong> (has <code class="docutils literal"><span class="pre">set</span></code> clause)</td>
+</tr>
+<tr class="row-odd"><td><code class="docutils literal"><span class="pre">x[&quot;tree&quot;]</span></code></td>
+</tr>
+<tr class="row-even"><td><code class="docutils literal"><span class="pre">x.name</span></code></td>
+<td><strong>lvalue</strong> (instance variables
+implicitly have a <code class="docutils literal"><span class="pre">set</span></code>
+clause)</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="the-big-rule">
+<h3>The Big Rule<a class="headerlink" href="#the-big-rule" title="Permalink to this headline">¶</a></h3>
+<div class="warning admonition error">
+<p class="first admonition-title">Error</p>
+<p class="last">A program that applies a mutating operation to an rvalue is ill-formed</p>
+</div>
+<p>For example:</p>
+<pre class="literal-block">
+clay = 43           // OK; a var is always assignable
+<strong>stone =</strong> clay * 1000 // <strong>Error:</strong> stone is an rvalue
+
+swap(&amp;clay, <strong>&amp;stone</strong>) // <strong>Error:</strong> 'stone' is an rvalue; can't take its address
+
+<strong>stone +=</strong> 3          // <strong>Error:</strong> += is declared inout, &#64;assignment and thus
+                    // implicitly takes the address of 'stone'
+
+<strong>let</strong> x = Number(42)  // x is an rvalue
+x.getValue()        // ok, read-only method
+x.increment()       // <strong>Error:</strong> calling mutating method on rvalue
+x.readOnlyValue     // ok, read-only property
+x.writableValue     // ok, there's no assignment to writableValue
+x.writableValue++   // <strong>Error:</strong> assigning into a property of an immutable value
+</pre>
+</div>
+<div class="section" id="non-inout-function-parameters-are-rvalues">
+<h3>Non-<code class="docutils literal"><span class="pre">inout</span></code> Function Parameters are RValues<a class="headerlink" href="#non-inout-function-parameters-are-rvalues" title="Permalink to this headline">¶</a></h3>
+<p>A function that performs a mutating operation on a parameter is
+ill-formed unless that parameter was marked with <code class="docutils literal"><span class="pre">inout</span></code>.  A
+method that performs a mutating operation on <code class="docutils literal"><span class="pre">self</span></code> is ill-formed
+unless the method is attributed with <code class="docutils literal"><span class="pre">mutating</span></code>:</p>
+<pre class="literal-block">
+func f(x: Int, inout y: Int) {
+  y = x         // ok, y is an inout parameter
+  x = y         // <strong>Error:</strong> function parameter 'x' is immutable
+}
+</pre>
+</div>
+<div class="section" id="protocols-and-constraints">
+<h3>Protocols and Constraints<a class="headerlink" href="#protocols-and-constraints" title="Permalink to this headline">¶</a></h3>
+<p>When a protocol declares a property or <code class="docutils literal"><span class="pre">subscript</span></code> requirement, a
+<code class="docutils literal"><span class="pre">{</span> <span class="pre">get</span> <span class="pre">}</span></code> or <code class="docutils literal"><span class="pre">{</span> <span class="pre">get</span> <span class="pre">set</span> <span class="pre">}</span></code> clause is always required.</p>
+<pre class="literal-block">
+protocol Bitset {
+  var count: Int { <strong>get</strong> }
+  var intValue: Int { <strong>get set</strong> }
+  subscript(bitIndex: Int) -&gt; Bool { <strong>get set</strong> }
+}
+</pre>
+<p>Where a <code class="docutils literal"><span class="pre">{</span> <span class="pre">get</span> <span class="pre">set</span> <span class="pre">}</span></code> clause appears, the corresponding expression
+on a type that conforms to the protocol must be an lvalue or the
+program is ill-formed:</p>
+<pre class="literal-block">
+struct BS {
+  var count: Int    // ok; an lvalue or an rvalue is fine
+
+  var intValue : Int {
+    get {
+      return 3
+    }
+    set {             // ok, lvalue required and has a set clause
+      ignore(value)
+    }
+  }
+
+  subscript(i: Int) -&gt; Bool {
+    return true   // <strong>Error:</strong> needs a 'set' clause to yield an lvalue
+  }
+}
+</pre>
+<hr class="docutils" />
+<table class="docutils footnote" frame="void" id="append" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>String will acquire an <code class="docutils literal"><span class="pre">append(other:</span> <span class="pre">String)</span></code> method as part of the
+formatting plan, but this scenario applies equally to any
+method of a value type</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

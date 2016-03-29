@@ -1,0 +1,699 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Object Initialization &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="contents.html" />
+    <link rel="next" title="Pattern Matching" href="Pattern Matching.html" />
+    <link rel="prev" title="Logical Objects" href="LogicalObjects.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Object Initialization</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        «&#160;&#160;<a href="LogicalObjects.html">Logical Objects</a>
+        &#160;&#160;::&#160;&#160;
+        <a class="uplink" href="contents.html">Contents</a>
+        &#160;&#160;::&#160;&#160;
+        <a href="Pattern Matching.html">Pattern Matching</a>&#160;&#160;»
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="object-initialization">
+<h1><a class="toc-backref" href="#id1">Object Initialization</a><a class="headerlink" href="#object-initialization" title="Permalink to this headline">¶</a></h1>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This document is incomplete and not up-to-date; it currently
+describes the initialization model from Swift 1.0.</p>
+</div>
+<div class="contents topic" id="contents">
+<p class="topic-title first">Contents</p>
+<ul class="simple">
+<li><a class="reference internal" href="#object-initialization" id="id1">Object Initialization</a><ul>
+<li><a class="reference internal" href="#introduction" id="id2">Introduction</a></li>
+<li><a class="reference internal" href="#initializers" id="id3">Initializers</a><ul>
+<li><a class="reference internal" href="#designated-initializers" id="id4">Designated Initializers</a></li>
+<li><a class="reference internal" href="#convenience-initializers" id="id5">Convenience Initializers</a></li>
+<li><a class="reference internal" href="#initializer-inheritance" id="id6">Initializer Inheritance</a></li>
+<li><a class="reference internal" href="#synthesized-initializers" id="id7">Synthesized Initializers</a></li>
+<li><a class="reference internal" href="#required-initializers" id="id8">Required Initializers</a></li>
+<li><a class="reference internal" href="#initializers-in-protocols" id="id9">Initializers in Protocols</a></li>
+<li><a class="reference internal" href="#de-initializers" id="id10">De-initializers</a></li>
+<li><a class="reference internal" href="#methods-returning-self" id="id11">Methods Returning <code class="docutils literal"><span class="pre">Self</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#memory-safety" id="id12">Memory Safety</a><ul>
+<li><a class="reference internal" href="#three-phase-initialization" id="id13">Three-Phase Initialization</a></li>
+<li><a class="reference internal" href="#initializer-inheritance-model" id="id14">Initializer Inheritance Model</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#objective-c-interoperability" id="id15">Objective-C Interoperability</a><ul>
+<li><a class="reference internal" href="#initializers-and-init-methods" id="id16">Initializers and Init Methods</a></li>
+<li><a class="reference internal" href="#designated-and-convenience-initializers" id="id17">Designated and Convenience Initializers</a></li>
+<li><a class="reference internal" href="#allocation-and-deallocation" id="id18">Allocation and Deallocation</a></li>
+<li><a class="reference internal" href="#dynamic-subclassing" id="id19">Dynamic Subclassing</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="introduction">
+<h2><a class="toc-backref" href="#id2">Introduction</a><a class="headerlink" href="#introduction" title="Permalink to this headline">¶</a></h2>
+<p><em>Object initialization</em> is the process by which a new object is
+allocated, its stored properties initialized, and any additional setup
+tasks are performed, including allowing its superclass&#8217;s to perform
+their own initialization. <em>Object teardown</em> is the reverse process,
+performing teardown tasks, destroying stored properties, and
+eventually deallocating the object.</p>
+</div>
+<div class="section" id="initializers">
+<h2><a class="toc-backref" href="#id3">Initializers</a><a class="headerlink" href="#initializers" title="Permalink to this headline">¶</a></h2>
+<p>An initializer is responsible for the initialization of an
+object. Initializers are introduced with the <code class="docutils literal"><span class="pre">init</span></code> keyword. For
+example:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class A {
+  var i: Int
+  var s: String
+
+  init int(i: Int) string(s: String) {
+    self.i = i
+    self.s = s
+    completeInit()
+  }
+
+  func completeInit() { /* ... */ }
+}
+</pre></div>
+</div>
+<p>Here, the class <code class="docutils literal"><span class="pre">A</span></code> has an initializer that accepts an <code class="docutils literal"><span class="pre">Int</span></code> and a
+<code class="docutils literal"><span class="pre">String</span></code>, and uses them to initialize its two stored properties,
+then calls another method to perform other initialization tasks. The
+initializer can be invoked by constructing a new <code class="docutils literal"><span class="pre">A</span></code> object:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">var </span><span class="nv">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">A</span><span class="p">(</span><span class="n">int</span><span class="p">:</span><span class="w"> </span><span class="mi">17</span><span class="p">,</span><span class="w"> </span><span class="n">string</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Seventeen&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The allocation of the new <code class="docutils literal"><span class="pre">A</span></code> object is implicit in the
+construction syntax, and cannot be separated from the call to the
+initializer.</p>
+<p>Within an initializer, all of the stored properties must be
+initialized (via an assignment) before <code class="docutils literal"><span class="pre">self</span></code> can be used in any
+way. For example, the following would produce a compiler error:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">init </span><span class="nf">int</span><span class="p">(</span><span class="n">i</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> string</span><span class="p">(</span><span class="n">s</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">) {</span>
+<span class="w">  </span><span class="n">completeInit</span><span class="p">()</span><span class="w"> </span><span class="c1">// error: variable &#39;self.i&#39; used before being initialized</span>
+<span class="w">  </span><span class="bp">self</span><span class="p">.</span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span>
+<span class="w">  </span><span class="bp">self</span><span class="p">.</span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>A stored property with an initial value declared within the class is
+considered to be initialized at the beginning of the initializer. For
+example, the following is a valid initializer:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class A2 {
+  var i: Int = 17
+  var s: String = &quot;Seventeen&quot;
+
+  init int(i: Int) string(s: String) {
+    // okay: i and s are both initialized in the class
+    completeInit()
+  }
+
+  func completeInit() { /* ... */ }
+}
+</pre></div>
+</div>
+<p>After all stored properties have been initialized, one is free to use
+<code class="docutils literal"><span class="pre">self</span></code> in any manner.</p>
+<div class="section" id="designated-initializers">
+<h3><a class="toc-backref" href="#id4">Designated Initializers</a><a class="headerlink" href="#designated-initializers" title="Permalink to this headline">¶</a></h3>
+<p>There are two kinds of initializers in Swift: designated initializers
+and convenience initializers. A <em>designated initializer</em> is
+responsible for the primary initialization of an object, including the
+initialization of any stored properties, <em>chaining</em> to one of its
+superclass&#8217;s designated initializers via a <code class="docutils literal"><span class="pre">super.init</span></code> call (if
+there is a superclass), and performing any other initialization tasks,
+in that order. For example, consider a subclass <code class="docutils literal"><span class="pre">B</span></code> of <code class="docutils literal"><span class="pre">A</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class B : A {
+  var d: Double
+
+  init int(i: Int) string(s: String) {
+    self.d = Double(i)            // initialize stored properties
+    super.init(int: i, string: s) // chain to superclass
+    completeInitForB()            // perform other tasks
+  }
+
+  func completeInitForB() { /* ... */ }
+}
+</pre></div>
+</div>
+<p>Consider the following construction of an object of type <code class="docutils literal"><span class="pre">B</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">var </span><span class="nv">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">B</span><span class="p">(</span><span class="n">int</span><span class="p">:</span><span class="w"> </span><span class="mi">17</span><span class="p">,</span><span class="w"> </span><span class="n">string</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Seventeen&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="sidebar">
+<p class="first sidebar-title">Note</p>
+<p class="last">Swift differs from many other languages in that it requires one to
+initialize stored properties <em>before</em> chaining to the superclass
+initializer. This is part of Swift&#8217;s memory safety guarantee, and
+is discussed further in the section on <a class="reference internal" href="#three-phase-initialization">Three-Phase
+Initialization</a>.</p>
+</div>
+<p>Initialization proceeds in several steps:</p>
+<ol class="arabic simple">
+<li>An object of type <code class="docutils literal"><span class="pre">B</span></code> is allocated by the runtime.</li>
+<li><code class="docutils literal"><span class="pre">B</span></code>&#8216;s initializer initializes the stored property <code class="docutils literal"><span class="pre">d</span></code> to
+<code class="docutils literal"><span class="pre">17.0</span></code>.</li>
+<li><code class="docutils literal"><span class="pre">B</span></code>&#8216;s initializer chains to <code class="docutils literal"><span class="pre">A</span></code>&#8216;s initializer.</li>
+<li><code class="docutils literal"><span class="pre">A</span></code>&#8216;s initializer initialize&#8217;s the stored properties <code class="docutils literal"><span class="pre">i</span></code> and
+<code class="docutils literal"><span class="pre">s</span></code>&#8216;.</li>
+<li><code class="docutils literal"><span class="pre">A</span></code>&#8216;s initializer calls <code class="docutils literal"><span class="pre">completeInit()</span></code>, then returns.</li>
+<li><code class="docutils literal"><span class="pre">B</span></code>&#8216;s initializer calls <code class="docutils literal"><span class="pre">completeInitForB()</span></code>, then returns.</li>
+</ol>
+<p>A class generally has a small number of designated initializers, which
+act as funnel points through which the object will be
+initialized. All of the designated initializers for a class must be
+written within the class definition itself, rather than in an
+extension, because the complete set of designated initializers is part
+of the interface contract with subclasses of a class.</p>
+<p>The other, non-designated initializers of a class are called
+convenience initializers, which tend to provide additional
+initialization capabilities that are often more convenient for common
+tasks.</p>
+</div>
+<div class="section" id="convenience-initializers">
+<h3><a class="toc-backref" href="#id5">Convenience Initializers</a><a class="headerlink" href="#convenience-initializers" title="Permalink to this headline">¶</a></h3>
+<p>A <em>convenience initializer</em> is an initializer that provides an
+alternative interface to the designated initializers of a class. A
+convenience initializer is denoted by the return type <code class="docutils literal"><span class="pre">Self</span></code> in the
+definition. Unlike designated initializers, convenience initializers
+can be defined either in the class definition itself or within an
+extension of the class. For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">extension </span><span class="nc">A</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">init</span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="bp">Self</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="bp">self</span><span class="p">.</span><span class="n">init</span><span class="p">(</span><span class="n">int</span><span class="p">:</span><span class="w"> </span><span class="mi">17</span><span class="p">,</span><span class="w"> </span><span class="n">string</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Seventeen&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>A convenience initializer cannot initialize the stored properties of
+the class directly, nor can it invoke a superclass initializer via
+<code class="docutils literal"><span class="pre">super.init</span></code>. Rather, it must <em>dispatch</em> to another initializer
+using <code class="docutils literal"><span class="pre">self.init</span></code>, which is then responsible for initializing the
+object. A convenience initializer is not permitted to access <code class="docutils literal"><span class="pre">self</span></code>
+(or anything that depends on <code class="docutils literal"><span class="pre">self</span></code>, such as one of its properties)
+prior to the <code class="docutils literal"><span class="pre">self.init</span></code> call, although it may freely access
+<code class="docutils literal"><span class="pre">self</span></code> after <code class="docutils literal"><span class="pre">self.init</span></code>.</p>
+<p>Convenience initializers and designated initializers can both be used
+to construct objects, using the same syntax. For example, the <code class="docutils literal"><span class="pre">A</span></code>
+initializer above can be used to build a new <code class="docutils literal"><span class="pre">A</span></code> object without any
+arguments:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">var </span><span class="nv">a2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">A</span><span class="p">()</span><span class="w"> </span><span class="c1">// uses convenience initializer</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="initializer-inheritance">
+<h3><a class="toc-backref" href="#id6">Initializer Inheritance</a><a class="headerlink" href="#initializer-inheritance" title="Permalink to this headline">¶</a></h3>
+<p>One of the primary benefits of convenience initializers is that they
+can be inherited by subclasses. Initializer inheritance eliminates the
+need to repeat common initialization code&#8212;such as initial values of
+stored properties not easily written in the class itself, or common
+registration tasks that occur during initialization&#8212;while using the
+same initialization syntax. For example, this allows a <code class="docutils literal"><span class="pre">B</span></code> object to
+be constructed with no arguments by using the inherited convenience
+initializer defined in the previous section:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">var </span><span class="nv">b2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">B</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Initialization proceeds as follows:</p>
+<ol class="arabic simple">
+<li>A <code class="docutils literal"><span class="pre">B</span></code> object is allocated by the runtime.</li>
+<li><code class="docutils literal"><span class="pre">A</span></code>&#8216;s convenience initializer <code class="docutils literal"><span class="pre">init()</span></code> is invoked.</li>
+<li><code class="docutils literal"><span class="pre">A</span></code>&#8216;s convenience initializer dispatches to <code class="docutils literal"><span class="pre">init</span> <span class="pre">int:string:</span></code>
+via the <code class="docutils literal"><span class="pre">self.init</span></code> call. This call dynamically resolves to
+<code class="docutils literal"><span class="pre">B</span></code>&#8216;s designated initializer.</li>
+<li><code class="docutils literal"><span class="pre">B</span></code>&#8216;s designated initializer initializes the stored property
+<code class="docutils literal"><span class="pre">d</span></code> to <code class="docutils literal"><span class="pre">17.0</span></code>.</li>
+<li><code class="docutils literal"><span class="pre">B</span></code>&#8216;s designated initializer chains to <code class="docutils literal"><span class="pre">A</span></code>&#8216;s designated
+initializer.</li>
+<li><code class="docutils literal"><span class="pre">A</span></code>&#8216;s designated initializer initialize&#8217;s the stored properties
+<code class="docutils literal"><span class="pre">i</span></code> and <code class="docutils literal"><span class="pre">s</span></code>&#8216;.</li>
+<li><code class="docutils literal"><span class="pre">A</span></code>&#8216;s designated initializer calls <code class="docutils literal"><span class="pre">completeInit()</span></code>, then
+returns.</li>
+<li><code class="docutils literal"><span class="pre">B</span></code>&#8216;s designated initializer calls <code class="docutils literal"><span class="pre">completeInitForB()</span></code>, then
+returns.</li>
+<li><code class="docutils literal"><span class="pre">A</span></code>&#8216;s convenience initializer returns.</li>
+</ol>
+<p>Convenience initializers are only inherited under certain
+circumstances. Specifically, for a given subclass to inherit the
+convenience initializers of its superclass, the subclass must override
+each of the designated initializers of its superclass. For example
+<code class="docutils literal"><span class="pre">B</span></code> provides the initializer <code class="docutils literal"><span class="pre">init</span> <span class="pre">int:string:</span></code>, which overrides
+<code class="docutils literal"><span class="pre">A</span></code>&#8216;s designated initializer <code class="docutils literal"><span class="pre">init</span> <span class="pre">int:string:</span></code> because the
+initializer name and parameters are the same. If we had some other
+subclass <code class="docutils literal"><span class="pre">OtherB</span></code> of <code class="docutils literal"><span class="pre">A</span></code> that did not provide such an override, it
+would not inherit <code class="docutils literal"><span class="pre">A</span></code>&#8216;s convenience initializers:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class OtherB : A {
+  var d: Double
+
+  init int(i: Int) string(s: String) double(d: Double) {
+    self.d = d                    // initialize stored properties
+    super.init(int: i, string: s) // chain to superclass
+  }
+}
+
+var ob = OtherB()   // error: A&#39;s convenience initializer init() not inherited
+</pre></div>
+</div>
+<div class="sidebar">
+<p class="first sidebar-title">Note</p>
+<p class="last">The requirement that a subclass override all of the designated
+initializers of its superclass to enable initializer inheritance is
+crucial to Swift&#8217;s memory safety model. See <a class="reference internal" href="#initializer-inheritance-model">Initializer
+Inheritance Model</a> for more information.</p>
+</div>
+<p>Note that a subclass may have different designated initializers from
+its superclass. This can occur in a number of ways. For example, the
+subclass might override one of its superclass&#8217;s designated
+initializers with a convenience initializer:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class YetAnotherB : A {
+  var d: Double
+
+  init int(i: Int) string(s: String) -&gt; Self {
+    self.init(int: i, string: s, double: Double(i)) // dispatch
+  }
+
+  init int(i: Int) string(s: String) double(d: Double) {
+    self.d = d                    // initialize stored properties
+    super.init(int: i, string: s) // chain to superclass
+  }
+}
+
+var yab = YetAnotherB()   // okay: YetAnotherB overrides all of A&#39;s designated initializers
+</pre></div>
+</div>
+<p>In other cases, it&#8217;s possible that the convenience initializers of the
+superclass simply can&#8217;t be made to work, because the subclass
+initializers require additional information provided via a
+parameter that isn&#8217;t present in the convenience initializers of the
+superclass:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class PickyB : A {
+  var notEasy: NoEasyDefault
+
+  init int(i: Int) string(s: String) notEasy(NoEasyDefault) {
+    self.notEasy = notEasy
+    super.init(int: i, string: s) // chain to superclass
+  }
+}
+</pre></div>
+</div>
+<p>Here, <code class="docutils literal"><span class="pre">PickyB</span></code> has a stored property of a type <code class="docutils literal"><span class="pre">NoEasyDefault</span></code>
+that can&#8217;t easily be given a default value: it has to be provided as a
+parameter to one of <code class="docutils literal"><span class="pre">PickyB</span></code>&#8216;s initializers. Therefore, <code class="docutils literal"><span class="pre">PickyB</span></code>
+takes over responsibility for its own initialization, and
+none of <code class="docutils literal"><span class="pre">A</span></code>&#8216;s convenience initializers will be inherited into
+<code class="docutils literal"><span class="pre">PickyB</span></code>.</p>
+</div>
+<div class="section" id="synthesized-initializers">
+<h3><a class="toc-backref" href="#id7">Synthesized Initializers</a><a class="headerlink" href="#synthesized-initializers" title="Permalink to this headline">¶</a></h3>
+<p>When a particular class does not specify any designated initializers,
+the implementation will synthesize initializers for the class when all
+of the class&#8217;s stored properties have initial values in the class. The
+form of the synthesized initializers depends on the superclass (if
+present).</p>
+<p>When a superclass is present, the compiler synthesizes a new
+designated initializer in the subclass for each designated initializer
+of the superclass. For example, consider the following class <code class="docutils literal"><span class="pre">C</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class C : B {
+  var title: String = &quot;Default Title&quot;
+}
+</pre></div>
+</div>
+<p>The superclass <code class="docutils literal"><span class="pre">B</span></code> has a single designated initializer,:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">init </span><span class="nf">int</span><span class="p">(</span><span class="n">i</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> string</span><span class="p">(</span><span class="n">s</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Therefore, the compiler synthesizes the following designated
+initializer in <code class="docutils literal"><span class="pre">C</span></code>, which chains to the corresponding designated
+initializer in the superclass:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">init </span><span class="nf">int</span><span class="p">(</span><span class="n">i</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> string</span><span class="p">(</span><span class="n">s</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">) {</span>
+<span class="w">  </span><span class="c1">// title is already initialized in the class C</span>
+<span class="w">  </span><span class="n">super</span><span class="p">.</span><span class="n">init</span><span class="p">(</span><span class="n">int</span><span class="p">:</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">string</span><span class="p">:</span><span class="w"> </span><span class="n">s</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The result of this synthesis is that all designated initializers of
+the superclass are (automatically) overridden in the subclass,
+becoming designated initializers of the subclass as well. Therefore,
+any convenience initializers in the superclass are also inherited,
+allowing the subclass (<code class="docutils literal"><span class="pre">C</span></code>) to be constructed with the same
+initializers as the superclass (<code class="docutils literal"><span class="pre">B</span></code>):</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">var </span><span class="nv">c1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">C</span><span class="p">(</span><span class="n">int</span><span class="p">:</span><span class="w"> </span><span class="mi">17</span><span class="p">,</span><span class="w"> </span><span class="n">string</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Seventeen&quot;</span><span class="p">)</span>
+<span class="kd">var </span><span class="nv">c2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">C</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>When the class has no superclass, a default initializer (with no
+parameters) is implicitly defined:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">class </span><span class="nc">D</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">var </span><span class="nv">title</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;Default Title&quot;</span>
+
+<span class="w">  </span><span class="cm">/* implicitly defined */</span>
+<span class="w">  </span><span class="n">init</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">var </span><span class="nv">d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">D</span><span class="p">()</span><span class="w"> </span><span class="c1">// uses implicitly-defined default initializer</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="required-initializers">
+<h3><a class="toc-backref" href="#id8">Required Initializers</a><a class="headerlink" href="#required-initializers" title="Permalink to this headline">¶</a></h3>
+<p>Objects are generally constructed with the construction syntax
+<code class="docutils literal"><span class="pre">T(...)</span></code> used in all of the examples above, where <code class="docutils literal"><span class="pre">T</span></code> is the name
+of the type. However, it is occasionally useful to construct an object
+for which the actual type is not known until runtime. For example, one
+might have a <code class="docutils literal"><span class="pre">View</span></code> class that expects to be initialized with a
+specific set of coordinates:</p>
+<div class="highlight-swift"><div class="highlight"><pre>struct Rect {
+  var origin: (Int, Int)
+  var dimensions: (Int, Int)
+}
+
+class View {
+  init frame(Rect) { /* initialize view */ }
+}
+</pre></div>
+</div>
+<p>The actual initialization of a subclass of <code class="docutils literal"><span class="pre">View</span></code> would then be
+performed at runtime, with the actual subclass being determined via
+some external file that describes the user interface. The actual
+instantiation of the object would use a type value:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">createView</span><span class="p">(</span><span class="n">viewClass</span><span class="p">:</span><span class="w"> </span><span class="n">View</span><span class="p">.</span><span class="n">Type</span><span class="p">, </span><span class="n">frame</span><span class="p">:</span><span class="w"> </span><span class="n">Rect</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">View</span><span class="p"> {</span>
+<span class="w">  </span><span class="kr">return</span><span class="w"> </span><span class="n">viewClass</span><span class="p">(</span><span class="n">frame</span><span class="p">:</span><span class="w"> </span><span class="n">frame</span><span class="p">)</span><span class="w"> </span><span class="c1">// error: &#39;init frame:&#39; is not &#39;required&#39;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The code above is invalid because there is no guarantee that a given
+subclass of <code class="docutils literal"><span class="pre">View</span></code> will have an initializer <code class="docutils literal"><span class="pre">init</span> <span class="pre">frame:</span></code>, because
+the subclass might have taken over its own initialization (as with
+<code class="docutils literal"><span class="pre">PickyB</span></code>, above). To require that all subclasses provide a
+particular initializer, use the <code class="docutils literal"><span class="pre">required</span></code> attribute as follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class View {
+  @required init frame(Rect) {
+    /* initialize view */
+  }
+}
+
+func createView(viewClass: View.Type, frame: Rect) -&gt; View {
+  return viewClass(frame: frame) // okay
+}
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">required</span></code> attribute allows the initializer to be used to
+construct an object of a dynamically-determined subclass, as in the
+<code class="docutils literal"><span class="pre">createView</span></code> method. It places the (transitive) requirement on all
+subclasses of <code class="docutils literal"><span class="pre">View</span></code> to provide an initializer <code class="docutils literal"><span class="pre">init</span> <span class="pre">frame:</span></code>. For
+example, the following <code class="docutils literal"><span class="pre">Button</span></code> subclass would produce an error:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">class </span><span class="nc">Button</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">View</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// error: &#39;Button&#39; does not provide required initializer &#39;init frame:&#39;.</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The fix is to implement the required initializer in <code class="docutils literal"><span class="pre">Button</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class Button : View {
+  @required init frame(Rect) { // okay: satisfies requirement
+    super.init(frame: frame)
+  }
+}
+</pre></div>
+</div>
+</div>
+<div class="section" id="initializers-in-protocols">
+<h3><a class="toc-backref" href="#id9">Initializers in Protocols</a><a class="headerlink" href="#initializers-in-protocols" title="Permalink to this headline">¶</a></h3>
+<p>Initializers may be declared within a protocol. For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">protocol </span><span class="nc">DefaultInitializable</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">init</span><span class="p">()</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<div class="sidebar">
+<p class="first sidebar-title">Note</p>
+<p class="last">Initializers in protocols have not yet been implemented. Stay tuned.</p>
+</div>
+<p>A class can satisfy this requirement by providing a required
+initializer. For example, only the first of the two following classes
+conforms to its protocol:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class DefInit : DefaultInitializable {
+  @required init() { }
+}
+
+class AlmostDefInit : DefaultInitializable {
+  init() { } // error: initializer used for protocol conformance must be &#39;required&#39;
+}
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">required</span></code> requirement ensures that all subclasses of the class
+declaring conformance to the protocol will also have the initializer,
+so they too will conform to the protocol. This allows one to construct
+objects given type values of protocol type:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">createAnyDefInit</span><span class="p">(</span><span class="n">typeVal</span><span class="p">:</span><span class="w"> </span><span class="n">DefaultInitializable</span><span class="p">.</span><span class="n">Type</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">DefaultInitializable</span><span class="p"> {</span>
+<span class="w">  </span><span class="kr">return</span><span class="w"> </span><span class="n">typeVal</span><span class="p">()</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="de-initializers">
+<h3><a class="toc-backref" href="#id10">De-initializers</a><a class="headerlink" href="#de-initializers" title="Permalink to this headline">¶</a></h3>
+<p>While initializers are responsible for setting up an object&#8217;s state,
+<em>de-initializers</em> are responsible for tearing down that state. Most
+classes don&#8217;t require a de-initializer, because Swift automatically
+releases all stored properties and calls to the superclass&#8217;s
+de-initializer. However, if your class has allocated a resource that
+is not an object (say, a Unix file descriptor) or has registered
+itself during initialization, one can write a de-initializer using
+<code class="docutils literal"><span class="pre">deinit</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class FileHandle {
+  var fd: Int32
+
+  init withFileDescriptor(fd: Int32) {
+    self.fd = fd
+  }
+
+  deinit {
+    close(fd)
+  }
+}
+</pre></div>
+</div>
+<p>The statements within a de-initializer (here, the call to <code class="docutils literal"><span class="pre">close</span></code>)
+execute first, then the superclass&#8217;s de-initializer is
+called. Finally, stored properties are released and the object is
+deallocated.</p>
+</div>
+<div class="section" id="methods-returning-self">
+<h3><a class="toc-backref" href="#id11">Methods Returning <code class="docutils literal"><span class="pre">Self</span></code></a><a class="headerlink" href="#methods-returning-self" title="Permalink to this headline">¶</a></h3>
+<p>A class method can have the special return type <code class="docutils literal"><span class="pre">Self</span></code>, which refers
+to the dynamic type of <code class="docutils literal"><span class="pre">self</span></code>. Such a method guarantees that it will
+return an object with the same dynamic type as <code class="docutils literal"><span class="pre">self</span></code>. One of the
+primary uses of the <code class="docutils literal"><span class="pre">Self</span></code> return type is for factory methods:</p>
+<div class="highlight-swift"><div class="highlight"><pre>extension View {
+  class func createView(frame: Rect) -&gt; Self {
+    return self(frame: frame)
+  }
+}
+</pre></div>
+</div>
+<div class="sidebar">
+<p class="first sidebar-title">Note</p>
+<p class="last">The return type <code class="docutils literal"><span class="pre">Self</span></code> fulfills the same role as Objective-C&#8217;s
+<code class="docutils literal"><span class="pre">instancetype</span></code>, although Swift provides stronger type checking for
+these methods.</p>
+</div>
+<p>Within the body of this class method, the implicit parameter <code class="docutils literal"><span class="pre">self</span></code>
+is a value with type <code class="docutils literal"><span class="pre">View.Type</span></code>, i.e., it&#8217;s a type value for the
+class <code class="docutils literal"><span class="pre">View</span></code> or one of its subclasses. Therefore, the restrictions
+are the same as for any value of type <code class="docutils literal"><span class="pre">View.Type</span></code>: one can call
+other class methods and construct new objects using required
+initializers of the class, among other things. The result returned
+from such a method must be derived from the type of <code class="docutils literal"><span class="pre">Self</span></code>. For
+example, it cannot return a value of type <code class="docutils literal"><span class="pre">View</span></code>, because <code class="docutils literal"><span class="pre">self</span></code>
+might refer to some subclass of <code class="docutils literal"><span class="pre">View</span></code>.</p>
+<p>Instance methods can also return <code class="docutils literal"><span class="pre">Self</span></code>. This is typically used to
+allow chaining of method calls by returning <code class="docutils literal"><span class="pre">Self</span></code> from each method,
+as in the builder pattern:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">class </span><span class="nc">DialogBuilder</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">func </span><span class="nf">setTitle</span><span class="p">(</span><span class="n">title</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">Self</span><span class="p"> {</span>
+<span class="w">    </span><span class="c1">// set the title</span>
+<span class="w">    </span><span class="kr">return</span><span class="w"> </span><span class="bp">self</span><span class="p">;</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="kd">func </span><span class="nf">setBounds</span><span class="p">(</span><span class="n">frame</span><span class="p">:</span><span class="w"> </span><span class="n">Rect</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">Self</span><span class="p"> {</span>
+<span class="w">    </span><span class="c1">// set the bounds</span>
+<span class="w">    </span><span class="kr">return</span><span class="w"> </span><span class="bp">self</span><span class="p">;</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">var </span><span class="nv">builder</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">DialogBuilder</span><span class="p">()</span>
+<span class="w">                </span><span class="p">.</span><span class="n">setTitle</span><span class="p">(</span><span class="s">&quot;Hello, World!&quot;</span><span class="p">)</span>
+<span class="w">                </span><span class="p">.</span><span class="n">setBounds</span><span class="p">(</span><span class="no">Rect</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">640</span><span class="p">,</span><span class="w"> </span><span class="mi">480</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="memory-safety">
+<h2><a class="toc-backref" href="#id12">Memory Safety</a><a class="headerlink" href="#memory-safety" title="Permalink to this headline">¶</a></h2>
+<p>Swift aims to provide memory safety by default, and much of the design
+of Swift&#8217;s object initialization scheme is in service of that
+goal. This section describes the rationale for the design based on the
+memory-safety goals of the language.</p>
+<div class="section" id="three-phase-initialization">
+<h3><a class="toc-backref" href="#id13">Three-Phase Initialization</a><a class="headerlink" href="#three-phase-initialization" title="Permalink to this headline">¶</a></h3>
+<p>The three-phase initialization model used by Swift&#8217;s initializers
+ensures that all stored properties get initialized before any code can
+make use of <code class="docutils literal"><span class="pre">self</span></code>. This is important uses of <code class="docutils literal"><span class="pre">self</span></code>&#8212;say,
+calling a method on <code class="docutils literal"><span class="pre">self</span></code>&#8212;could end up referring to stored
+properties before they are initialized. Consider the following
+Objective-C code, where instance variables are initialized <em>after</em> the
+call to the superclass initializer:</p>
+<div class="highlight-swift"><div class="highlight"><pre>@interface A : NSObject
+- (instancetype)init;
+- (void)finishInit;
+@end
+
+@implementation A
+- (instancetype)init {
+  self = [super init];
+  if (self) {
+    [self finishInit];
+  }
+  return self;
+}
+@end
+
+@interface B : A
+@end
+
+@implementation B {
+  NSString *ivar;
+}
+
+- (instancetype)init {
+  self = [super init];
+  if (self) {
+    self-&gt;ivar = @&quot;Default name&quot;;
+  }
+  return self;
+}
+
+- (void) finishInit {
+  NSLog(@&quot;ivar has the value %@\n&quot;, self-&gt;ivar);
+}
+@end
+</pre></div>
+</div>
+<div class="sidebar">
+<p class="first sidebar-title">Notes</p>
+<p class="last">In Objective-C, <code class="docutils literal"><span class="pre">+alloc</span></code> zero-initializes all of the instance
+variables, which gives them predictable behavior before the init
+method gets to initialize them. Given that Objective-C is fairly
+resilient to <code class="docutils literal"><span class="pre">nil</span></code> objects, this default behavior eliminates (or
+hides) many such initialization bugs. In Swift, however, the
+zero-initialized state is less likely to be valid, and the memory
+safety goals are stronger, so zero-initialization does not suffice.</p>
+</div>
+<p>When initializing a <code class="docutils literal"><span class="pre">B</span></code> object, the <code class="docutils literal"><span class="pre">NSLog</span></code> statement will print:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">ivar</span><span class="w"> </span><span class="n">has</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="p">(</span><span class="n">null</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>because <code class="docutils literal"><span class="pre">-[B</span> <span class="pre">finishInit]</span></code> executes before <code class="docutils literal"><span class="pre">B</span></code> has had a chance to
+initialize its instance variables. Swift initializers avoid this issue
+by splitting each initializer into three phases:</p>
+<p>1. Initialize stored properties. In this phase, the compiler verifies
+that <code class="docutils literal"><span class="pre">self</span></code> is not used except when writing to the stored properties
+of the current class (not its superclasses!). Additionally, this
+initialization directly writes to the storage of the stored
+properties, and does not call any setter or <code class="docutils literal"><span class="pre">willSet</span></code>/<code class="docutils literal"><span class="pre">didSet</span></code>
+method. In this phase, it is not possible to read any of the stored
+properties.</p>
+<p>2. Call to superclass initializer, if any. As with the first step,
+<code class="docutils literal"><span class="pre">self</span></code> cannot be accessed at all.</p>
+<p>3. Perform any additional initialization tasks, which may call methods
+on <code class="docutils literal"><span class="pre">self</span></code>, access properties, and so on.</p>
+<p>Note that, with this scheme, <code class="docutils literal"><span class="pre">self</span></code> cannot be used until the
+original class and all of its superclasses have initialized their
+stored properties, closing the memory safety hole.</p>
+</div>
+<div class="section" id="initializer-inheritance-model">
+<h3><a class="toc-backref" href="#id14">Initializer Inheritance Model</a><a class="headerlink" href="#initializer-inheritance-model" title="Permalink to this headline">¶</a></h3>
+<p>FIXME: To be written</p>
+</div>
+</div>
+<div class="section" id="objective-c-interoperability">
+<h2><a class="toc-backref" href="#id15">Objective-C Interoperability</a><a class="headerlink" href="#objective-c-interoperability" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="initializers-and-init-methods">
+<h3><a class="toc-backref" href="#id16">Initializers and Init Methods</a><a class="headerlink" href="#initializers-and-init-methods" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="designated-and-convenience-initializers">
+<h3><a class="toc-backref" href="#id17">Designated and Convenience Initializers</a><a class="headerlink" href="#designated-and-convenience-initializers" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="allocation-and-deallocation">
+<h3><a class="toc-backref" href="#id18">Allocation and Deallocation</a><a class="headerlink" href="#allocation-and-deallocation" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="dynamic-subclassing">
+<h3><a class="toc-backref" href="#id19">Dynamic Subclassing</a><a class="headerlink" href="#dynamic-subclassing" title="Permalink to this headline">¶</a></h3>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        «&#160;&#160;<a href="LogicalObjects.html">Logical Objects</a>
+        &#160;&#160;::&#160;&#160;
+        <a class="uplink" href="contents.html">Contents</a>
+        &#160;&#160;::&#160;&#160;
+        <a href="Pattern Matching.html">Pattern Matching</a>&#160;&#160;»
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

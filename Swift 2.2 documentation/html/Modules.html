@@ -1,0 +1,516 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Modules User Model &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Modules User Model</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <p>A <a class="reference internal" href="#term-module"><span class="xref std std-term">module</span></a> is the primary unit of code sharing in Swift. This document
+describes the experience of using modules in Swift: what they are and what they
+provide for the user.</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This document was used in planning Swift 1.0; it has not been kept
+up to date.</p>
+</div>
+<div class="contents local topic" id="contents">
+<ul class="simple">
+<li><a class="reference internal" href="#high-level-overview" id="id6">High-Level Overview</a><ul>
+<li><a class="reference internal" href="#a-module-contains-declarations" id="id7">A module contains declarations</a></li>
+<li><a class="reference internal" href="#imported-declarations-can-be-accessed-with-qualified-or-unqualified-lookup" id="id8">Imported declarations can be accessed with qualified or unqualified lookup</a></li>
+<li><a class="reference internal" href="#modules-provide-a-unique-context-for-declarations" id="id9">Modules provide a unique context for declarations</a></li>
+<li><a class="reference internal" href="#modules-may-contain-code" id="id10">Modules may contain code</a></li>
+<li><a class="reference internal" href="#modules-can-re-export-other-modules" id="id11">Modules can &#8220;re-export&#8221; other modules</a></li>
+<li><a class="reference internal" href="#modules-are-uniquely-identified-by-their-name" id="id12">Modules are uniquely identified by their name</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#import" id="id13"><code class="docutils literal"><span class="pre">import</span></code></a><ul>
+<li><a class="reference internal" href="#multiple-source-files" id="id14">Multiple source files</a></li>
+<li><a class="reference internal" href="#ambiguity" id="id15">Ambiguity</a></li>
+<li><a class="reference internal" href="#submodules" id="id16">Submodules</a></li>
+<li><a class="reference internal" href="#import-search-paths" id="id17">Import Search Paths</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#interoperability-with-objective-c-via-clang" id="id18">Interoperability with Objective-C via Clang</a><ul>
+<li><a class="reference internal" href="#clang-submodules" id="id19">Clang Submodules</a></li>
+<li><a class="reference internal" href="#module-overlays" id="id20">Module Overlays</a></li>
+<li><a class="reference internal" href="#multiple-source-files-part-2" id="id21">Multiple source files, part 2</a></li>
+<li><a class="reference internal" href="#accessing-swift-declarations-from-objective-c" id="id22">Accessing Swift declarations from Objective-C</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#glossary" id="id23">Glossary</a></li>
+</ul>
+</div>
+<div class="section" id="high-level-overview">
+<h1><a class="toc-backref" href="#id6">High-Level Overview</a><a class="headerlink" href="#high-level-overview" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="a-module-contains-declarations">
+<h2><a class="toc-backref" href="#id7">A module contains declarations</a><a class="headerlink" href="#a-module-contains-declarations" title="Permalink to this headline">¶</a></h2>
+<p>The primary purpose of a module is to provide declarations of types, functions,
+and global variables that are present in a library. <a class="reference internal" href="#term-import"><span class="xref std std-term">Importing</span></a> the
+module gives access to these declarations and allows them to be used in your
+code.</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kn">import </span><span class="nn">Chess</span>
+<span class="kn">import </span><span class="nn">Foundation</span>
+</pre></div>
+</div>
+<p>You can also selectively import certain declarations from a module:</p>
+<div class="highlight-swift"><div class="highlight"><pre>import func Chess.createGreedyPlayer
+import class Foundation.NSRegularExpression
+</pre></div>
+</div>
+<div class="admonition-comparison-with-other-languages admonition">
+<p class="first admonition-title">Comparison with Other Languages</p>
+<p class="last">Importing a module is much like importing a library in Ruby, Python, or Perl,
+importing a class in Java, or including a header file in a C-family language.
+However, unlike C, module files are not textually included and must be valid
+programs on their own, and may not be in a textual format at all. Unlike Java,
+declarations in a module are not visible at all until imported. And unlike the
+dynamic languages mentioned, importing a module cannot automatically cause
+any code to be run.</p>
+</div>
+</div>
+<div class="section" id="imported-declarations-can-be-accessed-with-qualified-or-unqualified-lookup">
+<h2><a class="toc-backref" href="#id8">Imported declarations can be accessed with qualified or unqualified lookup</a><a class="headerlink" href="#imported-declarations-can-be-accessed-with-qualified-or-unqualified-lookup" title="Permalink to this headline">¶</a></h2>
+<p>Once a module has been imported, its declarations are available for use within
+the current source file. These declarations can be referred to by name, or
+by <a class="reference internal" href="#term-qualified-name"><span class="xref std std-term">qualifying</span></a> them with the name of the module:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">playChess</span><span class="p">(</span><span class="n">blackPlayer</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Chess</span><span class="p">.</span><span class="n">Player</span><span class="p">, </span><span class="n">whitePlayer</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Chess</span><span class="p">.</span><span class="n">Player</span><span class="p">) {</span>
+<span class="w">  </span><span class="kd">var </span><span class="nv">board</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">Board</span><span class="p">()</span><span class="w"> </span><span class="c1">// refers to Chess.Board</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="modules-provide-a-unique-context-for-declarations">
+<h2><a class="toc-backref" href="#id9">Modules provide a unique context for declarations</a><a class="headerlink" href="#modules-provide-a-unique-context-for-declarations" title="Permalink to this headline">¶</a></h2>
+<p>A declaration in a module is unique; it is never the same as a declaration with
+the same name in another module (with one caveat described below). This means
+that two types <code class="docutils literal"><span class="pre">Chess.Board</span></code> and <code class="docutils literal"><span class="pre">Xiangqi.Board</span></code> can exist in the same
+program, and each can be referred to as <code class="docutils literal"><span class="pre">Board</span></code> as long as the other is not
+visible. If more than one imported module declares the same name, the full
+<a class="reference internal" href="#term-qualified-name"><span class="xref std std-term">qualified name</span></a> can be used for disambiguation.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This is accomplished by including the module name in the <a class="reference internal" href="#term-mangled-name"><span class="xref std std-term">mangled name</span></a> of a
+declaration. Therefore, it is an ABI-breaking change to change the name of a
+module containing a public declaration.</p>
+</div>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">The one exception to this rule is declarations that must be compatible with
+Objective-C. Such declarations follow the usual Objective-C rules for name
+conflicts: all classes must have unique names, all protocols must have unique
+names, and all constructors, methods, and properties must have unique names
+within their class (including inherited methods and properties).</p>
+</div>
+</div>
+<div class="section" id="modules-may-contain-code">
+<h2><a class="toc-backref" href="#id10">Modules may contain code</a><a class="headerlink" href="#modules-may-contain-code" title="Permalink to this headline">¶</a></h2>
+<p>In addition to declarations, modules may contain implementations of the
+functions they define. The compiler may choose to use this information when
+optimizing a user&#8217;s program, usually by inlining the module code into a caller.
+In some cases <a class="footnote-reference" href="#id2" id="id1">[1]</a>, the compiler may even use a module&#8217;s function
+implementations to produce more effective diagnostics.</p>
+<p>Modules can also contain <a class="reference internal" href="#term-autolinking"><span class="xref std std-term">autolinking</span></a> information, which the compiler passes
+on to the linker. This can be used to specify which library implements the
+declarations in the module.</p>
+<table class="docutils footnote" frame="void" id="id2" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>Specifically, code marked with the <code class="docutils literal"><span class="pre">&#64;_transparent</span></code> attribute is
+required to be &#8220;transparent&#8221; to the compiler: it <em>must</em> be inlined and
+will affect diagnostics.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="modules-can-re-export-other-modules">
+<h2><a class="toc-backref" href="#id11">Modules can &#8220;re-export&#8221; other modules</a><a class="headerlink" href="#modules-can-re-export-other-modules" title="Permalink to this headline">¶</a></h2>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This feature is likely to be modified in the future.</p>
+</div>
+<p>Like any other body of code, a module may depend on other modules in its
+implementation. The module implementer may also choose to <a class="reference internal" href="#term-re-export"><span class="xref std std-term">re-export</span></a> these
+modules, meaning that anyone who imports the first module will also have access
+to the declarations in the re-exported modules.</p>
+<div class="highlight-swift"><div class="highlight"><pre>@exported import AmericanCheckers
+</pre></div>
+</div>
+<p>As an example, the &#8220;Cocoa&#8221; <a class="reference internal" href="#term-framework"><span class="xref std std-term">framework</span></a> on OS X exists only to re-export three
+other frameworks: AppKit, Foundation, and CoreData.</p>
+<p>Just as certain declarations can be selectively imported from a module, so too
+can they be selectively re-exported, using the same syntax:</p>
+<div class="highlight-swift"><div class="highlight"><pre>@exported import class AmericanCheckers.Board
+</pre></div>
+</div>
+</div>
+<div class="section" id="modules-are-uniquely-identified-by-their-name">
+<span id="module-naming"></span><h2><a class="toc-backref" href="#id12">Modules are uniquely identified by their name</a><a class="headerlink" href="#modules-are-uniquely-identified-by-their-name" title="Permalink to this headline">¶</a></h2>
+<p>Module names exist in a global namespace and must be unique. Like type names,
+module names are conventionally capitalized.</p>
+<div class="admonition-todo admonition">
+<p class="first admonition-title">TODO</p>
+<p class="last">While this matches the general convention for Clang, there are advantages to
+being able to rename a module for lookup purposes, even if the ABI name stays
+the same. It would also be nice to avoid having people stick prefixes on their
+module names the way they currently do for Objective-C classes.</p>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>Because access into a module and access into a type look the same, it is bad
+style to declare a type with the same name as a top-level module used in your
+program:</p>
+<div class="highlight-swift"><div class="highlight"><pre>// Example 1:
+import Foundation
+import struct BuildingConstruction.Foundation
+
+var firstSupport = Foundation.SupportType() // from the struct or from the module?
+
+
+// Example 2:
+import Foundation
+import BuildingConstruction
+
+Foundation.SupportType() // from the class or from the module?
+</pre></div>
+</div>
+<p>In both cases, the type takes priority over the module, but this should still
+be avoided.</p>
+<div class="admonition-todo last admonition">
+<p class="first admonition-title">TODO</p>
+<p class="last">Can we enforce this in the compiler? It seems like there&#8217;s no way around
+Example 2, and indeed Example 2 is probably doing the wrong thing.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="section" id="import">
+<h1><a class="toc-backref" href="#id13"><code class="docutils literal"><span class="pre">import</span></code></a><a class="headerlink" href="#import" title="Permalink to this headline">¶</a></h1>
+<p>As shown above, a module is imported using the <code class="docutils literal"><span class="pre">import</span></code> keyword, followed by
+the name of the module:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kn">import </span><span class="nn">AppKit</span>
+</pre></div>
+</div>
+<p>To import only a certain declaration from the module, you use the appropriate
+declaration keyword:</p>
+<div class="highlight-swift"><div class="highlight"><pre>import class AppKit.NSWindow
+import func AppKit.NSApplicationMain
+import var AppKit.NSAppKitVersionNumber
+import typealias AppKit.NSApplicationPresentationOptions
+</pre></div>
+</div>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">import</span> <span class="pre">typealias</span></code> has slightly special behavior: it will match any type
+other than a protocol, regardless of how the type is declared in the imported
+module.</li>
+<li><code class="docutils literal"><span class="pre">import</span> <span class="pre">class</span></code>, <code class="docutils literal"><span class="pre">struct</span></code>, and <code class="docutils literal"><span class="pre">enum</span></code> will succeed even if the
+name given is a typealias for a type of the appropriate kind.</li>
+<li><code class="docutils literal"><span class="pre">import</span> <span class="pre">func</span></code> will bring in all overloads of the named function.</li>
+<li>Using a keyword that doesn&#8217;t match the named declaration is an error.</li>
+</ul>
+<div class="admonition-todo admonition">
+<p class="first admonition-title">TODO</p>
+<p class="last">There is currently no way to selectively import extensions or operators.</p>
+</div>
+<div class="section" id="multiple-source-files">
+<span id="implicit-visibility"></span><h2><a class="toc-backref" href="#id14">Multiple source files</a><a class="headerlink" href="#multiple-source-files" title="Permalink to this headline">¶</a></h2>
+<p>Most programs are broken up into multiple source files, and these files may
+depend on each other. To facilitate this design, declarations in <em>all</em> source
+files in a module (including the &#8220;main module&#8221; for an executable) are implicitly
+visible in each file&#8217;s context. It is almost as if all these files had been
+loaded with <code class="docutils literal"><span class="pre">import</span></code>, but with a few important differences:</p>
+<ul class="simple">
+<li>The declarations in other files belong to the module being built, just like
+those in the current file. Therefore, if you need to refer to them by
+qualified name, you need to use the name of the module being built.</li>
+<li>A module is a fully-contained entity: it may depend on other modules, but
+those other modules can&#8217;t depend on it. Source files within a module may
+have mutual dependencies.</li>
+</ul>
+<div class="admonition-fixme admonition">
+<p class="first admonition-title">FIXME</p>
+<p class="last">This wouldn&#8217;t belong in the user model at all except for the implicit
+visibility thing. Is there a better way to talk about this?</p>
+</div>
+</div>
+<div class="section" id="ambiguity">
+<h2><a class="toc-backref" href="#id15">Ambiguity</a><a class="headerlink" href="#ambiguity" title="Permalink to this headline">¶</a></h2>
+<p>Because two different modules can declare the same name, it is sometimes
+necessary to use a <a class="reference internal" href="#term-qualified-name"><span class="xref std std-term">qualified name</span></a> to refer to a particular declaration:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kn">import </span><span class="nn">Chess</span>
+<span class="kn">import </span><span class="nn">Xiangqi</span>
+
+<span class="kr">if </span><span class="n">userGame</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s">&quot;chess&quot;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="no">Chess</span><span class="p">.</span><span class="n">playGame</span><span class="p">()</span>
+<span class="p">}</span><span class="w"> </span><span class="kr">else if </span><span class="n">userGame</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s">&quot;xiangqi&quot;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="no">Xiangqi</span><span class="p">.</span><span class="n">playGame</span><span class="p">()</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Here, both modules declare a function named <code class="docutils literal"><span class="pre">playGame</span></code> that takes no
+arguments, so we have to disambiguate by &#8220;qualifying&#8221; the function name with
+the appropriate module.</p>
+<p>These are the rules for resolving name lookup ambiguities:</p>
+<ol class="arabic simple">
+<li>Declarations in the current source file are best.</li>
+<li>Declarations from other files in the same module are better than
+declarations from imports.</li>
+<li>Declarations from selective imports are better than declarations from
+non-selective imports. (This may be used to give priority to a particular
+module for a given name.)</li>
+<li>Every source file implicitly imports the core standard library as a
+non-selective import.</li>
+<li>If the name refers to a function, normal overload resolution may resolve
+ambiguities.</li>
+</ol>
+</div>
+<div class="section" id="submodules">
+<span id="id3"></span><h2><a class="toc-backref" href="#id16">Submodules</a><a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This feature was never implemented, or even fully designed.</p>
+</div>
+<p>For large projects, it is usually desirable to break a single application or
+framework into subsystems, which Swift calls &#8220;submodules&#8221;. A submodule is a
+development-time construct used for grouping within a module. By default,
+declarations within a submodule are considered &#8220;submodule-private&#8221;, which
+means they are only visible within that submodule (rather than across the
+entire module). These declarations will not conflict with declarations in other
+submodules that may have the same name.</p>
+<p>Declarations explicitly marked &#8220;whole-module&#8221; or &#8220;API&#8221; are still visible
+across the entire module (even if declared within a submodule), and must have a
+unique name within that space.</p>
+<p>The <a class="reference internal" href="#term-qualified-name"><span class="xref std std-term">qualified name</span></a> of a declaration within a submodule consists of the
+top-level module name, followed by the submodule name, followed by the
+declaration.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Submodules are an opportunity feature for Swift 1.0.</p>
+</div>
+<div class="admonition-todo admonition">
+<p class="first admonition-title">TODO</p>
+<p>We need to decide once and for all whether implicit visibility applies across
+submodule boundaries, i.e. &#8220;can I access the public Swift.AST.Module from
+Swift.Sema without an import, or do I have to say <code class="docutils literal"><span class="pre">import</span> <span class="pre">Swift.AST</span></code>?&#8221;</p>
+<p>Advantages of module-wide implicit visibility:</p>
+<ul class="simple">
+<li>Better name conflict checking. (The alternative is a linker error, or worse
+<em>no</em> linker error if the names have different manglings.)</li>
+<li>Less work if things move around.</li>
+<li>Build time performance is consistent whether or not you use this feature.</li>
+</ul>
+<p>Advantages of submodule-only implicit visibility:</p>
+<ul class="simple">
+<li>Code completion will include names of public things you don&#8217;t care about.</li>
+<li>We haven&#8217;t actually tested the build time performance of any large Swift
+projects, so we don&#8217;t know if we can actually handle targets that contain
+hundreds of files.</li>
+<li>Could be considered desirable to force declaring your internal dependencies
+explicitly.</li>
+<li>In this mode, we could allow two &#8220;whole-module&#8221; declarations to have the
+same name, since they won&#8217;t. (We could allow this in the other mode too
+but then the qualified name would always be required.)</li>
+</ul>
+<p class="last">Both cases still use &#8220;submodule-only&#8221; as the default access control, so this
+only affects the implicit visibility of whole-module and public declarations.</p>
+</div>
+</div>
+<div class="section" id="import-search-paths">
+<h2><a class="toc-backref" href="#id17">Import Search Paths</a><a class="headerlink" href="#import-search-paths" title="Permalink to this headline">¶</a></h2>
+<div class="admonition-fixme admonition">
+<p class="first admonition-title">FIXME</p>
+<p class="last">Write this section. Can source files be self-contained modules? How does -i
+mode work? Can the &#8220;wrong&#8221; module be found when looking for a dependency
+(i.e. can I substitute my own Foundation and expect AppKit to work)?
+How are modules stored on disk? How do hierarchical module names work?</p>
+</div>
+</div>
+</div>
+<div class="section" id="interoperability-with-objective-c-via-clang">
+<h1><a class="toc-backref" href="#id18">Interoperability with Objective-C via Clang</a><a class="headerlink" href="#interoperability-with-objective-c-via-clang" title="Permalink to this headline">¶</a></h1>
+<p>The compiler has the ability to interoperate with C and Objective-C by
+importing <a class="reference internal" href="#term-clang-module"><span class="xref std std-term">Clang modules</span></a>. This feature of the Clang compiler
+was developed to provide a &#8220;semantic import&#8221; extension to the C family of
+languages. The Swift compiler uses this to expose declarations from C and
+Objective-C as if they used native Swift types.</p>
+<p>In all the examples above, <code class="docutils literal"><span class="pre">import</span> <span class="pre">AppKit</span></code> has been using this mechanism:
+the module found with the name &#8220;AppKit&#8221; is generated from the Objective-C
+AppKit framework.</p>
+<div class="section" id="clang-submodules">
+<h2><a class="toc-backref" href="#id19">Clang Submodules</a><a class="headerlink" href="#clang-submodules" title="Permalink to this headline">¶</a></h2>
+<p>Clang also has a concept of &#8220;submodules&#8221;, which are essentially hierarchically-
+named modules. Unlike Swift&#8217;s <a class="reference internal" href="#submodules"><span>Submodules</span></a>, Clang submodules are visible
+from outside the module. It is conventional for a top-level Clang module to
+re-export all of its submodules, but sometimes certain submodules are specified
+to require an explicit import:</p>
+<div class="highlight-swift"><div class="highlight"><pre>import OpenGL.GL3
+</pre></div>
+</div>
+</div>
+<div class="section" id="module-overlays">
+<h2><a class="toc-backref" href="#id20">Module Overlays</a><a class="headerlink" href="#module-overlays" title="Permalink to this headline">¶</a></h2>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This feature has mostly been removed from Swift; it&#8217;s only in use
+in the &#8220;overlay&#8221; libraries bundled with Swift itself.</p>
+</div>
+<p>If a source file in module A includes <code class="docutils literal"><span class="pre">import</span> <span class="pre">A</span></code>, this indicates that the
+source file is providing a replacement or overlay for an external module.
+In most cases, the source file will <a class="reference internal" href="#term-re-export"><span class="xref std std-term">re-export</span></a> the underlying module, but
+add some convenience APIs to make the existing interface more Swift-friendly.</p>
+<p>This replacement syntax (using the current module name in an import) cannot
+be used to overlay a Swift module, because <a class="reference internal" href="#module-naming"><span>Modules are uniquely identified by their name</span></a>.</p>
+</div>
+<div class="section" id="multiple-source-files-part-2">
+<h2><a class="toc-backref" href="#id21">Multiple source files, part 2</a><a class="headerlink" href="#multiple-source-files-part-2" title="Permalink to this headline">¶</a></h2>
+<p>In migrating from Objective-C to Swift, it is expected that a single program
+will contain a mix of sources. The compiler therefore allows importing a single
+Objective-C header, exposing its declarations to the main source file by
+constructing a sort of &#8220;ad hoc&#8221; module. These can then be used like any
+other declarations imported from C or Objective-C.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This is describing the feature that eventually became &#8220;bridging
+headers&#8221; for app targets.</p>
+</div>
+</div>
+<div class="section" id="accessing-swift-declarations-from-objective-c">
+<h2><a class="toc-backref" href="#id22">Accessing Swift declarations from Objective-C</a><a class="headerlink" href="#accessing-swift-declarations-from-objective-c" title="Permalink to this headline">¶</a></h2>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This never actually happened; instead, we went with &#8220;generated
+headers&#8221; output by the Swift compiler.</p>
+</div>
+<p>Using the new <code class="docutils literal"><span class="pre">&#64;import</span></code> syntax, Objective-C translation units can import
+Swift modules as well. Swift declarations will be mirrored into Objective-C
+and can be called natively, just as Objective-C declarations are mirrored into
+Swift for <a class="reference internal" href="#term-clang-module"><span class="xref std std-term">Clang modules</span></a>. In this case, only the declarations
+compatible with Objective-C will be visible.</p>
+<div class="admonition-todo admonition">
+<p class="first admonition-title">TODO</p>
+<p class="last">We need to actually do this, but it requires working on a branch of Clang, so
+we&#8217;re pushing it back in the schedule as far as possible. The workaround is
+to manually write header files for imported Swift classes.</p>
+</div>
+<div class="admonition-todo admonition">
+<p class="first admonition-title">TODO</p>
+<p class="last">Importing Swift sources from within the same target is a goal, but there are
+many difficulties. How do you name a file to be imported? What if the file
+itself depends on another Objective-C header? What if there&#8217;s a mutual
+dependency across the language boundary? (That&#8217;s a problem in both directions,
+since both Clang modules and Swift modules are only supposed to be exposed
+once they&#8217;ve been type-checked.)</p>
+</div>
+</div>
+</div>
+<div class="section" id="glossary">
+<h1><a class="toc-backref" href="#id23">Glossary</a><a class="headerlink" href="#glossary" title="Permalink to this headline">¶</a></h1>
+<dl class="glossary docutils">
+<dt id="term-autolinking">autolinking</dt>
+<dd>A technique where linking information is included in compiled object files,
+so that external dependencies can be recorded without having to explicitly
+specify them at link time.</dd>
+<dt id="term-clang-module">Clang module</dt>
+<dd>A module whose contents are generated from a C-family header or set of
+headers. See Clang&#8217;s <a class="reference external" href="http://goto.apple.com/?http://clang.llvm.org/docs/Modules.html">Modules</a> documentation for more information.</dd>
+<dt id="term-framework">framework</dt>
+<dd><p class="first">A mechanism for library distribution on OS X. Traditionally contains header
+files describing the library&#8217;s API, a binary file containing the
+implementation, and a directory containing any resources the library may
+need.</p>
+<p class="last">Frameworks are also used on iOS, but as of iOS 7 custom frameworks cannot
+be created by users.</p>
+</dd>
+<dt id="term-import">import</dt>
+<dd>To locate and read a module, then make its declarations available in the
+current context.</dd>
+<dt id="term-library">library</dt>
+<dd>Abstractly, a collection of APIs for a programmer to use, usually with a
+common theme. Concretely, the file containing the implementation of these
+APIs.</dd>
+<dt id="term-mangled-name">mangled name</dt>
+<dd>A unique, internal name for a type or value. The term is most commonly used
+in C++; see <a class="reference external" href="http://goto.apple.com/?http://en.wikipedia.org/wiki/Name_mangling#Name_mangling_in_C.2B.2B">Wikipedia</a> for some examples. Swift&#8217;s name mangling scheme is
+not the same as C++&#8217;s but serves a similar purpose.</dd>
+<dt id="term-module">module</dt>
+<dd>An entity containing the API for a library, to be <a class="reference internal" href="#term-import"><span class="xref std std-term">imported</span></a> into
+a source file.</dd>
+<dt id="term-qualified-name">qualified name</dt>
+<dd>A multi-piece name like <code class="docutils literal"><span class="pre">Foundation.NSWindow</span></code>, which names an entity
+within a particular context. This document is concerned with the case where
+the context is the name of an imported module.</dd>
+<dt id="term-re-export">re-export</dt>
+<dd>To directly expose the API of one module through another module. Including
+the latter module in a source file will behave as if the user had also
+included the former module.</dd>
+<dt id="term-serialized-module">serialized module</dt>
+<dd>A particular encoding of a module that contains declarations that have
+already been processed by the compiler. It may also contain implementations
+of some function declarations in <a class="reference internal" href="#term-sil"><span class="xref std std-term">SIL</span></a> form.</dd>
+<dt id="term-sil">SIL</dt>
+<dd>&#8220;Swift Intermediate Language&#8221;, a stable IR for the distribution of
+inlineable code.</dd>
+<dt id="term-target">target</dt>
+<dd>A dynamic library, framework, plug-in, or application to be built.
+A natural LTO boundary, and roughly the same as what Xcode requires
+separate targets to build.</dd>
+</dl>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

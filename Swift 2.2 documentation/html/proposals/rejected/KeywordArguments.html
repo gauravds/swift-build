@@ -1,0 +1,348 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Summary &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../../_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="../../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../../index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Summary</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This proposal was rejected. We explored a number of alternate
+syntaxes for method names that both allowed describing arguments and were
+compatible with Objective-C selectors.</p>
+</div>
+<div class="section" id="summary">
+<h1>Summary<a class="headerlink" href="#summary" title="Permalink to this headline">¶</a></h1>
+<p>We make the following incremental language changes:</p>
+<ul class="simple">
+<li>We make it so that selector-style declaration syntax declares a
+<strong>selector name</strong> for a method. <code class="docutils literal"><span class="pre">func</span> <span class="pre">foo(x:T)</span> <span class="pre">bar(y:U)</span></code> declares a method
+named with a new selector reference syntax, <code class="docutils literal"><span class="pre">self.foo:bar:</span></code>. This method
+cannot be referenced as <code class="docutils literal"><span class="pre">foo</span></code>; it can only be referenced as
+<code class="docutils literal"><span class="pre">self.foo:bar:</span></code>, or with keyword application syntax,
+<code class="docutils literal"><span class="pre">self.foo(x,</span> <span class="pre">bar:</span> <span class="pre">y)</span></code>.</li>
+<li>We change keywords in parens, as in <code class="docutils literal"><span class="pre">(a:</span> <span class="pre">x,</span> <span class="pre">b:</span> <span class="pre">y)</span></code> to be a feature of
+apply syntax, instead of a feature of tuple literals. Name lookup changes to
+resolve keywords according to the function declaration rather than to the
+context tuple type. For tuple-style declarations <code class="docutils literal"><span class="pre">func</span> <span class="pre">foo(a:</span> <span class="pre">Int,</span> <span class="pre">b:</span> <span class="pre">Int)</span></code>,
+keywords are optional and can be reordered. For selector-style declarations
+<code class="docutils literal"><span class="pre">func</span> <span class="pre">foo(a:</span> <span class="pre">Int)</span> <span class="pre">bar(b:</span> <span class="pre">Int)</span></code>, the keywords are required and must appear
+in order.</li>
+<li>With keyword arguments no longer reliant on tuple types, we simplify the
+tuple type system by removing keywords from tuple types.</li>
+</ul>
+</div>
+<div class="section" id="keyword-apply-syntax">
+<h1>Keyword Apply Syntax<a class="headerlink" href="#keyword-apply-syntax" title="Permalink to this headline">¶</a></h1>
+<div class="highlight-swift"><div class="highlight"><pre>expr-apply ::= expr-postfix &#39;(&#39; (kw-arg (&#39;,&#39; kw-arg)*)? &#39;)&#39;
+kw-arg ::= (identifier &#39;:&#39;)? expr
+
+// Examples
+foo()
+foo(1, 2, 3)
+foo(1, bar: 2, bas: 3)
+foo!(1, bar: 2, bas: 3)
+a.foo?(1, bar: 2, bas: 3)
+</pre></div>
+</div>
+<p>Keyword syntax becomes a feature of apply expressions. When a named
+function or method is applied, a declaration is looked up using the name and any
+keyword arguments that are provided. An arbitrary expression that produces
+a function result may be applied, but cannot be used with keyword arguments.</p>
+</div>
+<div class="section" id="named-application-lookup">
+<h1>Named Application Lookup<a class="headerlink" href="#named-application-lookup" title="Permalink to this headline">¶</a></h1>
+<p>A named application is matched to a declaration using both the base name, which
+appears to the left of the open parens, and the keyword arguments that are
+provided. The matching rules are different for &#8220;tuple-style&#8221; and
+&#8220;keyword-style&#8221; declarations:</p>
+<div class="section" id="finding-the-base-name">
+<h2>Finding the base name<a class="headerlink" href="#finding-the-base-name" title="Permalink to this headline">¶</a></h2>
+<p>The callee of an apply is an arbitrary expression. If the expression is a
+standalone declaration reference or a member reference, then the apply is a
+<strong>named application</strong>, and the name is used as the <strong>base name</strong> during function
+name lookup, as described below. Certain expression productions are looked
+through when looking for a base name:</p>
+<ul class="simple">
+<li>The <code class="docutils literal"><span class="pre">Optional</span></code> postfix operators <code class="docutils literal"><span class="pre">!</span></code> and <code class="docutils literal"><span class="pre">?</span></code>.
+<code class="docutils literal"><span class="pre">foo.bar!()</span></code> and <code class="docutils literal"><span class="pre">bas?()</span></code> are named applications, as is <code class="docutils literal"><span class="pre">foo?!?()</span></code>.</li>
+<li>Parens. <code class="docutils literal"><span class="pre">(foo.bar)()`</span></code> is a named application.</li>
+</ul>
+<p>These productions are looked through to arbitrary depth, so <code class="docutils literal"><span class="pre">((foo!?)?!)()</span></code>
+is also a named application.</p>
+<p>Unnamed applications cannot use keyword arguments.</p>
+</div>
+<div class="section" id="tuple-style-declarations">
+<h2>Tuple-Style Declarations<a class="headerlink" href="#tuple-style-declarations" title="Permalink to this headline">¶</a></h2>
+<p>A tuple-style declaration matches a named application if:</p>
+<ul>
+<li><p class="first">The base name matches the name of the declaration:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">, </span><span class="n">y</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">) {}</span>
+<span class="n">foo</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="c1">// matches</span>
+<span class="n">bar</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="c1">// doesn&#39;t match</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Positional arguments, that is, arguments without keywords, must be convertible
+to the type of the corresponding positional parameter of the declaration:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">, </span><span class="n">y</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">) {}</span>
+<span class="n">foo</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="c1">// matches</span>
+<span class="n">foo</span><span class="p">(</span><span class="s">&quot;one&quot;</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="c1">// doesn&#39;t match</span>
+<span class="n">foo</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;two&quot;</span><span class="p">)</span><span class="w"> </span><span class="c1">// doesn&#39;t match</span>
+<span class="n">foo</span><span class="p">(</span><span class="s">&quot;one&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;two&quot;</span><span class="p">)</span><span class="w"> </span><span class="c1">// doesn&#39;t match</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Keyword names, if present, must match the declared name of a parameter in the
+declaration, and the corresponding argument must be convertible to the type
+of the parameter in the declaration. The same keyword name may not be used
+multiple times, and the same argument cannot be provided positionally and
+by keyword. All keyword arguments must follow all positional arguments:</p>
+<div class="highlight-swift"><div class="highlight"><pre>func foo(x: Int, y: String, z: UnicodeScalar) {}
+foo(1, &quot;two&quot;, &#39;3&#39;)          // matches
+foo(1, &quot;two&quot;, z: &#39;3&#39;)       // matches
+foo(1, y: &quot;two&quot;, &#39;3&#39;)       // invalid, positional arg after keyword arg
+foo(1, z: &#39;3&#39;, y: &quot;two&quot;)    // matches
+foo(z: &#39;3&#39;, x: 1, y: &quot;two&quot;) // matches
+foo(z: &#39;3&#39;, q: 1, y: &quot;two&quot;) // doesn&#39;t match; no keyword &#39;q&#39;
+foo(1, &quot;two&quot;, &#39;3&#39;, x: 4)    // doesn&#39;t match; &#39;x&#39; already given positionally
+foo(1, &quot;two&quot;, z: &#39;3&#39;, z: &#39;4&#39;) // doesn&#39;t match; multiple &#39;z&#39;
+</pre></div>
+</div>
+<p>As an exception, a trailing closure argument always positionally matches
+the last declared parameter, and can appear after keyword arguments:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">, </span><span class="n">y</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">, </span><span class="n">f</span><span class="p">:</span><span class="w"> </span><span class="p">()</span><span class="o"> -&gt; </span><span class="p">()</span>
+<span class="n">foo</span><span class="p">(</span><span class="n">y</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;two&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1">// matches</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">If the final declared keyword parameter takes a variadic argument, the keyword
+in the argument list may be followed by multiple
+non-keyworded arguments. All arguments up to either the next keyword or
+the end of the argument list become that keyword&#8217;s argument:</p>
+<div class="highlight-swift"><div class="highlight"><pre>func foo(x: Int, y: String, z: UnicodeScalar...) {}
+foo(1, &quot;two&quot;, &#39;3&#39;, &#39;4&#39;, &#39;5&#39;)       // matches, z = [&#39;3&#39;, &#39;4&#39;, &#39;5&#39;]
+foo(1, &quot;two&quot;, z: &#39;3&#39;, &#39;4&#39;, &#39;5&#39;)    // same
+foo(1, z: &#39;3&#39;, &#39;4&#39;, &#39;5&#39;, y: &quot;two&quot;) // same
+</pre></div>
+</div>
+</li>
+<li><p class="first">If the base name is the name of a non-function definition of function type,
+the input types match the input type of the referenced function value, and
+there are no keyword arguments:</p>
+<div class="highlight-swift"><div class="highlight"><pre>var foo: (Int, Int) -&gt; ()
+foo(1, 2) // matches
+foo(x: 1, y: 2) // doesn&#39;t match
+</pre></div>
+</div>
+</li>
+</ul>
+</div>
+<div class="section" id="selector-style-declarations">
+<h2>Selector-Style Declarations<a class="headerlink" href="#selector-style-declarations" title="Permalink to this headline">¶</a></h2>
+<p>A selector-style declaration matches a named application if:</p>
+<ul>
+<li><p class="first">The expression must provide keywords for all of its arguments but the first.
+It must <em>not</em> provide a keyword for the first argument:</p>
+<div class="highlight-swift"><div class="highlight"><pre>func foo(x: Int) bar(y: String) bas(z: UnicodeScalar) {}
+foo(1, &quot;two&quot;, &#39;3&#39;)              // doesn&#39;t match; no keywords
+foo(x: 1, bar: &quot;two&quot;, bas: &#39;3&#39;) // doesn&#39;t match; first keyword provided
+foo(1, bar: &quot;two&quot;, bas: &#39;3&#39;)    // matches
+</pre></div>
+</div>
+</li>
+<li><p class="first">The base name of the apply expression must match the first declared selector
+piece. The subsequent argument keyword names must match the remaining selector
+pieces in order. The same keyword name may be used multiple times, to refer
+to selector pieces with the same name. The argument values must be convertible
+to the declared types of each selector piece&#8217;s parameter:</p>
+<div class="highlight-swift"><div class="highlight"><pre>func foo(x: Int) bar(y: String) bas(z: UnicodeScalar) {}
+foo(1, bar: &quot;two&quot;, bas: &#39;3&#39;) // matches
+foo(1, bas: &#39;3&#39;, bar: &quot;two&quot;) // doesn&#39;t match; wrong selector piece order
+foo(1, bar: &#39;2&#39;, bas: &quot;three&quot;) // doesn&#39;t match; wrong types
+
+func foo(x: Int) foo(y: String) foo(z: UnicodeScalar) {}
+foo(1, foo: &quot;two&quot;, foo: &#39;3&#39;) // matches
+</pre></div>
+</div>
+</li>
+<li><p class="first">If the final selector piece declares a variadic parameter, then the keyword
+in the call expression may be followed by multiple arguments. All arguments
+up to the end of the argument list become the keyword parameter&#8217;s value.
+(Because of strict keyword ordering, additional keywords may not follow.)
+For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> bar</span><span class="p">(</span><span class="n">y</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="o">..</span><span class="p">.) {}</span>
+
+<span class="n">foo</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">bar</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;two&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;three&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;four&quot;</span><span class="p">)</span><span class="w"> </span><span class="c1">// matches, y = [&quot;two&quot;, &quot;three&quot;, &quot;four&quot;]</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">If the final selector piece declares a function parameter, then the function
+can be called using trailing closure syntax omitting the keyword. The keyword
+is still required when trailing closure syntax is not used. For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> withBlock</span><span class="p">(</span><span class="n">f</span><span class="p">:</span><span class="w"> </span><span class="p">()</span><span class="o"> -&gt; </span><span class="p">())</span>
+
+<span class="n">foo</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">withBlock</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">})</span><span class="w"> </span><span class="c1">// matches</span>
+<span class="n">foo</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">})</span><span class="w"> </span><span class="c1">// doesn&#39;t match</span>
+<span class="n">foo</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1">// matches</span>
+</pre></div>
+</div>
+<p>Trailing closure syntax can introduce ambiguities when selector-style
+functions differ only in their final closure selector piece:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> onCompletion</span><span class="p">(</span><span class="n">f</span><span class="p">:</span><span class="w"> </span><span class="p">()</span><span class="o"> -&gt; </span><span class="p">())</span><span class="nf"></span>
+<span class="nf">func foo</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> onError</span><span class="p">(</span><span class="n">f</span><span class="p">:</span><span class="w"> </span><span class="p">()</span><span class="o"> -&gt; </span><span class="p">())</span>
+
+<span class="n">foo</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1">// error: ambiguous</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</div>
+</div>
+<div class="section" id="duplicate-definitions">
+<h1>Duplicate Definitions<a class="headerlink" href="#duplicate-definitions" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="id1">
+<h2>Tuple-Style Declarations<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
+<p>Keyword names are part of a tuple-style declaration, but they are not part
+of the declaration&#8217;s name, they are not part of the declaration&#8217;s type, and
+they are not part of the declaration&#8217;s ABI. Two tuple-style declarations that
+differ only in keyword names are considered duplicates:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="c1">// Error: Duplicate definition of foo(Int, Int) -&gt; ()</span>
+<span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">a</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">, </span><span class="n">b</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">) {}</span>
+<span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">, </span><span class="n">y</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">) {}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="id2">
+<h2>Selector-Style Declarations<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h2>
+<p>The name of a selector-style declaration comprises all of its selector pieces in
+declaration order.  Selector-style declarations can be overloaded by selector
+name, by selector order, and by type:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="c1">// OK, no duplicates</span>
+<span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> bar</span><span class="p">(</span><span class="n">y</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> bas</span><span class="p">(</span><span class="n">z</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"></span>
+<span class="nf">func foo</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> bar</span><span class="p">(</span><span class="n">y</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> zim</span><span class="p">(</span><span class="n">z</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"></span>
+<span class="nf">func foo</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> bas</span><span class="p">(</span><span class="n">y</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> bar</span><span class="p">(</span><span class="n">z</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"></span>
+<span class="nf">func foo</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> bar</span><span class="p">(</span><span class="n">y</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> bas</span><span class="p">(</span><span class="n">z</span><span class="p">:</span><span class="w"> </span><span class="n">Float</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Tuple- and selector-style declarations are not considered duplicates, even if
+they can match the same keywords with the same types:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="c1">// OK, not duplicates</span>
+<span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">, </span><span class="n">bar</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"></span>
+<span class="nf">func foo</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> bar</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="unapplied-name-lookup">
+<h1>Unapplied Name Lookup<a class="headerlink" href="#unapplied-name-lookup" title="Permalink to this headline">¶</a></h1>
+<p>An unapplied declaration reference <code class="docutils literal"><span class="pre">identifier</span></code> or member reference
+<code class="docutils literal"><span class="pre">obj.identifier</span></code> finds any tuple-style declaration whose name matches the
+referenced name. It never finds selector-style declarations:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">a</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">, </span><span class="n">b</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">) {}</span>
+<span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">a</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">)</span><span class="nf"> bar</span><span class="p">(</span><span class="n">b</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">) {}</span>
+
+<span class="kd">var </span><span class="nv">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">foo</span><span class="w"> </span><span class="c1">// Finds foo(Int, Int) -&gt; (), not foo:bar:</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="selector-name-lookup">
+<h1>Selector Name Lookup<a class="headerlink" href="#selector-name-lookup" title="Permalink to this headline">¶</a></h1>
+<div class="highlight-swift"><div class="highlight"><pre>expr-selector-member-ref ::= expr-postfix &#39;.&#39; identifier &#39;:&#39; (identifier &#39;:&#39;)+
+</pre></div>
+</div>
+<p>Unapplied selector-style declarations can be referenced as a member of their
+enclosing context using selector member reference expressions. The name must
+consist of at least two selector pieces, each followed by a colon. (A single
+identifier followed by a colon, such as <code class="docutils literal"><span class="pre">foo.bar:</span></code>, is parsed as a normal
+member reference <code class="docutils literal"><span class="pre">foo.bar</span></code> followed by a colon.) A selector member reference
+expression finds any selector-style declarations whose selector pieces match the
+named selector pieces in order:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class C {
+  func foo(a: Int) bar(b: Int) bas(c: Int)
+  func foo(a: Int) bas(b: Int) bar(c: Int)
+
+  func foo(a: Int, bar: Int, bas: Int)
+}
+
+var c: C
+
+c.foo:bar:bas: // Finds c.foo:bar:bas: (not c.foo or c.foo:bas:bar:)
+c.foo:bas:bar: // Finds c.foo:bas:bar:
+c.foo          // Finds c.foo
+</pre></div>
+</div>
+</div>
+<div class="section" id="qoi-issues">
+<h1>QoI Issues<a class="headerlink" href="#qoi-issues" title="Permalink to this headline">¶</a></h1>
+<p>Under this proposal, keyword resolution relies on being able to find a named
+function declaration. This means that keywords cannot be used with arbitrary
+expressions of function type.
+We however still need to parse keywords in nameless applications for recovery.
+There are also functional operators like <code class="docutils literal"><span class="pre">!</span></code> and <code class="docutils literal"><span class="pre">?</span></code> that we need to
+forward keyword arguments through. Are there others? What about parens?
+<code class="docutils literal"><span class="pre">(foo)(bar:</span> <span class="pre">x)</span></code> should probably work.</p>
+<p>This proposal also prevents a single-element name from being referenced with
+selector syntax as <code class="docutils literal"><span class="pre">foo.bar:</span></code>. For QoI, we should recognize attempts to
+reference a member in this way, such as <code class="docutils literal"><span class="pre">if</span> <span class="pre">var</span> <span class="pre">f</span> <span class="pre">=</span> <span class="pre">foo.bar:</span> <span class="pre">{}</span></code> or
+<code class="docutils literal"><span class="pre">[foo.bar::</span> <span class="pre">bas]</span></code>, and fixit away the trailing colon.</p>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

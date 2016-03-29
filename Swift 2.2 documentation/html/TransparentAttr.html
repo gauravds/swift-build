@@ -1,0 +1,132 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>@_transparent &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>@_transparent</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="transparent">
+<h1><code class="docutils literal"><span class="pre">&#64;_transparent</span></code><a class="headerlink" href="#transparent" title="Permalink to this headline">¶</a></h1>
+<p>Semantically, <code class="docutils literal"><span class="pre">&#64;_transparent</span></code> means something like &#8220;treat this operation as
+if it were a primitive operation&#8221;. The name is meant to imply that both the
+compiler and the compiled program will &#8220;see through&#8221; the operation to its
+implementation.</p>
+<p>This has several consequences:</p>
+<ul class="simple">
+<li>Any calls to a function marked <code class="docutils literal"><span class="pre">&#64;_transparent</span></code> MUST be inlined prior to
+doing dataflow-related diagnostics, even under <code class="docutils literal"><span class="pre">-Onone</span></code>. This may be
+necessary to <em>catch</em> dataflow errors.</li>
+<li>Because of this, a <code class="docutils literal"><span class="pre">&#64;_transparent</span></code> function is inherently &#8220;fragile&#8221;, in
+that changing its implementation most likely will not affect callers in
+existing compiled binaries.</li>
+<li>Because of this, a <code class="docutils literal"><span class="pre">&#64;_transparent</span></code> function MUST only reference public
+symbols, and MUST not be optimized based on knowledge of the module it&#8217;s in.
+[This is not currently implemented or enforced.]</li>
+<li>Debug info SHOULD skip over the inlined operations when single-stepping
+through the calling function.</li>
+</ul>
+<p>This is all that <code class="docutils literal"><span class="pre">&#64;_transparent</span></code> means.</p>
+<div class="section" id="when-should-you-use-transparent">
+<h2>When should you use <code class="docutils literal"><span class="pre">&#64;_transparent</span></code>?<a class="headerlink" href="#when-should-you-use-transparent" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>Does the implementation of this function ever have to change? Then you can&#8217;t
+allow it to be inlined.</li>
+<li>Does the implementation need to call private things&#8212;either true-<code class="docutils literal"><span class="pre">private</span></code>
+functions, or <code class="docutils literal"><span class="pre">internal</span></code> functions that might go away in the next release?
+Then you can&#8217;t allow it to be inlined. (Well, you can for now for
+<code class="docutils literal"><span class="pre">internal</span></code>, but it&#8217;ll break once we have libraries that aren&#8217;t shipped with
+apps.)</li>
+<li>Is it okay if the function is <em>not</em> inlined? You&#8217;d just prefer that it were?
+Then you should use [the attribute we haven&#8217;t designed yet], rather than
+<code class="docutils literal"><span class="pre">&#64;_transparent</span></code>. (If you really need this right now, try
+<code class="docutils literal"><span class="pre">&#64;inline(__always)</span></code>.)</li>
+<li>Is it a problem if the function is inlined even under <code class="docutils literal"><span class="pre">-Onone</span></code>? Then you&#8217;re
+really in the previous case. Trust the compiler.</li>
+<li>Is it a problem if you can&#8217;t step through the function that&#8217;s been inlined?
+Then you don&#8217;t want <code class="docutils literal"><span class="pre">&#64;_transparent</span></code>; you just want <code class="docutils literal"><span class="pre">&#64;inline(__always)</span></code>.</li>
+<li>Is it okay if the inlining happens after all the dataflow diagnostics? Then
+you don&#8217;t want <code class="docutils literal"><span class="pre">&#64;_transparent</span></code>; you just want <code class="docutils literal"><span class="pre">&#64;inline(__always)</span></code>.</li>
+</ul>
+<p>If you made it this far, it sounds like <code class="docutils literal"><span class="pre">&#64;_transparent</span></code> is the right choice.</p>
+</div>
+<div class="section" id="current-implementation-limitations">
+<h2>Current implementation limitations<a class="headerlink" href="#current-implementation-limitations" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>We don&#8217;t have a general <code class="docutils literal"><span class="pre">&#64;inlineable</span></code> attribute for functions that <em>allows</em>
+inlining but doesn&#8217;t <em>require</em> it.</li>
+<li>As mentioned above, we don&#8217;t enforce that inlineable things only refer to
+public symbols. <a class="reference external" href="rdar://problem/22666548">rdar://problem/22666548</a></li>
+<li>We also don&#8217;t keep from optimizing based on implementation details of the
+current module. [No Radar yet.]</li>
+<li>If you have local types in your inlineable function, serialization falls
+over. (As does textual SIL.) <a class="reference external" href="rdar://problem/17631278">rdar://problem/17631278</a></li>
+<li>When compiling in non-single-frontend mode, SIL is generated for each file
+but then thrown away in the &#8220;merge modules&#8221; step. So none of it is inlineable
+for external callers. (Currently, <code class="docutils literal"><span class="pre">-whole-module-optimization</span></code> is
+equivalent to <code class="docutils literal"><span class="pre">-force-single-frontend-invocation</span></code>.) <a class="reference external" href="rdar://problem/18913977">rdar://problem/18913977</a></li>
+<li>Similarly, when compiling in non-single-frontend mode, no SIL is generated for
+any functions but those in the primary file (for each frontend invocation),
+including <code class="docutils literal"><span class="pre">&#64;inline(__always)</span></code> and <code class="docutils literal"><span class="pre">&#64;_transparent</span></code> functions. This is
+semantically a bug. <a class="reference external" href="rdar://problem/15366167">rdar://problem/15366167</a></li>
+</ul>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,336 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>The Swift Array Design &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>The Swift Array Design</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="the-swift-array-design">
+<h1>The Swift Array Design<a class="headerlink" href="#the-swift-array-design" title="Permalink to this headline">¶</a></h1>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Author:</th><td class="field-body">Dave Abrahams</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Date:</th><td class="field-body">2014-04-10</td>
+</tr>
+</tbody>
+</table>
+<style>
+tt {
+  background-color: #f2f2f2;
+}
+div.content ul > li {
+ background: none;
+ padding: 0 0 0 0.5em;
+ list-style-image: none;
+ list-style-type: disc;
+ }
+a:link {
+    color: #AB6023;
+    font-weight: normal
+}
+</style><div class="section" id="goals">
+<h2>Goals<a class="headerlink" href="#goals" title="Permalink to this headline">¶</a></h2>
+<ol class="arabic simple">
+<li>Performance equivalent to C arrays for subscript get/set of
+non-class element types is the most important performance goal.</li>
+<li>It should be possible to receive an <code class="docutils literal"><span class="pre">NSArray</span></code> from Cocoa,
+represent it as an <code class="docutils literal"><span class="pre">Array&lt;AnyObject&gt;</span></code>, and pass it right back to
+Cocoa as an <code class="docutils literal"><span class="pre">NSArray</span></code> in O(1) and with no memory allocations.</li>
+<li>Arrays should be usable as stacks, so we want amortized O(1) append
+and O(1) popBack.  Together with goal #1, this implies a
+<code class="docutils literal"><span class="pre">std::vector</span></code>-like layout, with a reserved tail memory capacity
+that can exceed the number of actual stored elements.</li>
+</ol>
+<p>To achieve goals 1 and 2 together, we use static knowledge of the
+element type: when it is statically known that the element type is not
+a class, code and checks accounting for the possibility of wrapping an
+<code class="docutils literal"><span class="pre">NSArray</span></code> are eliminated.  An <code class="docutils literal"><span class="pre">Array</span></code> of Swift value types always
+uses the most efficient possible representation, identical to that of
+<code class="docutils literal"><span class="pre">ContiguousArray</span></code>.</p>
+</div>
+<div class="section" id="components">
+<h2>Components<a class="headerlink" href="#components" title="Permalink to this headline">¶</a></h2>
+<p>Swift provides three generic array types, all of which have amortized
+O(1) growth.  In this document, statements about <strong>ArrayType</strong> apply
+to all three of the components.</p>
+<ul>
+<li><p class="first"><code class="docutils literal"><span class="pre">ContiguousArray&lt;T&gt;</span></code> is the fastest and simplest of the three—use this
+when you need &#8220;C array&#8221; performance.  The elements of a
+<code class="docutils literal"><span class="pre">ContiguousArray</span></code> are always stored contiguously in memory.</p>
+<img alt="_images/ContiguousArray.png" src="_images/ContiguousArray.png" />
+</li>
+<li><p class="first"><code class="docutils literal"><span class="pre">Array&lt;T&gt;</span></code> is like <code class="docutils literal"><span class="pre">ContiguousArray&lt;T&gt;</span></code>, but optimized for efficient
+conversions from Cocoa and back—when <code class="docutils literal"><span class="pre">T</span></code> can be a class type,
+<code class="docutils literal"><span class="pre">Array&lt;T&gt;</span></code> can be backed by the (potentially non-contiguous)
+storage of an arbitrary <code class="docutils literal"><span class="pre">NSArray</span></code> rather than by a Swift
+<code class="docutils literal"><span class="pre">ContiguousArray</span></code>.  <code class="docutils literal"><span class="pre">Array&lt;T&gt;</span></code> also supports up- and down- casts
+between arrays of related class types.  When <code class="docutils literal"><span class="pre">T</span></code> is known to be a
+non-class type, the performance of <code class="docutils literal"><span class="pre">Array&lt;T&gt;</span></code> is identical to that
+of <code class="docutils literal"><span class="pre">ContiguousArray&lt;T&gt;</span></code>.</p>
+<img alt="_images/ArrayImplementation.png" src="_images/ArrayImplementation.png" />
+</li>
+<li><p class="first"><code class="docutils literal"><span class="pre">Slice&lt;T&gt;</span></code> is a subrange of some <code class="docutils literal"><span class="pre">Array&lt;T&gt;</span></code> or
+<code class="docutils literal"><span class="pre">ContiguousArray&lt;T&gt;</span></code>; it&#8217;s the result of using slice notation,
+e.g. <code class="docutils literal"><span class="pre">a[7...21]</span></code> on any Swift array <code class="docutils literal"><span class="pre">a</span></code>.  A slice always has
+contiguous storage and &#8220;C array&#8221; performance.  Slicing an
+<em>ArrayType</em> is O(1) unless the source is an <code class="docutils literal"><span class="pre">Array&lt;T&gt;</span></code> backed by
+an <code class="docutils literal"><span class="pre">NSArray</span></code> that doesn&#8217;t supply contiguous storage.</p>
+<p><code class="docutils literal"><span class="pre">Slice</span></code> is recommended for transient computations but not for
+long-term storage.  Since it references a sub-range of some shared
+backing buffer, a <code class="docutils literal"><span class="pre">Slice</span></code> may artificially prolong the lifetime of
+elements outside the <code class="docutils literal"><span class="pre">Slice</span></code> itself.</p>
+<img alt="_images/Slice.png" src="_images/Slice.png" />
+</li>
+</ul>
+</div>
+<div class="section" id="mutation-semantics">
+<h2>Mutation Semantics<a class="headerlink" href="#mutation-semantics" title="Permalink to this headline">¶</a></h2>
+<p>The <em>ArrayType</em>s have full value semantics via copy-on-write (COW):</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">var </span><span class="nv">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span>
+<span class="kd">let </span><span class="nv">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a</span>
+<span class="n">a</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">42</span>
+<span class="n">print</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="w"> </span><span class="c1">// prints &quot;2&quot;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="bridging-rules-and-terminology-for-all-types">
+<h2>Bridging Rules and Terminology for all Types<a class="headerlink" href="#bridging-rules-and-terminology-for-all-types" title="Permalink to this headline">¶</a></h2>
+<ul id="bridged-verbatim">
+<li><p class="first">Every class type or <code class="docutils literal"><span class="pre">&#64;objc</span></code> existential (such as <code class="docutils literal"><span class="pre">AnyObject</span></code>) is
+<strong>bridged</strong> to Objective-C and <strong>bridged back</strong> to Swift via the
+identity transformation, i.e. it is <strong>bridged verbatim</strong>.</p>
+</li>
+<li><p class="first">A type <code class="docutils literal"><span class="pre">T</span></code> that is not <a class="reference internal" href="#bridged-verbatim">bridged verbatim</a> can conform to
+<code class="docutils literal"><span class="pre">BridgedToObjectiveC</span></code>, which specifies its conversions to and from
+ObjectiveC:</p>
+<div class="highlight-swift"><div class="highlight"><pre>protocol _BridgedToObjectiveC {
+  typealias _ObjectiveCType: AnyObject
+  func _bridgeToObjectiveC() -&gt; _ObjectiveCType
+  class func _forceBridgeFromObjectiveC(_: _ObjectiveCType) -&gt; Self
+}
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Classes and <code class="docutils literal"><span class="pre">&#64;objc</span></code> existentials shall not conform to
+<code class="docutils literal"><span class="pre">_BridgedToObjectiveC</span></code>, a restriction that&#8217;s not currently
+enforceable at compile-time.</p>
+</div>
+</li>
+<li><p class="first">Some generic types (<em>ArrayType</em><code class="docutils literal"><span class="pre">&lt;T&gt;</span></code> in particular) bridge to
+Objective-C only if their element types bridge.  These types conform
+to <code class="docutils literal"><span class="pre">_ConditionallyBridgedToObjectiveC</span></code>:</p>
+<div class="highlight-swift"><div class="highlight"><pre>protocol _ConditionallyBridgedToObjectiveC : _BridgedToObjectiveC {
+  class func _isBridgedToObjectiveC() -&gt; Bool
+  class func _conditionallyBridgeFromObjectiveC(_: _ObjectiveCType) -&gt; Self?
+}
+</pre></div>
+</div>
+<p>Bridging from, or <em>bridging back</em> to, a type <code class="docutils literal"><span class="pre">T</span></code> conforming to
+<code class="docutils literal"><span class="pre">_ConditionallyBridgedToObjectiveC</span></code> when
+<code class="docutils literal"><span class="pre">T._isBridgedToObjectiveC()</span></code> is <code class="docutils literal"><span class="pre">false</span></code> is a user programming
+error that may be diagnosed at
+runtime. <code class="docutils literal"><span class="pre">_conditionallyBridgeFromObjectiveC</span></code> can be used to attempt
+to bridge back, and return <code class="docutils literal"><span class="pre">nil</span></code> if the entire object cannot be
+bridged.</p>
+<div class="admonition-implementation-note admonition">
+<p class="first admonition-title">Implementation Note</p>
+<p class="last">There are various ways to move this detection to compile-time</p>
+</div>
+</li>
+<li><p class="first">For a type <code class="docutils literal"><span class="pre">T</span></code> that is not <a class="reference internal" href="#bridged-verbatim">bridged verbatim</a>,</p>
+<ul>
+<li><p class="first">if <code class="docutils literal"><span class="pre">T</span></code> conforms to <code class="docutils literal"><span class="pre">BridgedToObjectiveC</span></code> and either</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">T</span></code> does not conform to <code class="docutils literal"><span class="pre">_ConditionallyBridgedToObjectiveC</span></code></li>
+<li>or, <code class="docutils literal"><span class="pre">T._isBridgedToObjectiveC()</span></code></li>
+</ul>
+<p>then a value <code class="docutils literal"><span class="pre">x</span></code> of type <code class="docutils literal"><span class="pre">T</span></code> is <strong>bridged</strong> as
+<code class="docutils literal"><span class="pre">T._ObjectiveCType</span></code> via <code class="docutils literal"><span class="pre">x._bridgeToObjectiveC()</span></code>, and an object
+<code class="docutils literal"><span class="pre">y</span></code> of <code class="docutils literal"><span class="pre">T._ObjectiveCType</span></code> is <strong>bridged back</strong> to <code class="docutils literal"><span class="pre">T</span></code> via
+<code class="docutils literal"><span class="pre">T._forceBridgeFromObjectiveC(y)</span></code></p>
+</li>
+<li><p class="first">Otherwise, <code class="docutils literal"><span class="pre">T</span></code> <strong>does not bridge</strong> to Objective-C</p>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="array-type-conversions">
+<h2><code class="docutils literal"><span class="pre">Array</span></code> Type Conversions<a class="headerlink" href="#array-type-conversions" title="Permalink to this headline">¶</a></h2>
+<p>From here on, this document deals only with <code class="docutils literal"><span class="pre">Array</span></code> itself, and not
+<code class="docutils literal"><span class="pre">Slice</span></code> or <code class="docutils literal"><span class="pre">ContiguousArray</span></code>, which support a subset of <code class="docutils literal"><span class="pre">Array</span></code>&#8216;s conversions.  Future revisions will add descriptions of <code class="docutils literal"><span class="pre">Slice</span></code>
+and <code class="docutils literal"><span class="pre">ContiguousArray</span></code> conversions.</p>
+<div class="section" id="kinds-of-conversions">
+<h3>Kinds of Conversions<a class="headerlink" href="#kinds-of-conversions" title="Permalink to this headline">¶</a></h3>
+<p>In these definitions, <code class="docutils literal"><span class="pre">Base</span></code> is <code class="docutils literal"><span class="pre">AnyObject</span></code> or a trivial subtype
+thereof, <code class="docutils literal"><span class="pre">Derived</span></code> is a trivial subtype of <code class="docutils literal"><span class="pre">Base</span></code>, and <code class="docutils literal"><span class="pre">X</span></code>
+conforms to <code class="docutils literal"><span class="pre">_BridgedToObjectiveC</span></code>:</p>
+<ul class="simple" id="trivial-bridging">
+<li><strong>Trivial bridging</strong> implicitly converts <code class="docutils literal"><span class="pre">Base[]</span></code> to
+<code class="docutils literal"><span class="pre">NSArray</span></code> in O(1). This is simply a matter of returning the
+Array&#8217;s internal buffer, which is-a <code class="docutils literal"><span class="pre">NSArray</span></code>.</li>
+</ul>
+<ul id="trivial-bridging-back">
+<li><p class="first"><strong>Trivial bridging back</strong> implicitly converts <code class="docutils literal"><span class="pre">NSArray</span></code> to
+<code class="docutils literal"><span class="pre">AnyObject[]</span></code> in O(1) plus the cost of calling <code class="docutils literal"><span class="pre">copy()</span></code> on
+the <code class="docutils literal"><span class="pre">NSArray</span></code>. <a class="footnote-reference" href="#nocopy" id="id1">[1]</a></p>
+</li>
+<li><p class="first"><strong>Implicit conversions</strong> between <code class="docutils literal"><span class="pre">Array</span></code> types</p>
+<ul class="simple">
+<li><strong>Implicit upcasting</strong> implicitly converts <code class="docutils literal"><span class="pre">Derived[]</span></code> to
+<code class="docutils literal"><span class="pre">Base[]</span></code> in O(1).</li>
+<li><strong>Implicit bridging</strong> implicitly converts <code class="docutils literal"><span class="pre">X[]</span></code> to
+<code class="docutils literal"><span class="pre">X._ObjectiveCType[]</span></code> in O(N).</li>
+</ul>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Either type of implicit conversion may be combined with
+<a class="reference internal" href="#trivial-bridging">trivial bridging</a> in an implicit conversion to <code class="docutils literal"><span class="pre">NSArray</span></code>.</p>
+</div>
+</li>
+<li><p class="first"><strong>Checked conversions</strong> convert <code class="docutils literal"><span class="pre">T[]</span></code> to <code class="docutils literal"><span class="pre">U[]?</span></code> in O(N)
+via <code class="docutils literal"><span class="pre">a</span> <span class="pre">as</span> <span class="pre">U[]</span></code>.</p>
+<ul class="simple">
+<li><strong>Checked downcasting</strong> converts <code class="docutils literal"><span class="pre">Base[]</span></code> to <code class="docutils literal"><span class="pre">Derived[]?</span></code>.</li>
+<li><strong>Checked bridging back</strong> converts <code class="docutils literal"><span class="pre">T[]</span></code> to <code class="docutils literal"><span class="pre">X[]?</span></code> where
+<code class="docutils literal"><span class="pre">X._ObjectiveCType</span></code> is <code class="docutils literal"><span class="pre">T</span></code> or a trivial subtype thereof.</li>
+</ul>
+</li>
+<li><p class="first"><strong>Forced conversions</strong> convert <code class="docutils literal"><span class="pre">AnyObject[]</span></code> or <code class="docutils literal"><span class="pre">NSArray</span></code> to
+<code class="docutils literal"><span class="pre">T[]</span></code> implicitly, in bridging thunks between Swift and Objective-C.</p>
+<p>For example, when a user writes a Swift method taking <code class="docutils literal"><span class="pre">NSView[]</span></code>,
+it is exposed to Objective-C as a method taking <code class="docutils literal"><span class="pre">NSArray</span></code>, which
+is force-converted to <code class="docutils literal"><span class="pre">NSView[]</span></code> when called from Objective-C.</p>
+<ul class="simple">
+<li><strong>Forced downcasting</strong> converts <code class="docutils literal"><span class="pre">AnyObject[]</span></code> to <code class="docutils literal"><span class="pre">Derived[]</span></code> in
+O(1)</li>
+<li><strong>Forced bridging back</strong> converts <code class="docutils literal"><span class="pre">AnyObject[]</span></code> to <code class="docutils literal"><span class="pre">X[]</span></code> in O(N).</li>
+</ul>
+<p>A forced conversion where any element fails to convert is considered
+a user programming error that may trap.  In the case of forced
+downcasts, the trap may be <a class="reference internal" href="#deferred">deferred</a> to the point where an offending
+element is accessed.</p>
+</li>
+</ul>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Both checked and forced downcasts may be combined with <a class="reference internal" href="#trivial-bridging-back">trivial
+bridging back</a> in conversions from <code class="docutils literal"><span class="pre">NSArray</span></code>.</p>
+</div>
+</div>
+<div class="section" id="maintaining-type-safety">
+<h3>Maintaining Type-Safety<a class="headerlink" href="#maintaining-type-safety" title="Permalink to this headline">¶</a></h3>
+<p>Both upcasts and forced downcasts raise type-safety issues.</p>
+<div class="section" id="upcasts">
+<h4>Upcasts<a class="headerlink" href="#upcasts" title="Permalink to this headline">¶</a></h4>
+<p>TODO: this section is outdated.</p>
+<p>When up-casting an <code class="docutils literal"><span class="pre">Derived[]</span></code> to <code class="docutils literal"><span class="pre">Base[]</span></code>, a buffer of
+<code class="docutils literal"><span class="pre">Derived</span></code> object can simply be <code class="docutils literal"><span class="pre">unsafeBitCast</span></code>&#8216;ed to a buffer
+of elements of type <code class="docutils literal"><span class="pre">Base</span></code>—as long as the resulting buffer is never
+mutated.  For example, we cannot allow a <code class="docutils literal"><span class="pre">Base</span></code> element to be
+inserted in the buffer, because the buffer&#8217;s destructor will destroy
+the elements with the (incorrect) static presumption that they have
+<code class="docutils literal"><span class="pre">Derived</span></code> type.</p>
+<p>Furthermore, we can&#8217;t (logically) copy the buffer just prior to
+mutation, since the <code class="docutils literal"><span class="pre">Base[]</span></code> may be copied prior to mutation,
+and our shared subscript assignment semantics imply that all copies
+must observe its subscript assignments.</p>
+<p>Therefore, converting <code class="docutils literal"><span class="pre">T[]</span></code> to <code class="docutils literal"><span class="pre">U[]</span></code> is akin to
+resizing: the new <code class="docutils literal"><span class="pre">Array</span></code> becomes logically independent.  To avoid
+an immediate O(N) conversion cost, and preserve shared subscript
+assignment semantics, we use a layer of indirection in the data
+structure.  Further, when <code class="docutils literal"><span class="pre">T</span></code> is a subclass of <code class="docutils literal"><span class="pre">U</span></code>, the
+intermediate object is marked to prevent in-place mutation of the
+buffer; it will be copied upon its first mutation:</p>
+<img alt="_images/ArrayCast.png" src="_images/ArrayCast.png" />
+</div>
+<div class="section" id="deferred-checking-for-forced-downcasts">
+<span id="deferred"></span><h4>Deferred Checking for Forced Downcasts<a class="headerlink" href="#deferred-checking-for-forced-downcasts" title="Permalink to this headline">¶</a></h4>
+<p>In forced downcasts, if any element fails to have dynamic type <code class="docutils literal"><span class="pre">Derived</span></code>,
+it is considered a programming error that may cause a trap.  Sometimes
+we can do this check in O(1) because the source holds a known buffer
+type.  Rather than incur O(N) checking for the other cases, the new
+intermediate object is marked for deferred checking, and all element
+accesses through that object are dynamically typechecked, with a trap
+upon failure (except in <code class="docutils literal"><span class="pre">-Ounchecked</span></code> builds).</p>
+<p>When the resulting array is later up-cast (other than to a type that
+can be validated in O(1) by checking the type of the underlying
+buffer), the result is also marked for deferred checking.</p>
+<hr class="docutils" />
+<table class="docutils footnote" frame="void" id="nocopy" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>This <code class="docutils literal"><span class="pre">copy()</span></code> may amount to a retain if the <code class="docutils literal"><span class="pre">NSArray</span></code>
+is already known to be immutable.  We could eventually optimize out
+the copy if we can detect that the <code class="docutils literal"><span class="pre">NSArray</span></code> is uniquely
+referenced.  Our current unique-reference detection applies only to
+Swift objects, though.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,648 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Constructors and Initialization in Swift &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../../_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="../../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../../index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Constructors and Initialization in Swift</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="constructors-and-initialization-in-swift">
+<h1><a class="toc-backref" href="#id4">Constructors and Initialization in Swift</a><a class="headerlink" href="#constructors-and-initialization-in-swift" title="Permalink to this headline">¶</a></h1>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This proposal was rejected, though it helped in the design of the
+final Swift 1 initialization model.</p>
+</div>
+<div class="contents topic" id="contents">
+<p class="topic-title first">Contents</p>
+<ul class="simple">
+<li><a class="reference internal" href="#constructors-and-initialization-in-swift" id="id4">Constructors and Initialization in Swift</a><ul>
+<li><a class="reference internal" href="#initialization-in-objective-c" id="id5">Initialization in Objective-C</a><ul>
+<li><a class="reference internal" href="#two-phase-initialization" id="id6">Two-Phase Initialization</a></li>
+<li><a class="reference internal" href="#designated-initializers" id="id7">Designated Initializers</a></li>
+<li><a class="reference internal" href="#the-middle-phase-of-initialization" id="id8">The Middle Phase of Initialization</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#swift-constructors" id="id9">Swift Constructors</a><ul>
+<li><a class="reference internal" href="#constructor-delegation" id="id10">Constructor Delegation</a></li>
+<li><a class="reference internal" href="#superclass-constructors" id="id11">Superclass Constructors</a></li>
+<li><a class="reference internal" href="#instance-variable-initialization" id="id12">Instance Variable Initialization</a></li>
+<li><a class="reference internal" href="#one-or-two-phase-initialization" id="id13">One- or Two-Phase Initialization?</a></li>
+<li><a class="reference internal" href="#constructor-inheritance" id="id14">Constructor Inheritance</a></li>
+<li><a class="reference internal" href="#class-clusters-and-assignment-to-self" id="id15">Class Clusters and Assignment to Self</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#objective-c-interoperability" id="id16">Objective-C Interoperability</a><ul>
+<li><a class="reference internal" href="#constructor-initializer-mapping" id="id17">Constructor &lt;-&gt; Initializer Mapping</a></li>
+<li><a class="reference internal" href="#id3" id="id18">Designated Initializers</a></li>
+<li><a class="reference internal" href="#nil-and-re-assigned-self" id="id19">Nil and Re-assigned Self</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#alternatives" id="id20">Alternatives</a><ul>
+<li><a class="reference internal" href="#separate-swift-constructors-from-objective-c-initializers" id="id21">Separate Swift Constructors from Objective-C Initializers</a></li>
+<li><a class="reference internal" href="#embrace-two-phase-initialization" id="id22">Embrace Two-Phase Initialization</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="initialization-in-objective-c">
+<h2><a class="toc-backref" href="#id5">Initialization in Objective-C</a><a class="headerlink" href="#initialization-in-objective-c" title="Permalink to this headline">¶</a></h2>
+<p>In Objective-C, object allocation and initialization are separate
+operations that are (by convention) always used together. One sends
+the <code class="docutils literal"><span class="pre">alloc</span></code> message to the class to allocate it, then sends an
+<code class="docutils literal"><span class="pre">init</span></code> (or other message in the init family) to the newly-allocated
+object, for example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="p">[[</span><span class="n">NSString</span><span class="w"> </span><span class="n">alloc</span><span class="p">]</span><span class="w"> </span><span class="n">initWithUTF8String</span><span class="p">:</span><span class="s">&quot;initialization&quot;</span><span class="p">]</span>
+</pre></div>
+</div>
+<div class="section" id="two-phase-initialization">
+<h3><a class="toc-backref" href="#id6">Two-Phase Initialization</a><a class="headerlink" href="#two-phase-initialization" title="Permalink to this headline">¶</a></h3>
+<p>The separation of allocation and initialization implies that
+initialization is a two-phase process. In the first phase
+(allocation), memory is allocated and the memory associated with all
+instance variables is zero&#8217;d out. In the second phase, in which the
+appropriate &#8220;init&#8221; instance method is invoked, the instance variables
+are (manually) initialized.</p>
+<p>Note that an object is considered to be fully constructor after
+allocation but before initialization. Therefore, a message send
+initiated from a superclass&#8217;s <code class="docutils literal"><span class="pre">init</span></code> can invoke a method in a
+subclass whose own <code class="docutils literal"><span class="pre">init</span></code> has not completed. A contrived example:</p>
+<div class="highlight-swift"><div class="highlight"><pre>@interface A : NSObject {
+  NSString *_description;
+}
+- (id)init;
+- (NSString*)description;
+@end
+
+@implementation A
+- (id)init {
+  self = [super init]
+  if (self) {
+    _description = [self description];
+  }
+  return self;
+}
+
+- (NSString *)description {
+  return @&quot;A&quot;;
+}
+@end
+
+@interface B : A
+@property NSString *title;
+@end
+
+@implementation B
+- (id)init {
+  self = [super init]
+  if (self) {
+    self-&gt;title = @&quot;Hello&quot;;
+  }
+  return self;
+}
+
+-(NSString *)description {
+  return self-&gt;title;
+}
+@end
+</pre></div>
+</div>
+<p>During the second phase of initialization, A&#8217;s <code class="docutils literal"><span class="pre">-init</span></code> method
+invokes the <code class="docutils literal"><span class="pre">-description</span></code> method, which ends up in B&#8217;s
+<code class="docutils literal"><span class="pre">-description</span></code>. Here, <code class="docutils literal"><span class="pre">title</span></code> will be <code class="docutils literal"><span class="pre">nil</span></code> even though the
+apparent invariant (when looking at B&#8217;s <code class="docutils literal"><span class="pre">-init</span></code> method) is that
+<code class="docutils literal"><span class="pre">title</span></code> is never nil, because B&#8217;s <code class="docutils literal"><span class="pre">-init</span></code> method has not yet
+finished execution.</p>
+<p>In a language with single-phase initialization (such as C++, Java, or
+C# constructors), the object is considered to have the type of the
+constructor currently executing for the purposes of dynamic
+dispatch. For the Objective-C example above, this would mean that when
+A&#8217;s <code class="docutils literal"><span class="pre">-init</span></code> sends the <code class="docutils literal"><span class="pre">description</span></code> message, it would invoke A&#8217;s
+<code class="docutils literal"><span class="pre">-description</span></code>. This is somewhat safer than two-phase
+initialization, because the programmer does not have to deal with the
+possibility of executing one&#8217;s methods before the initialization of
+one&#8217;s instance variables have completed. It is also less flexible.</p>
+</div>
+<div class="section" id="designated-initializers">
+<h3><a class="toc-backref" href="#id7">Designated Initializers</a><a class="headerlink" href="#designated-initializers" title="Permalink to this headline">¶</a></h3>
+<p>One of the benefits of Objective-C&#8217;s <code class="docutils literal"><span class="pre">init</span></code> methods is that they are
+instance methods, and therefore are inherited. One need not override
+the <code class="docutils literal"><span class="pre">init</span></code> methods in a subclass unless that subclass has additional
+instance variables that require initialization. However, when a
+subclass does introduce additional instance variables that require
+initialization, which <code class="docutils literal"><span class="pre">init</span></code> methods should it override? If the
+answer is &#8220;all of them&#8221;, then initializer inheritance isn&#8217;t all that
+useful.</p>
+<p>Objective-C convention has the notion of a <a class="reference external" href="https://developer.apple.com/library/ios/documentation/general/conceptual/CocoaEncyclopedia/Initialization/Initialization.html">designated initializer</a>
+which is, roughly, an initializer method that is responsible for
+calling one of it&#8217;s superclass&#8217;s initializers, then initializing its
+own instance variables. Initializers that are not designated
+initializers are &#8220;secondary&#8221; initializers: they typically delegate to
+another initializer (eventually terminating the chain at a designated
+initializer) rather than performing initialization themselves. For
+example, consider the following <code class="docutils literal"><span class="pre">Task</span></code> class (from the
+aforementioned &#8220;Concepts in Objective-C Programming&#8221; document):</p>
+<div class="highlight-swift"><div class="highlight"><pre>@interface Task
+@property NSString *title;
+@property NSDate *date;
+
+- (id)initWithTitle:(NSString *)aTitle date:(NSDate *)aDate;
+- (id)initWithTitle:(NSString *)aTitle;
+- (id)init;
+@end
+
+@implementation Task
+- (id)initWithTitle:(NSString *)aTitle date:(NSDate *)aDate {
+  title = aTitle;
+  date = aDate;
+  return self;
+}
+
+- (id)initWithTitle:(NSString *)aTitle {
+  return [self initWithTitle:aTitle date:[NSDate date]];
+}
+
+- (id)init {
+  return [self initWithTitle:@&quot;Task&quot;];
+}
+@end
+</pre></div>
+</div>
+<p>The first initializer is the designated initializer, which directly
+initializes the instance variables from its parameters. The second two
+initializers are secondary initializers, which delegate to other
+initializers, eventually reaching the designated initializer.</p>
+<p>A subclass should override all of its superclass&#8217;s designated
+initializers, but it need not override the secondary initializers. We
+can illustrate this with a subclass of <code class="docutils literal"><span class="pre">Task</span></code> that introduces a new
+instance variable:</p>
+<div class="highlight-swift"><div class="highlight"><pre>@interface PackagedTask : Task
+@property dispatch_queue_t queue;
+
+- (id)initWithTitle:(NSString *)aTitle date:(NSDate *)aDate;
+- (id)initWithTitle:(NSString *)aTitle date:(NSDate *)aDate queue:(dispatch_queue_t)aQueue;
+@end
+
+@implementation PackagedTask
+- (id)initWithTitle:(NSString *)aTitle date:(NSDate *)aDate {
+  return [self initWithTitle:aTitle
+               date:aDate
+               queue:dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0)];
+}
+
+- (id)initWithTitle:(NSString * aTitle date:(NSDate *)aDate queue:(dispatch_queue_t)aQueue {
+  self = [super initWithTitle:aTitle date:aDate];
+  if (self) {
+    queue = aQueue;
+  }
+  return self;
+}
+@end
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">PackagedTask</span></code> overrides <code class="docutils literal"><span class="pre">Task</span></code>&#8216;s designated initializer,
+<code class="docutils literal"><span class="pre">-initWithTitle:date:</span></code>, which then becomes a secondary initializer
+of <code class="docutils literal"><span class="pre">PackagedTask</span></code>, whose only designated initializer is
+<code class="docutils literal"><span class="pre">initWithTitle:date:queue:</span></code>. The latter method invokes its
+superclass&#8217;s designated initializer (<code class="docutils literal"><span class="pre">-[Task</span> <span class="pre">initWithTitle:date:]</span></code>),
+then initializes its own instance variable. By following the rules of
+designated initializers mentioned above, one ensures that the
+inherited secondary initializers still work. Consider the execution
+of <code class="docutils literal"><span class="pre">[[PackagedTask</span> <span class="pre">alloc]</span> <span class="pre">init]</span></code>:</p>
+<ul class="simple">
+<li>A <code class="docutils literal"><span class="pre">PackagedTask</span></code> object is allocated.</li>
+<li><code class="docutils literal"><span class="pre">-[Task</span> <span class="pre">init]</span></code> executes, which delegates to <code class="docutils literal"><span class="pre">-[Task</span>
+<span class="pre">initWithTitle]</span></code>.</li>
+<li><code class="docutils literal"><span class="pre">-[Task</span> <span class="pre">initWithTitle]</span></code> delegates to <code class="docutils literal"><span class="pre">-initWithTitle:date:</span></code>,
+which executes <code class="docutils literal"><span class="pre">-[PackagedTask</span> <span class="pre">initWithTitle:date:]</span></code>.</li>
+<li><code class="docutils literal"><span class="pre">-[PackagedTask</span> <span class="pre">initWithTitle:date:]</span></code> invokes <code class="docutils literal"><span class="pre">-[Task</span>
+<span class="pre">initWithTitle:date:]</span></code> to initialize <code class="docutils literal"><span class="pre">Task</span></code>&#8216;s instance variables,
+then initializes its own instance variables.</li>
+</ul>
+</div>
+<div class="section" id="the-middle-phase-of-initialization">
+<h3><a class="toc-backref" href="#id8">The Middle Phase of Initialization</a><a class="headerlink" href="#the-middle-phase-of-initialization" title="Permalink to this headline">¶</a></h3>
+<p>Objective-C&#8217;s two-phase initialization actually has a third part,
+which occurs between the zeroing of the instance variables and the
+call to the initialization. This initialization invokes the default
+constructors for instance variables of C++ class type when those
+default constructors are not trivial. For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre>@interface A
+struct X {
+  X() { printf(&quot;X()\n&quot;); }
+};
+
+@interface A : NSObject {
+  X x;
+}
+@end
+</pre></div>
+</div>
+<p>When constructing an object with <code class="docutils literal"><span class="pre">[[A</span> <span class="pre">alloc]</span> <span class="pre">init]</span></code>, the default
+constructor for <code class="docutils literal"><span class="pre">X</span></code> will execute after the instance variables are
+zeroed but before <code class="docutils literal"><span class="pre">+alloc</span></code> returns.</p>
+</div>
+</div>
+<div class="section" id="swift-constructors">
+<h2><a class="toc-backref" href="#id9">Swift Constructors</a><a class="headerlink" href="#swift-constructors" title="Permalink to this headline">¶</a></h2>
+<p>Swift&#8217;s constructors merge both allocation and initialization into a
+single function. One constructs a new object with type construction
+syntax as follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="no">Task</span><span class="p">(</span><span class="n">title</span><span class="p">:</span><span class="s">&quot;My task&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">date</span><span class="p">:</span><span class="no">NSDate</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>The object will be allocated (via Swift&#8217;s allocation routines) and the
+corresponding constructor will be invoked to perform the
+initialization. The constructor itself might look like this:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">class </span><span class="nc">Task</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">var </span><span class="nv">title</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">String</span>
+<span class="w">  </span><span class="kd">var </span><span class="nv">date</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">NSDate</span>
+
+<span class="w">  </span><span class="n">constructor</span><span class="p">(</span><span class="n">title</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;Task&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">date</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">NSDate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">NSDate</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="bp">self</span><span class="p">.</span><span class="n">title</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">title</span>
+<span class="w">    </span><span class="bp">self</span><span class="p">.</span><span class="n">date</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">date</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Due to the use of default arguments, one can create a task an any of
+the following ways:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="no">Task</span><span class="p">()</span>
+<span class="no">Task</span><span class="p">(</span><span class="n">title</span><span class="p">:</span><span class="s">&quot;My task&quot;</span><span class="p">)</span>
+<span class="no">Task</span><span class="p">(</span><span class="n">date</span><span class="p">:</span><span class="no">NSDate</span><span class="p">())</span>
+<span class="no">Task</span><span class="p">(</span><span class="n">title</span><span class="p">:</span><span class="s">&quot;My task&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">date</span><span class="p">:</span><span class="no">NSDate</span><span class="p">())</span>
+</pre></div>
+</div>
+<div class="section" id="constructor-delegation">
+<h3><a class="toc-backref" href="#id10">Constructor Delegation</a><a class="headerlink" href="#constructor-delegation" title="Permalink to this headline">¶</a></h3>
+<p>Although our use of default arguments has eliminated the need for the
+various secondary constructors in the Objective-C version of the
+<code class="docutils literal"><span class="pre">Task</span></code> class, there are other reasons why one might want to have one
+constructor in a class call another to perform initialization
+(called constructor <em>delegation</em>). For example, default arguments
+cannot make use of other argument values, and one may have a more
+complicated default value. For example, the default title could depend
+on the provided date. Swift should support constructor delegation for
+this use case:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">constructor</span><span class="p">(</span><span class="n">title</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">date</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">NSDate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">NSDate</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="bp">self</span><span class="p">.</span><span class="n">title</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">title</span>
+<span class="w">  </span><span class="bp">self</span><span class="p">.</span><span class="n">date</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">date</span>
+<span class="p">}</span>
+
+<span class="n">constructor</span><span class="p">(</span><span class="n">date</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">NSDate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">NSDate</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="cm">/*self.*/</span><span class="n">constructor</span><span class="p">(</span><span class="n">title</span><span class="p">:</span><span class="s">&quot;Task created on &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">date</span><span class="p">.</span><span class="n">description</span><span class="p">(),</span>
+<span class="w">                       </span><span class="n">date</span><span class="p">:</span><span class="n">date</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>A constructor that delegates to another constructor must do so before
+using or initializing any of its instance variables. This property can
+be verified via definite initialization analysis.</p>
+</div>
+<div class="section" id="superclass-constructors">
+<h3><a class="toc-backref" href="#id11">Superclass Constructors</a><a class="headerlink" href="#superclass-constructors" title="Permalink to this headline">¶</a></h3>
+<p>When one class inherits another, each constructor within the subclass
+must call one of its superclass&#8217;s constructors before using or
+initializing any of its instance variables, which is also verified via
+definite initialization analysis. For example, the Swift
+<code class="docutils literal"><span class="pre">PackagedTask</span></code> class could be implemented as:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">class </span><span class="nc">PackagedTask</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Task</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">var </span><span class="nv">queue</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">dispatch_queue_t</span>
+
+<span class="w">  </span><span class="n">constructor</span><span class="p">(</span><span class="n">title</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">date</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">NSDate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">NSDate</span><span class="p">(),</span>
+<span class="w">              </span><span class="n">queue</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">dispatch_queue_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dispatch_get_global_queue</span><span class="p">(</span><span class="n">DISPATCH_QUEUE_PRIORITY_DEFAULT</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">super</span><span class="p">.</span><span class="n">constructor</span><span class="p">(</span><span class="n">title</span><span class="p">:</span><span class="n">title</span><span class="p">,</span><span class="w"> </span><span class="n">date</span><span class="p">:</span><span class="n">date</span><span class="p">)</span>
+<span class="w">    </span><span class="bp">self</span><span class="p">.</span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="instance-variable-initialization">
+<h3><a class="toc-backref" href="#id12">Instance Variable Initialization</a><a class="headerlink" href="#instance-variable-initialization" title="Permalink to this headline">¶</a></h3>
+<p>Swift allows instance variables to be provided with an initializer,
+which will be called as part of initialization of an object. For
+example, we could provide initializers for the members of <code class="docutils literal"><span class="pre">Task</span></code> as
+follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">class </span><span class="nc">Task</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">var </span><span class="nv">title</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">String</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;Title&quot;</span>
+<span class="w">  </span><span class="kd">var </span><span class="nv">date</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">NSDate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">NSDate</span><span class="p">()</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Here, one does not need to write any constructor: a default,
+zero-parameter constructor will be synthesized by the compiler, which
+runs the provided instance variable initializations. Similarly, if I
+did write a constructor but did not initialize all of the instance
+variables, each uninitialized instance variable would be initialized
+by its provided initializer. While this is mainly programmer
+convenience (one need only write the common initialization for an
+instance variable once, rather than once per non-delegating
+constructor), it may also have an impact on the overall initialization
+story (see below).</p>
+</div>
+<div class="section" id="one-or-two-phase-initialization">
+<h3><a class="toc-backref" href="#id13">One- or Two-Phase Initialization?</a><a class="headerlink" href="#one-or-two-phase-initialization" title="Permalink to this headline">¶</a></h3>
+<p>Swift&#8217;s current model it attempts to ensure that instance variables
+are initialized before they are used via definite initialization
+analysis. However, we haven&#8217;t yet specified whether dynamic dispatch
+during initialization sees the object as being of the
+currently-executing constructor&#8217;s type (as in C++/Java/C#) or of the
+final subclass&#8217;s type (as in Objective-C).</p>
+<p>I propose that we follow the C++/Java/C# precedent, which allows us to
+ensure (within Swift code) that an instance variable is never accessed
+before it has been initialized, eliminating the safety concerns
+introduced by Objective-C&#8217;s two-phase initialization. Practically
+speaking, this means that the vtable/isa pointer should be set to the
+constructor&#8217;s type while the constructor executes.</p>
+<p>This model complicates constructor inheritance considerably. A
+secondary initializer in Objective-C works by delegating to
+(eventually) a designated initializer, which is overridden by the
+subclass. Following the C++/Java/C# precedent breaks this pattern,
+because the overriding designated initializer will never be invoked.</p>
+</div>
+<div class="section" id="constructor-inheritance">
+<h3><a class="toc-backref" href="#id14">Constructor Inheritance</a><a class="headerlink" href="#constructor-inheritance" title="Permalink to this headline">¶</a></h3>
+<p>Currently, constructors in Swift are not inherited. This is a
+limitation that Swift&#8217;s constructor model shares with C++98/03, Java,
+and C#, and a regression from Objective-C. C++11 introduced the notion
+of inherited constructors. It is an opt-in feature, introduced into
+one&#8217;s class with a using declaration such as:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">using</span><span class="w"> </span><span class="n">MySuperclass</span><span class="p">::</span><span class="n">MySuperclass</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>C++11 inherited constructors are implemented by essentially copying
+the signatures of all of the superclass&#8217;s constructors into the
+subclass, ignoring those for which the subclass already has a
+constructor with the same signature. This approach does not translate
+well to Swift, because there is no way to gather all of the
+constructors in either the superclass or the subclass due to the
+presence of class extensions.</p>
+<p>One potential approach is to bring Objective-C&#8217;s notion of designated
+and secondary initializers into Swift. A &#8220;designated&#8221; constructor is
+responsible for calling the superclass constructor and then
+initializing its own instance variables.</p>
+<p>A &#8220;secondary&#8221; constructor can be written in the class definition or an
+extension. A secondary constructor must delegate to another
+constructor, which will find the constructor to delegate to based on
+the type of the eventual subclass of the object. Thus, the subclass&#8217;s
+override of the designated constructor will initialize all of the
+instance variables before continuing execution of the secondary
+constructor.</p>
+<p>For the above to be safe, we need to ensure that subclasses
+override all of the designated constructors of their
+superclass. Therefore, we require that designated constructors be
+written within the class definition <a class="footnote-reference" href="#id2" id="id1">[1]</a>. Secondary constructors can
+be written in either the class definition or an
+extension.</p>
+<p>In Objective-C, classes generally only have one or two designated
+initializers, so having to override them doesn&#8217;t seem too onerous. If
+it begins to feel like boilerplate, we could perform the override
+automatically when all of the instance variables of the subclass
+themselves have initializers.</p>
+<p>Note that the requirement that all designated constructors be
+initializable means that adding a new designated constructor to a
+class is both an ABI- and API-breaking change.</p>
+<p>Syntactically, we could introduce some kind of attribute or keyword to
+distinguish designated constructors from secondary
+constructors. Straw men: <code class="docutils literal"><span class="pre">[designated]</span></code> for designated constructors,
+which is implied for constructors in the class definition, and
+<code class="docutils literal"><span class="pre">[inherited]</span></code> for secondary constructors, which is implied for
+constructors in class extensions.</p>
+<table class="docutils footnote" frame="void" id="id2" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>We could be slightly more lenient here, allowing designated
+constructors to be written in any class extension within the
+same module as the class definition.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="class-clusters-and-assignment-to-self">
+<h3><a class="toc-backref" href="#id15">Class Clusters and Assignment to Self</a><a class="headerlink" href="#class-clusters-and-assignment-to-self" title="Permalink to this headline">¶</a></h3>
+<p>TBD.</p>
+</div>
+</div>
+<div class="section" id="objective-c-interoperability">
+<h2><a class="toc-backref" href="#id16">Objective-C Interoperability</a><a class="headerlink" href="#objective-c-interoperability" title="Permalink to this headline">¶</a></h2>
+<p>The proposed Swift model for constructors needs to interoperate well
+with Objective-C, both for Objective-C classes imported into Swift and
+for Swift classes imported into Objective-C.</p>
+<div class="section" id="constructor-initializer-mapping">
+<h3><a class="toc-backref" href="#id17">Constructor &lt;-&gt; Initializer Mapping</a><a class="headerlink" href="#constructor-initializer-mapping" title="Permalink to this headline">¶</a></h3>
+<p>Fundamental to the interoperability story is that Swift constructors
+serve the same role as Objective-C initializers, and therefore should
+be interoperable. An Objective-C object should be constructible with
+Swift construction syntax, e.g.,:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="no">NSDate</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>and one should be able to override an Objective-C initializer in a
+Swift subclass by writing a constructor, e.g.,:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">class </span><span class="nc">Task</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">NSObject</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">constructor</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">super</span><span class="p">.</span><span class="n">constructor</span><span class="p">()</span><span class="w"> </span><span class="c1">// invokes -[NSObject init]</span>
+
+<span class="w">    </span><span class="c1">// perform initialization</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>On the Objective-C side, one should be able to create a <code class="docutils literal"><span class="pre">Task</span></code>
+object with <code class="docutils literal"><span class="pre">[[Task</span> <span class="pre">alloc]</span> <span class="pre">init]</span></code>, subclass <code class="docutils literal"><span class="pre">Task</span></code> to override
+<code class="docutils literal"><span class="pre">-init</span></code>, and so on.</p>
+<p>Each Swift constructor has both its two Swift entry points (one that
+allocates the object, one that initializes it) and an Objective-C
+entry point for the initializer. Given a Swift constructor, the
+selector for the Objective-C entry point is formed by:</p>
+<ul class="simple">
+<li>For the first selector piece, prepending the string &#8216;&#8217;init&#8217;&#8217; to the
+capitalized name of the first parameter.</li>
+<li>For the remaining selector pieces, the names of the remaining
+parameters.</li>
+</ul>
+<p>For example, given the Swift constructor:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">constructor</span><span class="w"> </span><span class="n">withTitle</span><span class="p">(</span><span class="n">aTitle</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="p">)</span><span class="w"> </span><span class="n">date</span><span class="p">(</span><span class="n">aDate</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">NSDate</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// ...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>the Objective-C entry point will have the selector
+<code class="docutils literal"><span class="pre">initWithTitle:date:</span></code>. Missing parameter names will be holes in the
+selector (e.g., &#8216;&#8217;init::::&#8217;&#8216;). If the constructor either has zero
+parameters or if it has a single parameter with <code class="docutils literal"><span class="pre">Void</span></code>
+type (i.e., the empty tuple <code class="docutils literal"><span class="pre">()</span></code>), the selector will be a
+zero-argument selector with no trailing colon, e.g.,:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">constructor</span><span class="w"> </span><span class="n">toMemory</span><span class="p">(</span><span class="n">_</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">}</span>
+</pre></div>
+</div>
+<p>maps to the selector <code class="docutils literal"><span class="pre">initToMemory</span></code>.</p>
+<p>This mapping is reversible: given a selector in the “init” family,
+i.e., where the first word is “init”, we split the selector into its
+various pieces at the colons:</p>
+<ul class="simple">
+<li>For the first piece, we remove the “init” and then lowercase the
+next character <em>unless</em> the second character is also uppercase. This
+becomes the name of the first parameter to the constructor. If this
+string is non-empty and the selector is a zero-argument selector
+(i.e., no trailing <code class="docutils literal"><span class="pre">:</span></code>), the first (only) parameter has <code class="docutils literal"><span class="pre">Void</span></code>
+type.</li>
+<li>For the remaining pieces, we use the selector piece as the name of
+the corresponding parameter to the constructor.</li>
+</ul>
+<p>Note that this scheme intentionally ignores methods that don&#8217;t have
+the leading <code class="docutils literal"><span class="pre">init</span></code> keyword, including (e.g.) methods starting with
+<code class="docutils literal"><span class="pre">_init</span></code> or methods with completely different names that have been
+tagged as being in the <code class="docutils literal"><span class="pre">init</span></code> family in Objective-C (via the
+<code class="docutils literal"><span class="pre">objc_method_family</span></code> attribute in Clang). We consider these cases to
+be rare enough that we don&#8217;t want to pessimize the conventional
+<code class="docutils literal"><span class="pre">init</span></code> methods to accommodate them.</p>
+</div>
+<div class="section" id="id3">
+<h3><a class="toc-backref" href="#id18">Designated Initializers</a><a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h3>
+<p>Designed initializers in Objective-C are currently identified by
+documentation and convention. To strengthen these conventions and make
+it possible to mechanically verify (in Swift) that all designated
+initializers have been overridden, we should introduce a Clang method
+attribute <code class="docutils literal"><span class="pre">objc_designated_initializer</span></code> that can be applied to the
+designated initializers in Objective-C. Clang can then be extended to
+perform similar checking to what we&#8217;re describing for Swift:
+designated initializers delegate or chain to the superclass
+constructor, secondary constructors always delegate, and subclassing
+requires one to override the designated initializers. The impact can
+be softened somewhat using warnings or other heuristics, to be
+(separately) determined.</p>
+</div>
+<div class="section" id="nil-and-re-assigned-self">
+<h3><a class="toc-backref" href="#id19">Nil and Re-assigned Self</a><a class="headerlink" href="#nil-and-re-assigned-self" title="Permalink to this headline">¶</a></h3>
+<p>An Objective-C initializer can return a self pointer that is different
+than the one it was called with. When this happens, it is either due
+to an error (in which case it will return nil) or because the object
+is being substituted for another object.</p>
+<p>In both cases, we are left with a partially-constructed object that
+then needs to be destroyed, even though its instance variables may not
+yet have been initialized. This is also a problem for Objective-C,
+which makes returning anything other than the original &#8216;&#8217;self&#8217;&#8217;
+brittle.</p>
+<p>In Swift, we will have a separate error-handling mechanism to report
+failures. A Swift constructor will not be allowed to return a value;
+rather, it should raise an error if an error occurs, and that error
+will be propagated however we eventually decide to implement error
+propagation.</p>
+<p>Object substitution is the more complicated feature. I propose that we
+do not initially support object substitution within Swift
+constructors. However, for memory safety we do need to recognize when
+calling the superclass constructor or delegating to another
+constructor has replaced the object (which can happen in Objective-C
+code). Aside from the need to destroy the original object, the
+instance variables of the new object will already have been
+initialized, so our &#8220;initialization&#8221; of those instance variables is
+actually assignment. The code generation for constructors will need to
+account for this.</p>
+</div>
+</div>
+<div class="section" id="alternatives">
+<h2><a class="toc-backref" href="#id20">Alternatives</a><a class="headerlink" href="#alternatives" title="Permalink to this headline">¶</a></h2>
+<p>This proposal is complicated, in part because it&#8217;s trying to balance
+the safety goals of Swift against the convenience of Objective-C&#8217;s
+two-phase initialization.</p>
+<div class="section" id="separate-swift-constructors-from-objective-c-initializers">
+<h3><a class="toc-backref" href="#id21">Separate Swift Constructors from Objective-C Initializers</a><a class="headerlink" href="#separate-swift-constructors-from-objective-c-initializers" title="Permalink to this headline">¶</a></h3>
+<p>Rather than try to adapt Swift&#8217;s constructors to work with
+Objective-C&#8217;s initializers, we could instead keep these features
+distinct. Swift constructors would maintain their current behavior
+(which ensures that instance variables are always initialized), and
+neither override nor introduce Objective-C initializers as entry
+points.</p>
+<p>In this world, one would still have to implement <code class="docutils literal"><span class="pre">init</span></code> methods in
+Swift classes to override Objective-C initializers or make a Swift
+object constructible in Objective-C via the <code class="docutils literal"><span class="pre">alloc/init</span></code>
+pattern. Swift constructors would not be inherited, or would use some
+mechanism like C++11&#8217;s inherited constructors. As we do today, Swift&#8217;s
+Clang importer could introduce constructors into Objective-C classes
+that simply forward to the underlying initializers, so that we get
+Swift&#8217;s object construction syntax. However, the need to write
+<code class="docutils literal"><span class="pre">init</span></code> methods when subclasses would feel like a kludge.</p>
+</div>
+<div class="section" id="embrace-two-phase-initialization">
+<h3><a class="toc-backref" href="#id22">Embrace Two-Phase Initialization</a><a class="headerlink" href="#embrace-two-phase-initialization" title="Permalink to this headline">¶</a></h3>
+<p>We could switch Swift whole-heartedly over to two-phase
+initialization, eliminating constructors in favor of <code class="docutils literal"><span class="pre">init</span></code>
+methods. We would likely want to ensure that all instance variables
+get initialized before the <code class="docutils literal"><span class="pre">init</span></code> methods ever run, for safety
+reasons. This could be handled by (for example) requiring initializers
+on all instance variables, and running those initializers after
+allocation and before the <code class="docutils literal"><span class="pre">init</span></code> methods are called, the same way
+that instance variables with non-trivial default constructors are
+handled in Objective-C++. We would still likely need the notion of a
+designated initializer in Objective-C to make this safe in Swift,
+since we need to know which Objective-C initializers are guaranteed to
+initialize those instance variables not written in Swift.</p>
+<p>This choice makes interoperability with Objective-C easier (since
+we&#8217;re adopting Objective-C&#8217;s model), but it makes safety either harder
+(e.g., we have to make all of our methods guard against uninitialized
+instance variables) or more onerous (requiring initializers on the
+declarations of all instance variables).</p>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

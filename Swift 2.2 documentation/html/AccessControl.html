@@ -1,0 +1,294 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Access Control &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="contents.html" />
+    <link rel="next" title="Driver Design &amp; Internals" href="DriverInternals.html" />
+    <link rel="prev" title="Index Invalidation Rules in the Swift Standard Library" href="IndexInvalidation.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Access Control</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        «&#160;&#160;<a href="IndexInvalidation.html">Index Invalidation Rules in the Swift Standard Library</a>
+        &#160;&#160;::&#160;&#160;
+        <a class="uplink" href="contents.html">Contents</a>
+        &#160;&#160;::&#160;&#160;
+        <a href="DriverInternals.html">Driver Design &amp; Internals</a>&#160;&#160;»
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="access-control">
+<h1>Access Control<a class="headerlink" href="#access-control" title="Permalink to this headline">¶</a></h1>
+<p>The general guiding principle of Swift access control:</p>
+<blockquote>
+<div><strong>No entity can be defined in terms of another entity that has a lower
+access level.</strong></div></blockquote>
+<p>There are three levels of access: &#8220;private&#8221;, &#8220;internal&#8221;, and &#8220;public&#8221;.
+Private entities can only be accessed from within the source file where they
+are defined. Internal entities can be accessed anywhere within the module they
+are defined. Public entities can be accessed from anywhere within the module
+and from any other context that imports the current module.</p>
+<p>The names <code class="docutils literal"><span class="pre">public</span></code> and <code class="docutils literal"><span class="pre">private</span></code> have precedent in many languages;
+<code class="docutils literal"><span class="pre">internal</span></code> comes from C#. In the future, <code class="docutils literal"><span class="pre">public</span></code> may be used for both API
+and SPI, at which point we may design additional annotations to distinguish the
+two.</p>
+<p>By default, most entities in a source file have <code class="docutils literal"><span class="pre">internal</span></code> access.
+This optimizes for the most common case—a single-target application
+project—while not accidentally revealing entities to clients of a framework
+module.</p>
+<div class="contents local topic" id="contents">
+<ul class="simple">
+<li><a class="reference internal" href="#rules" id="id2">Rules</a><ul>
+<li><a class="reference internal" href="#globals-and-members" id="id3">Globals and Members</a></li>
+<li><a class="reference internal" href="#protocols" id="id4">Protocols</a></li>
+<li><a class="reference internal" href="#structs-enums-and-classes" id="id5">Structs, Enums, and Classes</a></li>
+<li><a class="reference internal" href="#types" id="id6">Types</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#runtime-guarantees" id="id7">Runtime Guarantees</a><ul>
+<li><a class="reference internal" href="#interaction-with-objective-c" id="id8">Interaction with Objective-C</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#non-goals-class-only-and-protected" id="id9">Non-Goals: &#8220;class-only&#8221; and &#8220;protected&#8221;</a></li>
+<li><a class="reference internal" href="#potential-future-directions" id="id10">Potential Future Directions</a></li>
+</ul>
+</div>
+<div class="section" id="rules">
+<h2><a class="toc-backref" href="#id2">Rules</a><a class="headerlink" href="#rules" title="Permalink to this headline">¶</a></h2>
+<p>Access to a particular entity is considered relative to the current
+<em>access context.</em> The access context of an entity is the current
+file (if <code class="docutils literal"><span class="pre">private</span></code>), the current module (if <code class="docutils literal"><span class="pre">internal</span></code>), or the current
+program (if <code class="docutils literal"><span class="pre">public</span></code>). A reference to an entity may only be written within
+the entity&#8217;s access context.</p>
+<p>If a particular entity is not accessible, it does not appear in name lookup,
+unlike in C++. However, access control does not restrict access to members via
+runtime reflection (where applicable), nor does it necessarily restrict
+visibility of symbols in a linked binary.</p>
+<div class="section" id="globals-and-members">
+<h3><a class="toc-backref" href="#id3">Globals and Members</a><a class="headerlink" href="#globals-and-members" title="Permalink to this headline">¶</a></h3>
+<p>A global function, constant, or variable may have any access level less than
+or equal to the access level of its type. That is, a <code class="docutils literal"><span class="pre">private</span></code> constant can
+have <code class="docutils literal"><span class="pre">public</span></code> type, but not the other way around.</p>
+<p>Accessors for variables have the same access level as their associated variable.
+The setter may be explicitly annotated with an access level less than or equal
+to the access level of the variable; this is written as <code class="docutils literal"><span class="pre">private(set)</span></code> or
+<code class="docutils literal"><span class="pre">internal(set)</span></code> before the <code class="docutils literal"><span class="pre">var</span></code> introducer.</p>
+<p>An initializer, method, subscript, or property may have any access level less
+than or equal to the access level of its type (including the implicit &#8216;Self&#8217;
+type), with a few additional rules:</p>
+<ul class="simple">
+<li>If the type&#8217;s access level is <code class="docutils literal"><span class="pre">private</span></code>, the access level of members
+defaults to <code class="docutils literal"><span class="pre">private</span></code>. If the type&#8217;s access level is <code class="docutils literal"><span class="pre">internal</span></code> or
+<code class="docutils literal"><span class="pre">public</span></code>, the access level of members defaults to <code class="docutils literal"><span class="pre">internal</span></code>.</li>
+<li>If a member is used to satisfy a protocol requirement, its access level must
+be at least as high as the protocol conformance&#8217;s; see <a class="reference internal" href="#protocols"><span>Protocols</span></a> below.</li>
+<li>If an initializer is <code class="docutils literal"><span class="pre">required</span></code> by a superclass, its access level must be
+at least as high as the access level of the subclass itself.</li>
+<li>Accessors for subscripts follow the same rules as accessors for variables.</li>
+<li>A member may be overridden whenever it is accessible.</li>
+</ul>
+<p>The implicit memberwise initializer for a struct has the minimum access level
+of all of the struct&#8217;s stored properties, except that if all properties are
+<code class="docutils literal"><span class="pre">public</span></code> the initializer is <code class="docutils literal"><span class="pre">internal</span></code>. The implicit no-argument
+initializer for structs and classes follows the default access level for the
+type.</p>
+<p>Currently, enum cases always have the same access level as the enclosing enum.</p>
+<p>Deinitializers are only invoked by the runtime and do not nominally have access.
+Internally, the compiler represents them as having the same access level as the
+enclosing type.</p>
+</div>
+<div class="section" id="protocols">
+<span id="id1"></span><h3><a class="toc-backref" href="#id4">Protocols</a><a class="headerlink" href="#protocols" title="Permalink to this headline">¶</a></h3>
+<p>A protocol may have any access level less than or equal to the access levels
+of the protocols it refines. That is, a <code class="docutils literal"><span class="pre">private</span></code> ExtendedWidget protocol can
+refine a <code class="docutils literal"><span class="pre">public</span></code> Widget protocol, but not the other way around.</p>
+<p>The access level of a requirement is the access level of the enclosing
+protocol, even when the protocol is <code class="docutils literal"><span class="pre">public</span></code>. Currently, requirements may not
+be given a lower access level than the enclosing protocol.</p>
+<p>Swift does not currently support private protocol conformances, so for runtime
+consistency, the access level of the conformance of type T to protocol P is
+equal to the minimum of T&#8217;s access level and P&#8217;s access level; that is, the
+conformance is accessible whenever both T and P are accessible. This does not
+change if the protocol is conformed to in an extension. (The access level of a
+conformance is not currently reflected in the source, but is a useful concept
+for applying restrictions consistently.)</p>
+<p>All members used to satisfy a conformance must have an access level at least as
+high as the conformance&#8217;s. This ensures consistency between views of the type;
+if any member has a <em>lower</em> access level than the conformance, then the member
+could be accessed anyway through a generic function constrained by the protocol.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This rule disallows an <code class="docutils literal"><span class="pre">internal</span></code> member of a protocol extension to satisfy
+a <code class="docutils literal"><span class="pre">public</span></code> requirement for a <code class="docutils literal"><span class="pre">public</span></code> type. Removing this limitation is
+not inherently unsafe, but (a) may be unexpected given the lack of explicit
+reference to the member, and (b) results in references to non-public symbols
+in the current representation.</p>
+</div>
+<p>A protocol may be used as a type whenever it is accessible. A nominal can
+conform to a protocol whenever the protocol is accessible.</p>
+</div>
+<div class="section" id="structs-enums-and-classes">
+<h3><a class="toc-backref" href="#id5">Structs, Enums, and Classes</a><a class="headerlink" href="#structs-enums-and-classes" title="Permalink to this headline">¶</a></h3>
+<p>A struct, enum, or class may be used as a type whenever it is accessible. A
+struct, enum, or class may be extended whenever it is accessible.</p>
+<p>A class may be subclassed whenever it is accessible. A class may have any
+access level less than or equal to the access level of its superclass.</p>
+<p>Members in an extension have the same default access level as members declared
+within the extended type. However, an extension may be marked with an explicit
+access modifier (e.g. <code class="docutils literal"><span class="pre">private</span> <span class="pre">extension</span></code>), in which case the default
+access level of members within the extension is changed to match.</p>
+<p>Extensions with explicit access modifiers may not add new protocol
+conformances, since Swift does not support private protocol conformances
+(see <a class="reference internal" href="#protocols"><span>Protocols</span></a> above).</p>
+<p>A type may conform to a protocol with lower access than the type itself.</p>
+</div>
+<div class="section" id="types">
+<h3><a class="toc-backref" href="#id6">Types</a><a class="headerlink" href="#types" title="Permalink to this headline">¶</a></h3>
+<p>A nominal type&#8217;s access level is the same as the access level of the nominal
+declaration itself. A generic type&#8217;s access level is the minimum of the access
+level of the base type and the access levels of all generic argument types.</p>
+<p>A tuple type&#8217;s access level is the minimum of the access levels of its
+elements. A function type&#8217;s access level is the minimum of the access levels of
+its input and return types.</p>
+<p>A typealias may have any access level up to the access level of the type it
+aliases. That is, a <code class="docutils literal"><span class="pre">private</span></code> typealias can refer to a <code class="docutils literal"><span class="pre">public</span></code> type, but
+not the other way around. This includes associated types used to satisfy
+protocol conformances.</p>
+</div>
+</div>
+<div class="section" id="runtime-guarantees">
+<h2><a class="toc-backref" href="#id7">Runtime Guarantees</a><a class="headerlink" href="#runtime-guarantees" title="Permalink to this headline">¶</a></h2>
+<p>Non-<code class="docutils literal"><span class="pre">public</span></code> members of a class or extension will not be seen by subclasses
+or other extensions from outside the module. Therefore, members of a subclass
+or extension will not conflict with or inadvertently be considered to override
+non-accessible members of the superclass.</p>
+<p>Both <code class="docutils literal"><span class="pre">private</span></code> and <code class="docutils literal"><span class="pre">internal</span></code> increase opportunities for devirtualization,
+though it is still possible to put a subclass of a <code class="docutils literal"><span class="pre">private</span></code> class within the
+same file.</p>
+<p>Most information about a non-<code class="docutils literal"><span class="pre">public</span></code> entity still has to be put into a
+module file for now, since we don&#8217;t have resilience implemented. This can be
+improved later, and is no more revealing than the information currently
+available in the runtime for pure Objective-C classes.</p>
+<div class="section" id="interaction-with-objective-c">
+<h3><a class="toc-backref" href="#id8">Interaction with Objective-C</a><a class="headerlink" href="#interaction-with-objective-c" title="Permalink to this headline">¶</a></h3>
+<p>If an entity is exposed to Objective-C, most of the runtime guarantees and
+optimization opportunities go out the window. We have to use a particular
+selector for members, everything can be inspected at runtime, and even a
+private member can cause selector conflicts. In this case, access control is
+only useful for discipline purposes.</p>
+<p>Members explicitly marked <code class="docutils literal"><span class="pre">private</span></code> are <em>not</em> exposed to Objective-C unless
+they are also marked <code class="docutils literal"><span class="pre">&#64;objc</span></code> (or <code class="docutils literal"><span class="pre">&#64;IBAction</span></code> or similar), even if declared
+within a class implicitly or explicitly marked <code class="docutils literal"><span class="pre">&#64;objc</span></code>.</p>
+<p>Any <code class="docutils literal"><span class="pre">public</span></code> entities will be included in the generated header. In an
+application or unit test target, <code class="docutils literal"><span class="pre">internal</span></code> entities will be exposed as well.</p>
+</div>
+</div>
+<div class="section" id="non-goals-class-only-and-protected">
+<h2><a class="toc-backref" href="#id9">Non-Goals: &#8220;class-only&#8221; and &#8220;protected&#8221;</a><a class="headerlink" href="#non-goals-class-only-and-protected" title="Permalink to this headline">¶</a></h2>
+<p>This proposal omits two forms of access control commonly found in other
+languages, a &#8220;class-implementation-only&#8221; access (often called &#8220;private&#8221;), and a
+&#8220;class and any subclasses&#8221; access (often called &#8220;protected&#8221;). We chose not to
+include these levels of access control because they do not add useful
+functionality beyond <code class="docutils literal"><span class="pre">private</span></code>, <code class="docutils literal"><span class="pre">internal</span></code>, and <code class="docutils literal"><span class="pre">public</span></code>.</p>
+<dl class="docutils">
+<dt>&#8220;class-only&#8221;</dt>
+<dd><p class="first">If &#8220;class-only&#8221; includes extensions of the class, it is clear that it
+provides no protection at all, since a class may be extended from any context
+where it is accessible. So a hypothetical &#8220;class-only&#8221; must already be
+limited with regards to extensions. Beyond that, however, a &#8220;class-only&#8221;
+limit forces code to be declared within the class that might otherwise
+naturally be a top-level helper or an extension method on another type.</p>
+<p class="last"><code class="docutils literal"><span class="pre">private</span></code> serves the proper use case of limiting access to the
+implementation details of a class (even from the rest of the module!) while
+not requiring that all of those implementation details be written lexically
+inside the class.</p>
+</dd>
+<dt>&#8220;protected&#8221;</dt>
+<dd><p class="first">&#8220;protected&#8221; access provides no guarantees of information hiding, since any
+subclass can now access the implementation details of its superclass&#8212;and
+expose them publicly, if it so chooses. This interacts poorly with our future
+plans for resilient APIs. Additionally, it increases the complexity of the
+access control model for both the compiler and for developers, and like
+&#8220;class-only&#8221; it is not immediately clear how it interacts with extensions.</p>
+<p class="last">Though it is not compiler-enforced, members that might be considered
+&#8220;protected&#8221; are effectively publicly accessible, and thus should be marked
+<code class="docutils literal"><span class="pre">public</span></code> in Swift. They can still be documented as intended for overriding
+rather than for subclassing, but the specific details of this are best dealt
+with on a case-by-case basis.</p>
+</dd>
+</dl>
+</div>
+<div class="section" id="potential-future-directions">
+<h2><a class="toc-backref" href="#id10">Potential Future Directions</a><a class="headerlink" href="#potential-future-directions" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>Allowing <code class="docutils literal"><span class="pre">private</span></code> or <code class="docutils literal"><span class="pre">internal</span></code> protocol conformances, which are only
+accessible at compile-time from a particular access context.</li>
+<li>Limiting particular capabilities, such as marking something <code class="docutils literal"><span class="pre">final(public)</span></code>
+to restrict subclassing or overriding outside of the current module.</li>
+<li>Allowing the Swift parts of a mixed-source framework to access private
+headers.</li>
+<li>Revealing <code class="docutils literal"><span class="pre">internal</span></code> Swift API in a mixed-source framework in a second
+generated header.</li>
+<li>Levels of <code class="docutils literal"><span class="pre">public</span></code>, for example <code class="docutils literal"><span class="pre">public(&quot;SPI&quot;)</span></code>.</li>
+<li>Enum cases less accessible than the enum.</li>
+<li>Protocol requirements less accessible than the protocol.</li>
+</ul>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        «&#160;&#160;<a href="IndexInvalidation.html">Index Invalidation Rules in the Swift Standard Library</a>
+        &#160;&#160;::&#160;&#160;
+        <a class="uplink" href="contents.html">Contents</a>
+        &#160;&#160;::&#160;&#160;
+        <a href="DriverInternals.html">Driver Design &amp; Internals</a>&#160;&#160;»
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,286 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Rationales for the Swift standard library designs &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Rationales for the Swift standard library designs</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="rationales-for-the-swift-standard-library-designs">
+<h1>Rationales for the Swift standard library designs<a class="headerlink" href="#rationales-for-the-swift-standard-library-designs" title="Permalink to this headline">¶</a></h1>
+<p>This document collects rationales for the Swift standard library.  It is not
+meant to document all possible designs that we considered, but might describe
+some of those, when important to explain the design that was chosen.</p>
+<div class="section" id="current-designs">
+<h2>Current designs<a class="headerlink" href="#current-designs" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="some-nsstring-apis-are-mirrored-on-string">
+<h3>Some <code class="docutils literal"><span class="pre">NSString</span></code> APIs are mirrored on <code class="docutils literal"><span class="pre">String</span></code><a class="headerlink" href="#some-nsstring-apis-are-mirrored-on-string" title="Permalink to this headline">¶</a></h3>
+<p>There was not enough time in Swift 1.0 to design a rich <code class="docutils literal"><span class="pre">String</span></code> API, so we
+reimplemented most of <code class="docutils literal"><span class="pre">NSString</span></code> APIs on <code class="docutils literal"><span class="pre">String</span></code> for parity.  This brought
+the exact <code class="docutils literal"><span class="pre">NSString</span></code> semantics of those APIs, for example, treatment of
+Unicode or behavior in edge cases (for example, empty strings), which we might
+want to reconsider.</p>
+<p>Radars: <a class="reference external" href="rdar://problem/19705854">rdar://problem/19705854</a></p>
+</div>
+<div class="section" id="size-t-is-unsigned-but-it-is-imported-as-int">
+<h3><code class="docutils literal"><span class="pre">size_t</span></code> is unsigned, but it is imported as <code class="docutils literal"><span class="pre">Int</span></code><a class="headerlink" href="#size-t-is-unsigned-but-it-is-imported-as-int" title="Permalink to this headline">¶</a></h3>
+<p>Converging APIs to use <code class="docutils literal"><span class="pre">Int</span></code> as the default integer type allows users to
+write fewer explicit type conversions.</p>
+<p>Importing <code class="docutils literal"><span class="pre">size_t</span></code> as a signed <code class="docutils literal"><span class="pre">Int</span></code> type would not be a problem for 64-bit
+platforms.  The only concern is about 32-bit platforms, and only about
+operating on array-like data structures that span more than half of the address
+space.  Even today, in 2015, there are enough 32-bit platforms that are still
+interesting, and x32 ABIs for 64-bit CPUs are also important.  We agree that
+32-bit platforms are important, but the usecase for an unsigned <code class="docutils literal"><span class="pre">size_t</span></code> on
+32-bit platforms is pretty marginal, and for code that nevertheless needs to do
+that there is always the option of doing a bitcast to <code class="docutils literal"><span class="pre">UInt</span></code> or using C.</p>
+</div>
+<div class="section" id="type-conversions">
+<h3>Type Conversions<a class="headerlink" href="#type-conversions" title="Permalink to this headline">¶</a></h3>
+<p>The canonical way to convert from an instance <cite>x</cite> of type <code class="docutils literal"><span class="pre">T</span></code> to
+type <code class="docutils literal"><span class="pre">U</span></code> is <code class="docutils literal"><span class="pre">U(x)</span></code>, a precedent set by <code class="docutils literal"><span class="pre">Int(value:</span> <span class="pre">UInt32)</span></code>.
+Conversions that can fail should use failable initializers,
+e.g. <code class="docutils literal"><span class="pre">Int(text:</span> <span class="pre">String)</span></code>, yielding a <code class="docutils literal"><span class="pre">Int?</span></code>. When other forms provide
+added convenience, they may be provided as well. For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">String</span><span class="p">.</span><span class="no">Index</span><span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">utf16</span><span class="p">.</span><span class="n">startIndex</span><span class="p">.</span><span class="n">successor</span><span class="p">(),</span><span class="w"> </span><span class="n">within</span><span class="p">:</span><span class="w"> </span><span class="n">s</span><span class="p">)</span><span class="w"> </span><span class="c1">// canonical</span>
+<span class="n">s</span><span class="p">.</span><span class="n">utf16</span><span class="p">.</span><span class="n">startIndex</span><span class="p">.</span><span class="n">successor</span><span class="p">().</span><span class="n">samePositionIn</span><span class="p">(</span><span class="n">s</span><span class="p">)</span><span class="w">        </span><span class="c1">// alternate</span>
+</pre></div>
+</div>
+<p>Converting initializers generally take one parameter. A converting
+initializer&#8217;s first parameter should not have an argument label unless
+it indicates a lossy, non-typesafe, or non-standard conversion method,
+e.g. <code class="docutils literal"><span class="pre">Int(bitPattern:</span> <span class="pre">someUInt)</span></code>.  When a converting initializer
+requires a parameter for context, it should not come first, and
+generally <em>should</em> use a keyword.  For example, <code class="docutils literal"><span class="pre">String(33,</span> <span class="pre">radix:</span>
+<span class="pre">2)</span></code>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Rationale:</th><td class="field-body">First, type conversions are typical trouble spots, and we
+like the idea that people are explicit about the types to which
+they&#8217;re converting.  Secondly, avoiding method or property syntax
+provides a distinct context for code completion.  Rather than
+appearing in completions offered after <code class="docutils literal"><span class="pre">.</span></code>, for example, the
+available conversions could show up whenever the user hit the “tab”
+key after an expression.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="protocols-with-restricted-conformance-rules">
+<h3>Protocols with restricted conformance rules<a class="headerlink" href="#protocols-with-restricted-conformance-rules" title="Permalink to this headline">¶</a></h3>
+<p>It is sometimes useful to define a public protocol that only a limited set of
+types can adopt.  There is no language feature in Swift to disallow declaring
+conformances in third-party code: as long as the requirements are implemented
+and the protocol is accessible, the compiler allows the conformance.</p>
+<p>The standard library adopts the following pattern: the protocol is declared as
+a regular public type, but it includes at least one requirement named using the
+underscore rule.  That underscored API becomes private to the users according
+to the standard library convention, effectively preventing third-party code from
+declaring a conformance.</p>
+<p>For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre>public protocol CVarArgType {
+  var _cVarArgEncoding: [Word] { get }
+}
+
+// Public API that uses CVaListPointer, so CVarArgType has to be public, too.
+public func withVaList&lt;R&gt;(
+  args: [CVarArgType],
+  @noescape f: (CVaListPointer) -&gt; R
+) -&gt; R
+</pre></div>
+</div>
+</div>
+<div class="section" id="high-order-functions-on-collections-return-arrays">
+<h3>High-order functions on collections return <code class="docutils literal"><span class="pre">Array</span></code>s<a class="headerlink" href="#high-order-functions-on-collections-return-arrays" title="Permalink to this headline">¶</a></h3>
+<p>We can&#8217;t make <code class="docutils literal"><span class="pre">map()</span></code>, <code class="docutils literal"><span class="pre">filter()</span></code>, etc. all return <code class="docutils literal"><span class="pre">Self</span></code>:</p>
+<ul>
+<li><p class="first"><code class="docutils literal"><span class="pre">map()</span></code> takes a function <code class="docutils literal"><span class="pre">(T)</span> <span class="pre">-&gt;</span> <span class="pre">U</span></code> and therefore can&#8217;t return Self
+literally.  The required language feature for making <code class="docutils literal"><span class="pre">map()</span></code> return
+something like <code class="docutils literal"><span class="pre">Self</span></code> in generic code (higher-kinded types) doesn&#8217;t exist
+in Swift.  You can&#8217;t write a method like <code class="docutils literal"><span class="pre">func</span> <span class="pre">map(f:</span> <span class="pre">(T)</span> <span class="pre">-&gt;</span> <span class="pre">U)</span> <span class="pre">-&gt;</span> <span class="pre">Self&lt;U&gt;</span></code>
+today.</p>
+</li>
+<li><p class="first">There are lots of sequences that don&#8217;t have an appropriate form for the
+result.  What happens when you filter the only element out of a
+<code class="docutils literal"><span class="pre">SequenceOfOne&lt;T&gt;</span></code>, which is defined to have exactly one element?</p>
+</li>
+<li><p class="first">A <code class="docutils literal"><span class="pre">map()</span></code> that returns <code class="docutils literal"><span class="pre">Self&lt;U&gt;</span></code> hews most closely to the signature
+required by Functor (mathematical purity of signature), but if you make map
+on <code class="docutils literal"><span class="pre">Set</span></code> or <code class="docutils literal"><span class="pre">Dictionary</span></code> return <code class="docutils literal"><span class="pre">Self</span></code>, it violates the semantic laws
+required by Functor, so it&#8217;s a false purity.  We&#8217;d rather preserve the
+semantics of functional <code class="docutils literal"><span class="pre">map()</span></code> than its signature.</p>
+</li>
+<li><p class="first">The behavior is surprising (and error-prone) in generic code:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">countFlattenedElements</span><span class="p">&lt;</span><span class="w"></span>
+<span class="w">  </span><span class="no">S</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">SequenceType</span><span class="w"> </span><span class="n">where</span><span class="w"> </span><span class="no">S</span><span class="p">.</span><span class="no">Generator</span><span class="p">.</span><span class="no">Element</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="no">Set</span><span class="p">&lt;</span><span class="no">Double</span><span class="p">&gt;</span><span class="w"></span>
+<span class="p">&gt;(</span><span class="n">sequence</span><span class="p">:</span><span class="w"> </span><span class="n">S</span><span class="p">)</span><span class="o"> -&gt; </span><span class="no">Int</span><span class="p"> {</span>
+<span class="w">  </span><span class="kr">return</span><span class="w"> </span><span class="n">sequence</span><span class="p">.</span><span class="n">map</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nv">$0</span><span class="p">.</span><span class="n">count</span><span class="w"> </span><span class="p">}.</span><span class="n">reduce</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nv">$0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">$1</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</li>
+</ul>
+<p>The function behaves as expected when given an <code class="docutils literal"><span class="pre">[Set&lt;Double&gt;]</span></code>, but the
+results are wrong for <code class="docutils literal"><span class="pre">Set&lt;Set&lt;Double&gt;&gt;</span></code>.  The <code class="docutils literal"><span class="pre">sequence.map()</span></code> operation
+would return a <code class="docutils literal"><span class="pre">Set&lt;Int&gt;</span></code>, and all non-unique counts would disappear.</p>
+<ul class="simple">
+<li>Even if we throw semantics under the bus, maintaining mathematical purity of
+signature prevents us from providing useful variants of these algorithms that
+are the same in spirit, like the <code class="docutils literal"><span class="pre">flatMap()</span></code> that selects the non-nil
+elements of the result sequence.</li>
+</ul>
+</div>
+<div class="section" id="the-remove-method-family-on-collections">
+<h3>The <cite>remove*()</cite> method family on collections<a class="headerlink" href="#the-remove-method-family-on-collections" title="Permalink to this headline">¶</a></h3>
+<p>Protocol extensions for <code class="docutils literal"><span class="pre">RangeReplaceableCollectionType</span></code> define
+<code class="docutils literal"><span class="pre">removeFirst(n:</span> <span class="pre">Int)</span></code> and <code class="docutils literal"><span class="pre">removeLast(n:</span> <span class="pre">Int)</span></code>.  These functions remove
+exactly <code class="docutils literal"><span class="pre">n</span></code> elements; they don&#8217;t clamp <code class="docutils literal"><span class="pre">n</span></code> to <code class="docutils literal"><span class="pre">count</span></code> or they could be
+masking bugs.</p>
+<p>Since the standard library tries to preserve information, it also defines
+special overloads that return just one element, <code class="docutils literal"><span class="pre">removeFirst()</span> <span class="pre">-&gt;</span> <span class="pre">Element</span></code>
+and <code class="docutils literal"><span class="pre">removeLast()</span> <span class="pre">-&gt;</span> <span class="pre">Element</span></code>, that return the removed element.  These
+overloads have a precondition that the collection is not empty.  Another
+possible design would be that they don&#8217;t have preconditions and return
+<code class="docutils literal"><span class="pre">Element?</span></code>.  Doing so would make the overload set inconsistent: semantics of
+different overloads would be significantly different.  It would be surprising
+that <code class="docutils literal"><span class="pre">myData.removeFirst()</span></code> and <code class="docutils literal"><span class="pre">myData.removeFirst(1)</span></code> are not equivalent.</p>
+</div>
+<div class="section" id="lazy-functions-that-operate-on-sequences-and-collections">
+<h3>Lazy functions that operate on sequences and collections<a class="headerlink" href="#lazy-functions-that-operate-on-sequences-and-collections" title="Permalink to this headline">¶</a></h3>
+<p>In many cases functions that operate on sequences can be implemented either
+lazily or eagerly without compromising performance.  To decide between a lazy
+and an eager implementation, the standard library uses the following rule.
+When there is a choice, and not explicitly required by the API semantics,
+functions don&#8217;t return lazy collection wrappers that refer to users&#8217; closures.
+The consequence is that all users&#8217; closures are <code class="docutils literal"><span class="pre">&#64;noescape</span></code>, except in an
+explicitly lazy context.</p>
+<p>Based on this rule, we conclude that <code class="docutils literal"><span class="pre">enumerate(),</span> <span class="pre">``zip()</span></code> and
+<code class="docutils literal"><span class="pre">reverse()</span></code> return lazy wrappers, but <code class="docutils literal"><span class="pre">filter()</span></code> and <code class="docutils literal"><span class="pre">map()</span></code> don&#8217;t.  For
+the first three functions being lazy is the right default, since usually the
+result is immediately consumed by for-in, so we don&#8217;t want to allocate memory
+for it.</p>
+<p>A different design that was rejected is to preserve consistency with other
+strict functions by making these methods strict, but then client code needs to
+call an API with a different name, say <code class="docutils literal"><span class="pre">lazyEnumerate()</span></code> to opt into
+laziness.  The problem is that the eager API, which would have a shorter and
+less obscure name, would be less efficient for the common case.</p>
+</div>
+<div class="section" id="use-of-booleantype-in-library-apis">
+<h3>Use of <code class="docutils literal"><span class="pre">BooleanType</span></code> in library APIs<a class="headerlink" href="#use-of-booleantype-in-library-apis" title="Permalink to this headline">¶</a></h3>
+<p>Use <code class="docutils literal"><span class="pre">Bool</span></code> instead of a generic function over a <code class="docutils literal"><span class="pre">BooleanType</span></code>, unless there
+are special circumstances (for example, <code class="docutils literal"><span class="pre">func</span> <span class="pre">&amp;&amp;</span></code> is designed to work on all
+boolean values so that <code class="docutils literal"><span class="pre">&amp;&amp;</span></code> feels like a part of the language).</p>
+<p><code class="docutils literal"><span class="pre">BooleanType</span></code> is a protocol to which only <code class="docutils literal"><span class="pre">Bool</span></code> and <code class="docutils literal"><span class="pre">ObjCBool</span></code> conform.
+Users don&#8217;t usually interact <code class="docutils literal"><span class="pre">ObjCBool</span></code> instances, except when using certain
+specific APIs (for example, APIs that operate on pointers to <code class="docutils literal"><span class="pre">BOOL</span></code>).  If
+someone already has an <code class="docutils literal"><span class="pre">ObjCBool</span></code> instance for whatever strange reason, they
+can just convert it to <code class="docutils literal"><span class="pre">Bool</span></code>.  We think this is the right tradeoff:
+simplifying function signatures is more important than making a marginal
+usecase a bit more convenient.</p>
+</div>
+</div>
+<div class="section" id="possible-future-directions">
+<h2>Possible future directions<a class="headerlink" href="#possible-future-directions" title="Permalink to this headline">¶</a></h2>
+<p>This section describes some of the possible future designs that we have
+discussed.  Some might get dismissed, others might become full proposals and
+get implemented.</p>
+<div class="section" id="mixed-type-fixed-point-arithmetic">
+<h3>Mixed-type fixed-point arithmetic<a class="headerlink" href="#mixed-type-fixed-point-arithmetic" title="Permalink to this headline">¶</a></h3>
+<p>Radars: <a class="reference external" href="rdar://problem/18812545">rdar://problem/18812545</a> <a class="reference external" href="rdar://problem/18812365">rdar://problem/18812365</a></p>
+<p>Standard library only defines arithmetic operators for LHS and RHS that have
+matching types.  It might be useful to allow users to mix types.</p>
+<p>There are multiple approaches:</p>
+<ul class="simple">
+<li>AIR model,</li>
+<li>overloads in the standard library for operations that are always safe and
+can&#8217;t trap (e.g., comparisons),</li>
+<li>overloads in the standard library for all operations.</li>
+</ul>
+<p>TODO: describe advantages</p>
+<p>The arguments towards not doing any of these, at least in the short term:</p>
+<ul class="simple">
+<li>demand might be lower than we think: seems like users have converged towards
+using <code class="docutils literal"><span class="pre">Int</span></code> as the default integer type.</li>
+<li>mitigation: import good C APIs that use appropriate typedefs for
+unsigned integers (<code class="docutils literal"><span class="pre">size_t</span></code> for example) as <code class="docutils literal"><span class="pre">Int</span></code>.</li>
+</ul>
+</div>
+<div class="section" id="swift-power-operator">
+<h3>Swift: Power operator<a class="headerlink" href="#swift-power-operator" title="Permalink to this headline">¶</a></h3>
+<p>Radars: <a class="reference external" href="rdar://problem/17283778">rdar://problem/17283778</a></p>
+<p>It would be very useful to have a power operator in Swift.  We want to make
+code look as close as possible to the domain notation, the two-dimensional
+formula in this case.  In the two-dimensional representation exponentiation is
+represented by a change in formatting.  With <code class="docutils literal"><span class="pre">pow()</span></code>, once you see the comma,
+you have to scan to the left and count parentheses to even understand that
+there is a <code class="docutils literal"><span class="pre">pow()</span></code> there.</p>
+<p>The biggest concern is that adding an operator has a high barrier.
+Nevertheless, we agree <code class="docutils literal"><span class="pre">**</span></code> is the right way to spell it, if we were to have
+it.  Also there was some agreement that if we did not put this operator in the
+core library (so that you won&#8217;t get it by default), it would become much more
+compelling.</p>
+<p>We will revisit the discussion when we have submodules for the standard
+library, in one form or the other.</p>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

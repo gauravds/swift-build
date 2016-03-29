@@ -1,3 +1,18 @@
+# Make own swift language.
+------------------------------------------
+
+Step 1. Use `swift-clone-all.sh` for download all essential repo
+
+Step 2. Run `swift-build.sh` for always compiling your own swift. (For cmd changes use `.bash_profile`)
+
+Step 3. Every time need to fetch the latest repos of apple/swift so for that purpuse use swift-fetch-all.sh
+
+`Python 3 is required`
+
+
+Old instruction ---
+
+
 swift build instructions for the impatient
 ------------------------------------------
 
@@ -30,3 +45,5 @@ use eclipse generator: `/swift/utils/build-script --eclipse --release`
 more options of the build script can be found in its help text:
 
 https://github.com/apple/swift/blob/master/utils/build-script#L172
+
+

@@ -1,0 +1,1297 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>The Swift ABI &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>The Swift ABI</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="the-swift-abi">
+<span id="abi"></span><h1><a class="toc-backref" href="#id1">The Swift ABI</a><a class="headerlink" href="#the-swift-abi" title="Permalink to this headline">¶</a></h1>
+<div class="contents topic" id="contents">
+<p class="topic-title first">Contents</p>
+<ul class="simple">
+<li><a class="reference internal" href="#the-swift-abi" id="id1">The Swift ABI</a><ul>
+<li><a class="reference internal" href="#hard-constraints-on-resilience" id="id2">Hard Constraints on Resilience</a></li>
+<li><a class="reference internal" href="#type-layout" id="id3">Type Layout</a><ul>
+<li><a class="reference internal" href="#fragile-struct-and-tuple-layout" id="id4">Fragile Struct and Tuple Layout</a></li>
+<li><a class="reference internal" href="#class-layout" id="id5">Class Layout</a></li>
+<li><a class="reference internal" href="#fragile-enum-layout" id="id6">Fragile Enum Layout</a><ul>
+<li><a class="reference internal" href="#empty-enums" id="id7">Empty Enums</a></li>
+<li><a class="reference internal" href="#single-case-enums" id="id8">Single-Case Enums</a></li>
+<li><a class="reference internal" href="#c-like-enums" id="id9">C-Like Enums</a></li>
+<li><a class="reference internal" href="#single-payload-enums" id="id10">Single-Payload Enums</a></li>
+<li><a class="reference internal" href="#multi-payload-enums" id="id11">Multi-Payload Enums</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#existential-container-layout" id="id12">Existential Container Layout</a><ul>
+<li><a class="reference internal" href="#opaque-existential-containers" id="id13">Opaque Existential Containers</a></li>
+<li><a class="reference internal" href="#class-existential-containers" id="id14">Class Existential Containers</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#type-metadata" id="id15">Type Metadata</a><ul>
+<li><a class="reference internal" href="#common-metadata-layout" id="id16">Common Metadata Layout</a></li>
+<li><a class="reference internal" href="#struct-metadata" id="id17">Struct Metadata</a></li>
+<li><a class="reference internal" href="#enum-metadata" id="id18">Enum Metadata</a></li>
+<li><a class="reference internal" href="#tuple-metadata" id="id19">Tuple Metadata</a></li>
+<li><a class="reference internal" href="#function-metadata" id="id20">Function Metadata</a></li>
+<li><a class="reference internal" href="#protocol-metadata" id="id21">Protocol Metadata</a></li>
+<li><a class="reference internal" href="#metatype-metadata" id="id22">Metatype Metadata</a></li>
+<li><a class="reference internal" href="#class-metadata" id="id23">Class Metadata</a></li>
+<li><a class="reference internal" href="#generic-parameter-vector" id="id24">Generic Parameter Vector</a></li>
+<li><a class="reference internal" href="#nominal-type-descriptor" id="id25">Nominal Type Descriptor</a></li>
+<li><a class="reference internal" href="#protocol-descriptor" id="id26">Protocol Descriptor</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#heap-objects" id="id27">Heap Objects</a><ul>
+<li><a class="reference internal" href="#heap-metadata" id="id28">Heap Metadata</a></li>
+<li><a class="reference internal" href="#heap-object-header" id="id29">Heap Object Header</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#mangling" id="id30">Mangling</a><ul>
+<li><a class="reference internal" href="#globals" id="id31">Globals</a></li>
+<li><a class="reference internal" href="#direct-and-indirect-symbols" id="id32">Direct and Indirect Symbols</a></li>
+<li><a class="reference internal" href="#declaration-contexts" id="id33">Declaration Contexts</a></li>
+<li><a class="reference internal" href="#types" id="id34">Types</a></li>
+<li><a class="reference internal" href="#generics" id="id35">Generics</a></li>
+<li><a class="reference internal" href="#value-witnesses" id="id36">Value Witnesses</a></li>
+<li><a class="reference internal" href="#identifiers" id="id37">Identifiers</a></li>
+<li><a class="reference internal" href="#substitutions" id="id38">Substitutions</a></li>
+<li><a class="reference internal" href="#predefined-substitutions" id="id39">Predefined Substitutions</a></li>
+<li><a class="reference internal" href="#indexes" id="id40">Indexes</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="hard-constraints-on-resilience">
+<h2><a class="toc-backref" href="#id2">Hard Constraints on Resilience</a><a class="headerlink" href="#hard-constraints-on-resilience" title="Permalink to this headline">¶</a></h2>
+<p>The root of a class hierarchy must remain stable, at pain of
+invalidating the metaclass hierarchy.  Note that a Swift class without an
+explicit base class is implicitly rooted in the SwiftObject
+Objective-C class.</p>
+</div>
+<div class="section" id="type-layout">
+<h2><a class="toc-backref" href="#id3">Type Layout</a><a class="headerlink" href="#type-layout" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="fragile-struct-and-tuple-layout">
+<h3><a class="toc-backref" href="#id4">Fragile Struct and Tuple Layout</a><a class="headerlink" href="#fragile-struct-and-tuple-layout" title="Permalink to this headline">¶</a></h3>
+<p>Structs and tuples currently share the same layout algorithm, noted as the
+&#8220;Universal&#8221; layout algorithm in the compiler implementation. The algorithm
+is as follows:</p>
+<ul class="simple">
+<li>Start with a <strong>size</strong> of <strong>0</strong> and an <strong>alignment</strong> of <strong>1</strong>.</li>
+<li>Iterate through the fields, in element order for tuples, or in <code class="docutils literal"><span class="pre">var</span></code>
+declaration order for structs. For each field:<ul>
+<li>Update <strong>size</strong> by rounding up to the <strong>alignment of the field</strong>, that is,
+increasing it to the least value greater or equal to <strong>size</strong> and evenly
+divisible by the <strong>alignment of the field</strong>.</li>
+<li>Assign the <strong>offset of the field</strong> to the current value of <strong>size</strong>.</li>
+<li>Update <strong>size</strong> by adding the <strong>size of the field</strong>.</li>
+<li>Update <strong>alignment</strong> to the max of <strong>alignment</strong> and the
+<strong>alignment of the field</strong>.</li>
+</ul>
+</li>
+<li>The final <strong>size</strong> and <strong>alignment</strong> are the size and alignment of the
+aggregate. The <strong>stride</strong> of the type is the final <strong>size</strong> rounded up to
+<strong>alignment</strong>.</li>
+</ul>
+<p>Note that this differs from C or LLVM&#8217;s normal layout rules in that <em>size</em>
+and <em>stride</em> are distinct; whereas C layout requires that an embedded struct&#8217;s
+size be padded out to its alignment and that nothing be laid out there,
+Swift layout allows an outer struct to lay out fields in the inner struct&#8217;s
+tail padding, alignment permitting. Unlike C, zero-sized structs and tuples
+are also allowed, and take up no storage in enclosing aggregates. The Swift
+compiler emits LLVM packed struct types with manual padding to get the
+necessary control over the binary layout. Some examples:</p>
+<div class="highlight-swift"><div class="highlight"><pre>// LLVM &lt;{ i64, i8 }&gt;
+struct S {
+  var x: Int
+  var y: UInt8
+}
+
+// LLVM &lt;{ i8, [7 x i8], &lt;{ i64, i8 }&gt;, i8 }&gt;
+struct S2 {
+  var x: UInt8
+  var s: S
+  var y: UInt8
+}
+
+// LLVM &lt;{}&gt;
+struct Empty {}
+
+// LLVM &lt;{ i64, i64 }&gt;
+struct ContainsEmpty {
+  var x: Int
+  var y: Empty
+  var z: Int
+}
+</pre></div>
+</div>
+</div>
+<div class="section" id="class-layout">
+<h3><a class="toc-backref" href="#id5">Class Layout</a><a class="headerlink" href="#class-layout" title="Permalink to this headline">¶</a></h3>
+<p>Swift relies on the following assumptions about the Objective-C runtime,
+which are therefore now part of the Objective-C ABI:</p>
+<ul class="simple">
+<li>32-bit platforms never have tagged pointers.  ObjC pointer types are
+either nil or an object pointer.</li>
+<li>On x86-64, a tagged pointer either sets the lowest bit of the pointer
+or the highest bit of the pointer.  Therefore, both of these bits are
+zero if and only if the value is not a tagged pointer.</li>
+<li>On ARM64, a tagged pointer always sets the highest bit of the pointer.</li>
+<li>32-bit platforms never perform any isa masking.  <code class="docutils literal"><span class="pre">object_getClass</span></code>
+is always equivalent to <code class="docutils literal"><span class="pre">*(Class*)object</span></code>.</li>
+<li>64-bit platforms perform isa masking only if the runtime exports a
+symbol <code class="docutils literal"><span class="pre">uintptr_t</span> <span class="pre">objc_debug_isa_class_mask;</span></code>.  If this symbol
+is exported, <code class="docutils literal"><span class="pre">object_getClass</span></code> on a non-tagged pointer is always
+equivalent to <code class="docutils literal"><span class="pre">(Class)(objc_debug_isa_class_mask</span> <span class="pre">&amp;</span> <span class="pre">*(uintptr_t*)object)</span></code>.</li>
+<li>The superclass field of a class object is always stored immediately
+after the isa field.  Its value is either nil or a pointer to the
+class object for the superclass; it never has other bits set.</li>
+</ul>
+<p>The following assumptions are part of the Swift ABI:</p>
+<ul class="simple">
+<li>Swift class pointers are never tagged pointers.</li>
+</ul>
+<p>TODO</p>
+</div>
+<div class="section" id="fragile-enum-layout">
+<h3><a class="toc-backref" href="#id6">Fragile Enum Layout</a><a class="headerlink" href="#fragile-enum-layout" title="Permalink to this headline">¶</a></h3>
+<p>In laying out enum types, the ABI attempts to avoid requiring additional
+storage to store the tag for the enum case. The ABI chooses one of five
+strategies based on the layout of the enum:</p>
+<div class="section" id="empty-enums">
+<h4><a class="toc-backref" href="#id7">Empty Enums</a><a class="headerlink" href="#empty-enums" title="Permalink to this headline">¶</a></h4>
+<p>In the degenerate case of an enum with no cases, the enum is an empty type.</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">enum</span><span class="w"> </span><span class="n">Empty</span><span class="w"> </span><span class="p">{}</span><span class="w"> </span><span class="c1">// =&gt; empty type</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="single-case-enums">
+<h4><a class="toc-backref" href="#id8">Single-Case Enums</a><a class="headerlink" href="#single-case-enums" title="Permalink to this headline">¶</a></h4>
+<p>In the degenerate case of an enum with a single case, there is no
+discriminator needed, and the enum type has the exact same layout as its
+case&#8217;s data type, or is empty if the case has no data type.</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">enum</span><span class="w"> </span><span class="n">EmptyCase</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">case</span><span class="w"> </span><span class="n">X</span><span class="w"> </span><span class="p">}</span><span class="w">             </span><span class="c1">// =&gt; empty type</span>
+<span class="n">enum</span><span class="w"> </span><span class="n">DataCase</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">case</span><span class="w"> </span><span class="no">Y</span><span class="p">(</span><span class="n">Int</span><span class="p">,</span><span class="w"> </span><span class="n">Double</span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1">// =&gt; LLVM &lt;{ i64, double }&gt;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="c-like-enums">
+<h4><a class="toc-backref" href="#id9">C-Like Enums</a><a class="headerlink" href="#c-like-enums" title="Permalink to this headline">¶</a></h4>
+<p>If none of the cases has a data type (a &#8220;C-like&#8221; enum), then the enum
+is laid out as an integer tag with the minimal number of bits to contain
+all of the cases. The machine-level layout of the type then follows LLVM&#8217;s
+data layout rules for integer types on the target platform. The cases are
+assigned tag values in declaration order.</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">enum</span><span class="w"> </span><span class="n">EnumLike2</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="c1">// =&gt; LLVM i1</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">A</span><span class="w">         </span><span class="c1">// =&gt; i1 0</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">B</span><span class="w">         </span><span class="c1">// =&gt; i1 1</span>
+<span class="p">}</span>
+
+<span class="n">enum</span><span class="w"> </span><span class="n">EnumLike8</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="c1">// =&gt; LLVM i3</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">A</span><span class="w">         </span><span class="c1">// =&gt; i3 0</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">B</span><span class="w">         </span><span class="c1">// =&gt; i3 1</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">C</span><span class="w">         </span><span class="c1">// =&gt; i3 2</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">D</span><span class="w">         </span><span class="c1">// etc.</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">E</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">F</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">G</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">H</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Discriminator values after the one used for the last case become <em>extra
+inhabitants</em> of the enum type (see <a class="reference internal" href="#single-payload-enums">Single-Payload Enums</a>).</p>
+</div>
+<div class="section" id="single-payload-enums">
+<h4><a class="toc-backref" href="#id10">Single-Payload Enums</a><a class="headerlink" href="#single-payload-enums" title="Permalink to this headline">¶</a></h4>
+<p>If an enum has a single case with a data type and one or more no-data cases
+(a &#8220;single-payload&#8221; enum), then the case with data type is represented using
+the data type&#8217;s binary representation, with added zero bits for tag if
+necessary. If the data type&#8217;s binary representation
+has <strong>extra inhabitants</strong>, that is, bit patterns with the size and alignment of
+the type but which do not form valid values of that type, they are used to
+represent the no-data cases, with extra inhabitants in order of ascending
+numeric value matching no-data cases in declaration order. If the type
+has <em>spare bits</em> (see <a class="reference internal" href="#multi-payload-enums">Multi-Payload Enums</a>), they are used to form extra
+inhabitants. The enum value is then represented as an integer with the storage
+size in bits of the data type. Extra inhabitants of the payload type not used
+by the enum type become extra inhabitants of the enum type itself.</p>
+<div class="highlight-swift"><div class="highlight"><pre>enum CharOrSectionMarker { =&gt; LLVM i32
+  case Paragraph            =&gt; i32 0x0020_0000
+  case Char(UnicodeScalar)  =&gt; i32 (zext i21 %Char to i32)
+  case Chapter              =&gt; i32 0x0020_0001
+}
+
+CharOrSectionMarker.Char(&#39;\x00&#39;) =&gt; i32 0x0000_0000
+CharOrSectionMarker.Char(&#39;\u10FFFF&#39;) =&gt; i32 0x0010_FFFF
+
+enum CharOrSectionMarkerOrFootnoteMarker { =&gt; LLVM i32
+  case CharOrSectionMarker(CharOrSectionMarker) =&gt; i32 %CharOrSectionMarker
+  case Asterisk                                 =&gt; i32 0x0020_0002
+  case Dagger                                   =&gt; i32 0x0020_0003
+  case DoubleDagger                             =&gt; i32 0x0020_0004
+}
+</pre></div>
+</div>
+<p>If the data type has no extra inhabitants, or there are not enough extra
+inhabitants to represent all of the no-data cases, then a tag bit is added
+to the enum&#8217;s representation. The tag bit is set for the no-data cases, which
+are then assigned values in the data area of the enum in declaration order.</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">enum</span><span class="w"> </span><span class="n">IntOrInfinity</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">LLVM</span><span class="w"> </span><span class="o">&lt;</span><span class="p">{</span><span class="w"> </span><span class="n">i64</span><span class="p">,</span><span class="w"> </span><span class="n">i1</span><span class="w"> </span><span class="p">}</span><span class="o">&gt;</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">NegInfinity</span><span class="w">    </span><span class="o">=&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="p">{</span><span class="w"> </span><span class="n">i64</span><span class="p">,</span><span class="w"> </span><span class="n">i1</span><span class="w"> </span><span class="p">}</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">    </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Int</span><span class="p">(</span><span class="n">Int</span><span class="p">)</span><span class="w">       </span><span class="o">=&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="p">{</span><span class="w"> </span><span class="n">i64</span><span class="p">,</span><span class="w"> </span><span class="n">i1</span><span class="w"> </span><span class="p">}</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">%</span><span class="n">Int</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">PosInfinity</span><span class="w">    </span><span class="o">=&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="p">{</span><span class="w"> </span><span class="n">i64</span><span class="p">,</span><span class="w"> </span><span class="n">i1</span><span class="w"> </span><span class="p">}</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">    </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">IntOrInfinity</span><span class="p">.</span><span class="no">Int</span><span class="p">(</span><span class="w">    </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="p">{</span><span class="w"> </span><span class="n">i64</span><span class="p">,</span><span class="w"> </span><span class="n">i1</span><span class="w"> </span><span class="p">}</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">     </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">}</span>
+<span class="n">IntOrInfinity</span><span class="p">.</span><span class="no">Int</span><span class="p">(</span><span class="mi">20721</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="p">{</span><span class="w"> </span><span class="n">i64</span><span class="p">,</span><span class="w"> </span><span class="n">i1</span><span class="w"> </span><span class="p">}</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="mi">20721</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="multi-payload-enums">
+<h4><a class="toc-backref" href="#id11">Multi-Payload Enums</a><a class="headerlink" href="#multi-payload-enums" title="Permalink to this headline">¶</a></h4>
+<p>If an enum has more than one case with data type, then a tag is necessary to
+discriminate the data types. The ABI will first try to find common
+<strong>spare bits</strong>, that is, bits in the data types&#8217; binary representations which are
+either fixed-zero or ignored by valid values of all of the data types. The tag
+will be scattered into these spare bits as much as possible. Currently only
+spare bits of primitive integer types, such as the high bits of an <code class="docutils literal"><span class="pre">i21</span></code>
+type, are considered. The enum data is represented as an integer with the
+storage size in bits of the largest data type.</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">enum</span><span class="w"> </span><span class="n">TerminalChar</span><span class="w"> </span><span class="p">{</span><span class="w">             </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">LLVM</span><span class="w"> </span><span class="n">i32</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Plain</span><span class="p">(</span><span class="n">UnicodeScalar</span><span class="p">)</span><span class="w">     </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">i32</span><span class="w">     </span><span class="p">(</span><span class="n">zext</span><span class="w"> </span><span class="n">i21</span><span class="w"> </span><span class="o">%</span><span class="n">Plain</span><span class="w">     </span><span class="n">to</span><span class="w"> </span><span class="n">i32</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Bold</span><span class="p">(</span><span class="n">UnicodeScalar</span><span class="p">)</span><span class="w">      </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">i32</span><span class="w"> </span><span class="p">(</span><span class="n">or</span><span class="w"> </span><span class="p">(</span><span class="n">zext</span><span class="w"> </span><span class="n">i21</span><span class="w"> </span><span class="o">%</span><span class="n">Bold</span><span class="w">      </span><span class="n">to</span><span class="w"> </span><span class="n">i32</span><span class="p">),</span><span class="w"> </span><span class="mh">0x0020</span><span class="n">_0000</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Underline</span><span class="p">(</span><span class="n">UnicodeScalar</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">i32</span><span class="w"> </span><span class="p">(</span><span class="n">or</span><span class="w"> </span><span class="p">(</span><span class="n">zext</span><span class="w"> </span><span class="n">i21</span><span class="w"> </span><span class="o">%</span><span class="n">Underline</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">i32</span><span class="p">),</span><span class="w"> </span><span class="mh">0x0040</span><span class="n">_0000</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Blink</span><span class="p">(</span><span class="n">UnicodeScalar</span><span class="p">)</span><span class="w">     </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">i32</span><span class="w"> </span><span class="p">(</span><span class="n">or</span><span class="w"> </span><span class="p">(</span><span class="n">zext</span><span class="w"> </span><span class="n">i21</span><span class="w"> </span><span class="o">%</span><span class="n">Blink</span><span class="w">     </span><span class="n">to</span><span class="w"> </span><span class="n">i32</span><span class="p">),</span><span class="w"> </span><span class="mh">0x0060</span><span class="n">_0000</span><span class="p">)</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">Empty</span><span class="w">                    </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">i32</span><span class="w"> </span><span class="mh">0x0080</span><span class="n">_0000</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="n">Cursor</span><span class="w">                   </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">i32</span><span class="w"> </span><span class="mh">0x0080</span><span class="n">_0001</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>If there are not enough spare bits to contain the tag, then additional bits are
+added to the representation to contain the tag. Tag values are
+assigned to data cases in declaration order. If there are no-data cases, they
+are collected under a common tag, and assigned values in the data area of the
+enum in declaration order.</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">class </span><span class="nc">Bignum</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="n">enum</span><span class="w"> </span><span class="n">IntDoubleOrBignum</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">LLVM</span><span class="w"> </span><span class="o">&lt;</span><span class="p">{</span><span class="w"> </span><span class="n">i64</span><span class="p">,</span><span class="w"> </span><span class="n">i2</span><span class="w"> </span><span class="p">}</span><span class="o">&gt;</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Int</span><span class="p">(</span><span class="n">Int</span><span class="p">)</span><span class="w">           </span><span class="o">=&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="p">{</span><span class="w"> </span><span class="n">i64</span><span class="p">,</span><span class="w"> </span><span class="n">i2</span><span class="w"> </span><span class="p">}</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">           </span><span class="o">%</span><span class="n">Int</span><span class="p">,</span><span class="w">            </span><span class="mi">0</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Double</span><span class="p">(</span><span class="n">Double</span><span class="p">)</span><span class="w">     </span><span class="o">=&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="p">{</span><span class="w"> </span><span class="n">i64</span><span class="p">,</span><span class="w"> </span><span class="n">i2</span><span class="w"> </span><span class="p">}</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">(</span><span class="n">bitcast</span><span class="w">  </span><span class="o">%</span><span class="n">Double</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">i64</span><span class="p">),</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="n">case</span><span class="w"> </span><span class="no">Bignum</span><span class="p">(</span><span class="n">Bignum</span><span class="p">)</span><span class="w">     </span><span class="o">=&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="p">{</span><span class="w"> </span><span class="n">i64</span><span class="p">,</span><span class="w"> </span><span class="n">i2</span><span class="w"> </span><span class="p">}</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">(</span><span class="n">ptrtoint</span><span class="w"> </span><span class="o">%</span><span class="n">Bignum</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">i64</span><span class="p">),</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="existential-container-layout">
+<h3><a class="toc-backref" href="#id12">Existential Container Layout</a><a class="headerlink" href="#existential-container-layout" title="Permalink to this headline">¶</a></h3>
+<p>Values of protocol type, protocol composition type, or &#8220;any&#8221; type
+(<code class="docutils literal"><span class="pre">protocol&lt;&gt;</span></code>) are laid out using <strong>existential containers</strong> (so-called
+because these types are &#8220;existential types&#8221; in type theory).</p>
+<div class="section" id="opaque-existential-containers">
+<h4><a class="toc-backref" href="#id13">Opaque Existential Containers</a><a class="headerlink" href="#opaque-existential-containers" title="Permalink to this headline">¶</a></h4>
+<p>If there is no class constraint on a protocol or protocol composition type,
+the existential container has to accommodate a value of arbitrary size and
+alignment. It does this using a <strong>fixed-size buffer</strong>, which is three pointers
+in size and pointer-aligned. This either directly contains the value, if its
+size and alignment are both less than or equal to the fixed-size buffer&#8217;s, or
+contains a pointer to a side allocation owned by the existential container.
+The type of the contained value is identified by its <cite>type metadata</cite> record,
+and witness tables for all of the required protocol conformances are included.
+The layout is as if declared in the following C struct:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">struct </span><span class="nc">OpaqueExistentialContainer</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">void</span><span class="w"> </span><span class="o">*</span><span class="n">fixedSizeBuffer</span><span class="p">[</span><span class="mi">3</span><span class="p">];</span>
+<span class="w">  </span><span class="n">Metadata</span><span class="w"> </span><span class="o">*</span><span class="n">type</span><span class="p">;</span>
+<span class="w">  </span><span class="n">WitnessTable</span><span class="w"> </span><span class="o">*</span><span class="n">witnessTables</span><span class="p">[</span><span class="n">NUM_WITNESS_TABLES</span><span class="p">];</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="class-existential-containers">
+<h4><a class="toc-backref" href="#id14">Class Existential Containers</a><a class="headerlink" href="#class-existential-containers" title="Permalink to this headline">¶</a></h4>
+<p>If one or more of the protocols in a protocol or protocol composition type
+have a class constraint, then only class values can be stored in the existential
+container, and a more efficient representation is used. Class instances are
+always a single pointer in size, so a fixed-size buffer and potential side
+allocation is not needed, and class instances always have a reference to their
+own type metadata, so the separate metadata record is not needed. The
+layout is thus as if declared in the following C struct:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">struct </span><span class="nc">ClassExistentialContainer</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">HeapObject</span><span class="w"> </span><span class="o">*</span><span class="n">value</span><span class="p">;</span>
+<span class="w">  </span><span class="n">WitnessTable</span><span class="w"> </span><span class="o">*</span><span class="n">witnessTables</span><span class="p">[</span><span class="n">NUM_WITNESS_TABLES</span><span class="p">];</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+<p>Note that if no witness tables are needed, such as for the &#8220;any class&#8221; type
+<code class="docutils literal"><span class="pre">protocol&lt;class&gt;</span></code> or an Objective-C protocol type, then the only element of
+the layout is the heap object pointer. This is ABI-compatible with <code class="docutils literal"><span class="pre">id</span></code>
+and <code class="docutils literal"><span class="pre">id</span> <span class="pre">&lt;Protocol&gt;</span></code> types in Objective-C.</p>
+</div>
+</div>
+</div>
+<div class="section" id="type-metadata">
+<h2><a class="toc-backref" href="#id15">Type Metadata</a><a class="headerlink" href="#type-metadata" title="Permalink to this headline">¶</a></h2>
+<p>The Swift runtime keeps a <strong>metadata record</strong> for every type used in a program,
+including every instantiation of generic types. These metadata records can
+be used by (TODO: reflection and) debugger tools to discover information about
+types. For non-generic nominal types, these metadata records are generated
+statically by the compiler. For instances of generic types, and for intrinsic
+types such as tuples, functions, protocol compositions, etc., metadata records
+are lazily created by the runtime as required. Every type has a unique metadata
+record; two <strong>metadata pointer</strong> values are equal iff the types are equivalent.</p>
+<p>In the layout descriptions below, offsets are given relative to the
+metadata pointer as an index into an array of pointers. On a 32-bit platform,
+<strong>offset 1</strong> means an offset of 4 bytes, and on 64-bit platforms, it means
+an offset of 8 bytes.</p>
+<div class="section" id="common-metadata-layout">
+<h3><a class="toc-backref" href="#id16">Common Metadata Layout</a><a class="headerlink" href="#common-metadata-layout" title="Permalink to this headline">¶</a></h3>
+<p>All metadata records share a common header, with the following fields:</p>
+<ul>
+<li><p class="first">The <strong>value witness table</strong> pointer references a vtable of functions
+that implement the value semantics of the type, providing fundamental
+operations such as allocating, copying, and destroying values of the type.
+The value witness table also records the size, alignment, stride, and other
+fundamental properties of the type. The value witness table pointer is at
+<strong>offset -1</strong> from the metadata pointer, that is, the pointer-sized word
+<strong>immediately before</strong> the pointer&#8217;s referenced address.</p>
+</li>
+<li><p class="first">The <strong>kind</strong> field is a pointer-sized integer that describes the kind of type
+the metadata describes. This field is at <strong>offset 0</strong> from the metadata
+pointer.</p>
+<p>The current kind values are as follows:</p>
+<ul class="simple">
+<li><a class="reference internal" href="#struct-metadata">Struct metadata</a> has a kind of <strong>1</strong>.</li>
+<li><a class="reference internal" href="#enum-metadata">Enum metadata</a> has a kind of <strong>2</strong>.</li>
+<li><strong>Opaque metadata</strong> has a kind of <strong>8</strong>. This is used for compiler
+<code class="docutils literal"><span class="pre">Builtin</span></code> primitives that have no additional runtime information.</li>
+<li><a class="reference internal" href="#tuple-metadata">Tuple metadata</a> has a kind of <strong>9</strong>.</li>
+<li><a class="reference internal" href="#function-metadata">Function metadata</a> has a kind of <strong>10</strong>.</li>
+<li><a class="reference internal" href="#protocol-metadata">Protocol metadata</a> has a kind of <strong>12</strong>. This is used for
+protocol types, for protocol compositions, and for the &#8220;any&#8221; type
+<code class="docutils literal"><span class="pre">protocol&lt;&gt;</span></code>.</li>
+<li><a class="reference internal" href="#metatype-metadata">Metatype metadata</a> has a kind of <strong>13</strong>.</li>
+<li><a class="reference internal" href="#class-metadata">Class metadata</a>, instead of a kind, has an <em>isa pointer</em> in its kind slot,
+pointing to the class&#8217;s metaclass record. This isa pointer is guaranteed
+to have an integer value larger than <strong>4096</strong> and so can be discriminated
+from non-class kind values.</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="struct-metadata">
+<h3><a class="toc-backref" href="#id17">Struct Metadata</a><a class="headerlink" href="#struct-metadata" title="Permalink to this headline">¶</a></h3>
+<p>In addition to the <a class="reference internal" href="#common-metadata-layout">common metadata layout</a> fields, struct metadata records
+contain the following fields:</p>
+<ul>
+<li><p class="first">The <a class="reference internal" href="#nominal-type-descriptor">nominal type descriptor</a> is referenced at <strong>offset 1</strong>.</p>
+</li>
+<li><p class="first">A reference to the <strong>parent</strong> metadata record is stored at <strong>offset 2</strong>. For
+structs that are members of an enclosing nominal type, this is a reference
+to the enclosing type&#8217;s metadata. For top-level structs, this is null.</p>
+<p>TODO: The parent pointer is currently always null.</p>
+</li>
+<li><p class="first">A vector of <strong>field offsets</strong> begins at <strong>offset 3</strong>. For each field of the
+struct, in <code class="docutils literal"><span class="pre">var</span></code> declaration order, the field&#8217;s offset in bytes from the
+beginning of the struct is stored as a pointer-sized integer.</p>
+</li>
+<li><p class="first">If the struct is generic, then the
+<a class="reference internal" href="#generic-parameter-vector">generic parameter vector</a> begins at <strong>offset 3+n</strong>, where <strong>n</strong> is the
+number of fields in the struct.</p>
+</li>
+</ul>
+</div>
+<div class="section" id="enum-metadata">
+<h3><a class="toc-backref" href="#id18">Enum Metadata</a><a class="headerlink" href="#enum-metadata" title="Permalink to this headline">¶</a></h3>
+<p>In addition to the <a class="reference internal" href="#common-metadata-layout">common metadata layout</a> fields, enum metadata records
+contain the following fields:</p>
+<ul>
+<li><p class="first">The <a class="reference internal" href="#nominal-type-descriptor">nominal type descriptor</a> is referenced at <strong>offset 1</strong>.</p>
+</li>
+<li><p class="first">A reference to the <strong>parent</strong> metadata record is stored at <strong>offset 2</strong>. For
+enums that are members of an enclosing nominal type, this is a reference to
+the enclosing type&#8217;s metadata. For top-level enums, this is null.</p>
+<p>TODO: The parent pointer is currently always null.</p>
+</li>
+<li><p class="first">If the enum is generic, then the
+<a class="reference internal" href="#generic-parameter-vector">generic parameter vector</a> begins at <strong>offset 3</strong>.</p>
+</li>
+</ul>
+</div>
+<div class="section" id="tuple-metadata">
+<h3><a class="toc-backref" href="#id19">Tuple Metadata</a><a class="headerlink" href="#tuple-metadata" title="Permalink to this headline">¶</a></h3>
+<p>In addition to the <a class="reference internal" href="#common-metadata-layout">common metadata layout</a> fields, tuple metadata records
+contain the following fields:</p>
+<ul>
+<li><p class="first">The <strong>number of elements</strong> in the tuple is a pointer-sized integer at
+<strong>offset 1</strong>.</p>
+</li>
+<li><p class="first">The <strong>labels string</strong> is a pointer to a list of consecutive null-terminated
+label names for the tuple at <strong>offset 2</strong>. Each label name is given as a
+null-terminated, UTF-8-encoded string in sequence. If the tuple has no
+labels, this is a null pointer.</p>
+<p>TODO: The labels string pointer is currently always null, and labels are
+not factored into tuple metadata uniquing.</p>
+</li>
+<li><p class="first">The <strong>element vector</strong> begins at <strong>offset 3</strong> and consists of a vector of
+type–offset pairs. The metadata for the <em>n</em>th element&#8217;s type is a pointer
+at <strong>offset 3+2*n</strong>. The offset in bytes from the beginning of the tuple to
+the beginning of the <em>n</em>th element is at <strong>offset 3+2*n+1</strong>.</p>
+</li>
+</ul>
+</div>
+<div class="section" id="function-metadata">
+<h3><a class="toc-backref" href="#id20">Function Metadata</a><a class="headerlink" href="#function-metadata" title="Permalink to this headline">¶</a></h3>
+<p>In addition to the <a class="reference internal" href="#common-metadata-layout">common metadata layout</a> fields, function metadata records
+contain the following fields:</p>
+<ul>
+<li><p class="first">The number of arguments to the function is stored at <strong>offset 1</strong>.</p>
+</li>
+<li><p class="first">A reference to the <strong>result type</strong> metadata record is stored at
+<strong>offset 2</strong>. If the function has multiple returns, this references a
+<a class="reference internal" href="#tuple-metadata">tuple metadata</a> record.</p>
+</li>
+<li><p class="first">The <strong>argument vector</strong> begins at <strong>offset 3</strong> and consists of pointers to
+metadata records of the function&#8217;s arguments.</p>
+<p>If the function takes any <strong>inout</strong> arguments, a pointer to each argument&#8217;s
+metadata record will be appended separately, the lowest bit being set if it is
+<strong>inout</strong>. Because of pointer alignment, the lowest bit will always be free to
+hold this tag.</p>
+<p>If the function takes no <strong>inout</strong> arguments, there will be only one pointer in
+the vector for the following cases:</p>
+<ul class="simple">
+<li>0 arguments: a <a class="reference internal" href="#tuple-metadata">tuple metadata</a> record for the empty tuple</li>
+<li>1 argument: the first and only argument&#8217;s metadata record</li>
+<li>&gt;1 argument: a <a class="reference internal" href="#tuple-metadata">tuple metadata</a> record containing the arguments</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="protocol-metadata">
+<h3><a class="toc-backref" href="#id21">Protocol Metadata</a><a class="headerlink" href="#protocol-metadata" title="Permalink to this headline">¶</a></h3>
+<p>In addition to the <a class="reference internal" href="#common-metadata-layout">common metadata layout</a> fields, protocol metadata records
+contain the following fields:</p>
+<ul>
+<li><p class="first">A <strong>layout flags</strong> word is stored at <strong>offset 1</strong>. The bits of this word
+describe the <a class="reference internal" href="#existential-container-layout">existential container layout</a> used to represent
+values of the type. The word is laid out as follows:</p>
+<ul class="simple">
+<li>The <strong>number of witness tables</strong> is stored in the least significant 31 bits.
+Values of the protocol type contain this number of witness table pointers
+in their layout.</li>
+<li>The <strong>class constraint</strong> is stored at bit 31. This bit is set if the type
+is <strong>not</strong> class-constrained, meaning that struct, enum, or class values
+can be stored in the type. If not set, then only class values can be stored
+in the type, and the type uses a more efficient layout.</li>
+</ul>
+<p>Note that the field is pointer-sized, even though only the lowest 32 bits are
+currently inhabited on all platforms. These values can be derived from the
+<a class="reference internal" href="#protocol-descriptor">protocol descriptor</a> records, but are pre-calculated for convenience.</p>
+</li>
+<li><p class="first">The <strong>number of protocols</strong> that make up the protocol composition is stored at
+<strong>offset 2</strong>. For the &#8220;any&#8221; types <code class="docutils literal"><span class="pre">protocol&lt;&gt;</span></code> or <code class="docutils literal"><span class="pre">protocol&lt;class&gt;</span></code>, this
+is zero. For a single-protocol type <code class="docutils literal"><span class="pre">P</span></code>, this is one. For a protocol
+composition type <code class="docutils literal"><span class="pre">protocol&lt;P,</span> <span class="pre">Q,</span> <span class="pre">...&gt;</span></code>, this is the number of protocols.</p>
+</li>
+<li><p class="first">The <strong>protocol descriptor vector</strong> begins at <strong>offset 3</strong>. This is an inline
+array of pointers to the <a class="reference internal" href="#protocol-descriptor">protocol descriptor</a> for every protocol in the
+composition, or the single protocol descriptor for a protocol type. For
+an &#8220;any&#8221; type, there is no protocol descriptor vector.</p>
+</li>
+</ul>
+</div>
+<div class="section" id="metatype-metadata">
+<h3><a class="toc-backref" href="#id22">Metatype Metadata</a><a class="headerlink" href="#metatype-metadata" title="Permalink to this headline">¶</a></h3>
+<p>In addition to the <a class="reference internal" href="#common-metadata-layout">common metadata layout</a> fields, metatype metadata records
+contain the following fields:</p>
+<ul class="simple">
+<li>A reference to the metadata record for the <strong>instance type</strong> that the metatype
+represents is stored at <strong>offset 1</strong>.</li>
+</ul>
+</div>
+<div class="section" id="class-metadata">
+<h3><a class="toc-backref" href="#id23">Class Metadata</a><a class="headerlink" href="#class-metadata" title="Permalink to this headline">¶</a></h3>
+<p>Class metadata is designed to interoperate with Objective-C; all class metadata
+records are also valid Objective-C <code class="docutils literal"><span class="pre">Class</span></code> objects. Class metadata pointers
+are used as the values of class metatypes, so a derived class&#8217;s metadata
+record also serves as a valid class metatype value for all of its ancestor
+classes.</p>
+<ul>
+<li><p class="first">The <strong>destructor pointer</strong> is stored at <strong>offset -2</strong> from the metadata
+pointer, behind the value witness table. This function is invoked by Swift&#8217;s
+deallocator when the class instance is destroyed.</p>
+</li>
+<li><p class="first">The <strong>isa pointer</strong> pointing to the class&#8217;s Objective-C-compatible metaclass
+record is stored at <strong>offset 0</strong>, in place of an integer kind discriminator.</p>
+</li>
+<li><p class="first">The <strong>super pointer</strong> pointing to the metadata record for the superclass is
+stored at <strong>offset 1</strong>. If the class is a root class, it is null.</p>
+</li>
+<li><p class="first">Two words are reserved for use by the Objective-C runtime at <strong>offset 2</strong>
+and <strong>offset 3</strong>.</p>
+</li>
+<li><p class="first">The <strong>rodata pointer</strong> is stored at <strong>offset 4</strong>; it points to an Objective-C
+compatible rodata record for the class. This pointer value includes a tag.
+The <strong>low bit is always set to 1</strong> for Swift classes and always set to 0 for
+Objective-C classes.</p>
+</li>
+<li><p class="first">The <strong>class flags</strong> are a 32-bit field at <strong>offset 5</strong>.</p>
+</li>
+<li><p class="first">The <strong>instance address point</strong> is a 32-bit field following the class flags.
+A pointer to an instance of this class points this number of bytes after the
+beginning of the instance.</p>
+</li>
+<li><p class="first">The <strong>instance size</strong> is a 32-bit field following the instance address point.
+This is the number of bytes of storage present in every object of this type.</p>
+</li>
+<li><p class="first">The <strong>instance alignment mask</strong> is a 16-bit field following the instance size.
+This is a set of low bits which must not be set in a pointer to an instance
+of this class.</p>
+</li>
+<li><p class="first">The <strong>runtime-reserved field</strong> is a 16-bit field following the instance
+alignment mask.  The compiler initializes this to zero.</p>
+</li>
+<li><p class="first">The <strong>class object size</strong> is a 32-bit field following the runtime-reserved
+field.  This is the total number of bytes of storage in the class metadata
+object.</p>
+</li>
+<li><p class="first">The <strong>class object address point</strong> is a 32-bit field following the class
+object size.  This is the number of bytes of storage in the class metadata
+object.</p>
+</li>
+<li><p class="first">The <a class="reference internal" href="#nominal-type-descriptor">nominal type descriptor</a> for the most-derived class type is referenced
+at an offset immediately following the class object address point. This is
+<strong>offset 8</strong> on a 64-bit platform or <strong>offset 11</strong> on a 32-bit platform.</p>
+</li>
+<li><p class="first">For each Swift class in the class&#8217;s inheritance hierarchy, in order starting
+from the root class and working down to the most derived class, the following
+fields are present:</p>
+<ul>
+<li><p class="first">First, a reference to the <strong>parent</strong> metadata record is stored.
+For classes that are members of an enclosing nominal type, this is a
+reference to the enclosing type&#8217;s metadata. For top-level classes, this is
+null.</p>
+<p>TODO: The parent pointer is currently always null.</p>
+</li>
+<li><p class="first">If the class is generic, its <a class="reference internal" href="#generic-parameter-vector">generic parameter vector</a> is stored inline.</p>
+</li>
+<li><p class="first">The <strong>vtable</strong> is stored inline and contains a function pointer to the
+implementation of every method of the class in declaration order.</p>
+</li>
+<li><p class="first">If the layout of a class instance is dependent on its generic parameters,
+then a <strong>field offset vector</strong> is stored inline, containing offsets in
+bytes from an instance pointer to each field of the class in declaration
+order. (For classes with fixed layout, the field offsets are accessible
+statically from global variables, similar to Objective-C ivar offsets.)</p>
+</li>
+</ul>
+<p>Note that none of these fields are present for Objective-C base classes in
+the inheritance hierarchy.</p>
+</li>
+</ul>
+</div>
+<div class="section" id="generic-parameter-vector">
+<h3><a class="toc-backref" href="#id24">Generic Parameter Vector</a><a class="headerlink" href="#generic-parameter-vector" title="Permalink to this headline">¶</a></h3>
+<p>Metadata records for instances of generic types contain information about their
+generic parameters. For each parameter of the type, a reference to the metadata
+record for the type argument is stored.  After all of the type argument
+metadata references, for each type parameter, if there are protocol
+requirements on that type parameter, a reference to the witness table for each
+protocol it is required to conform to is stored in declaration order.</p>
+<p>For example, given a generic type with the parameters <code class="docutils literal"><span class="pre">&lt;T,</span> <span class="pre">U,</span> <span class="pre">V&gt;</span></code>, its
+generic parameter record will consist of references to the metadata records
+for <code class="docutils literal"><span class="pre">T</span></code>, <code class="docutils literal"><span class="pre">U</span></code>, and <code class="docutils literal"><span class="pre">V</span></code> in succession, as if laid out in a C struct:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">struct </span><span class="nc">GenericParameterVector</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">TypeMetadata</span><span class="w"> </span><span class="o">*</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="n">U</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="n">V</span><span class="p">;</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+<p>If we add protocol requirements to the parameters, for example,
+<code class="docutils literal"><span class="pre">&lt;T:</span> <span class="pre">Runcible,</span> <span class="pre">U:</span> <span class="pre">protocol&lt;Fungible,</span> <span class="pre">Ansible&gt;,</span> <span class="pre">V&gt;</span></code>, then the type&#8217;s generic
+parameter vector contains witness tables for those protocols, as if laid out:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">struct </span><span class="nc">GenericParameterVector</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">TypeMetadata</span><span class="w"> </span><span class="o">*</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="n">U</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="n">V</span><span class="p">;</span>
+<span class="w">  </span><span class="n">RuncibleWitnessTable</span><span class="w"> </span><span class="o">*</span><span class="n">T_Runcible</span><span class="p">;</span>
+<span class="w">  </span><span class="n">FungibleWitnessTable</span><span class="w"> </span><span class="o">*</span><span class="n">U_Fungible</span><span class="p">;</span>
+<span class="w">  </span><span class="n">AnsibleWitnessTable</span><span class="w"> </span><span class="o">*</span><span class="n">U_Ansible</span><span class="p">;</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="nominal-type-descriptor">
+<h3><a class="toc-backref" href="#id25">Nominal Type Descriptor</a><a class="headerlink" href="#nominal-type-descriptor" title="Permalink to this headline">¶</a></h3>
+<p>The metadata records for class, struct, and enum types contain a pointer to a
+<strong>nominal type descriptor</strong>, which contains basic information about the nominal
+type such as its name, members, and metadata layout. For a generic type, one
+nominal type descriptor is shared for all instantiations of the type. The
+layout is as follows:</p>
+<ul class="simple">
+<li>The <strong>kind</strong> of type is stored at <strong>offset 0</strong>, which is as follows:<ul>
+<li><strong>0</strong> for a class,</li>
+<li><strong>1</strong> for a struct, or</li>
+<li><strong>2</strong> for an enum.</li>
+</ul>
+</li>
+<li>The mangled <strong>name</strong> is referenced as a null-terminated C string at
+<strong>offset 1</strong>. This name includes no bound generic parameters.</li>
+<li>The following four fields depend on the kind of nominal type.<ul>
+<li>For a struct or class:<ul>
+<li>The <strong>number of fields</strong> is stored at <strong>offset 2</strong>. This is the length
+of the field offset vector in the metadata record, if any.</li>
+<li>The <strong>offset to the field offset vector</strong> is stored at <strong>offset 3</strong>.
+This is the offset in pointer-sized words of the field offset vector for
+the type in the metadata record. If no field offset vector is stored
+in the metadata record, this is zero.</li>
+<li>The <strong>field names</strong> are referenced as a doubly-null-terminated list of
+C strings at <strong>offset 4</strong>. The order of names corresponds to the order
+of fields in the field offset vector.</li>
+<li>The <strong>field type accessor</strong> is a function pointer at <strong>offset 5</strong>. If
+non-null, the function takes a pointer to an instance of type metadata
+for the nominal type, and returns a pointer to an array of type metadata
+references for the types of the fields of that instance. The order matches
+that of the field offset vector and field name list.</li>
+</ul>
+</li>
+<li>For an enum:<ul>
+<li>The <strong>number of payload cases</strong> and <strong>payload size offset</strong> are stored
+at <strong>offset 2</strong>. The least significant 24 bits are the number of payload
+cases, and the most significant 8 bits are the offset of the payload
+size in the type metadata, if present.</li>
+<li>The <strong>number of no-payload cases</strong> is stored at <strong>offset 3</strong>.</li>
+<li>The <strong>case names</strong> are referenced as a doubly-null-terminated list of
+C strings at <strong>offset 4</strong>. The names are ordered such that payload cases
+come first, followed by no-payload cases. Within each half of the list,
+the order of names corresponds to the order of cases in the enum
+declaration.</li>
+<li>The <strong>case type accessor</strong> is a function pointer at <strong>offset 5</strong>. If
+non-null, the function takes a pointer to an instance of type metadata
+for the enum, and returns a pointer to an array of type metadata
+references for the types of the cases of that instance. The order matches
+that of the case name list. This function is similar to the field type
+accessor for a struct, except also the least significant bit of each
+element in the result is set if the enum case is an <strong>indirect case</strong>.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>If the nominal type is generic, a pointer to the <strong>metadata pattern</strong> that
+is used to form instances of the type is stored at <strong>offset 6</strong>. The pointer
+is null if the type is not generic.</li>
+<li>The <strong>generic parameter descriptor</strong> begins at <strong>offset 7</strong>. This describes
+the layout of the generic parameter vector in the metadata record:<ul>
+<li>The <strong>offset of the generic parameter vector</strong> is stored at <strong>offset 7</strong>.
+This is the offset in pointer-sized words of the generic parameter vector
+inside the metadata record. If the type is not generic, this is zero.</li>
+<li>The <strong>number of type parameters</strong> is stored at <strong>offset 8</strong>. This count
+includes associated types of type parameters with protocol constraints.</li>
+<li>The <strong>number of type parameters</strong> is stored at <strong>offset 9</strong>. This count
+includes only the primary formal type parameters.</li>
+<li>For each type parameter <strong>n</strong>, the following fields are stored:<ul>
+<li>The <strong>number of witnesses</strong> for the type parameter is stored at
+<strong>offset 10+n</strong>. This is the number of witness table pointers that are
+stored for the type parameter in the generic parameter vector.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>Note that there is no nominal type descriptor for protocols or protocol types.
+See the <a class="reference internal" href="#protocol-descriptor">protocol descriptor</a> description below.</p>
+</div>
+<div class="section" id="protocol-descriptor">
+<h3><a class="toc-backref" href="#id26">Protocol Descriptor</a><a class="headerlink" href="#protocol-descriptor" title="Permalink to this headline">¶</a></h3>
+<p><cite>Protocol metadata</cite> contains references to zero, one, or more <strong>protocol
+descriptors</strong> that describe the protocols values of the type are required to
+conform to. The protocol descriptor is laid out to be compatible with
+Objective-C <code class="docutils literal"><span class="pre">Protocol</span></code> objects. The layout is as follows:</p>
+<ul class="simple">
+<li>An <strong>isa</strong> placeholder is stored at <strong>offset 0</strong>. This field is populated by
+the Objective-C runtime.</li>
+<li>The mangled <strong>name</strong> is referenced as a null-terminated C string at
+<strong>offset 1</strong>.</li>
+<li>If the protocol inherits one or more other protocols, a pointer to the
+<strong>inherited protocols list</strong> is stored at <strong>offset 2</strong>. The list starts with
+the number of inherited protocols as a pointer-sized integer, and is followed
+by that many protocol descriptor pointers. If the protocol inherits no other
+protocols, this pointer is null.</li>
+<li>For an ObjC-compatible protocol, its <strong>required instance methods</strong> are stored
+at <strong>offset 3</strong> as an ObjC-compatible method list. This is null for native
+Swift protocols.</li>
+<li>For an ObjC-compatible protocol, its <strong>required class methods</strong> are stored
+at <strong>offset 4</strong> as an ObjC-compatible method list. This is null for native
+Swift protocols.</li>
+<li>For an ObjC-compatible protocol, its <strong>optional instance methods</strong> are stored
+at <strong>offset 5</strong> as an ObjC-compatible method list. This is null for native
+Swift protocols.</li>
+<li>For an ObjC-compatible protocol, its <strong>optional class methods</strong> are stored
+at <strong>offset 6</strong> as an ObjC-compatible method list. This is null for native
+Swift protocols.</li>
+<li>For an ObjC-compatible protocol, its <strong>instance properties</strong> are stored
+at <strong>offset 7</strong> as an ObjC-compatible property list. This is null for native
+Swift protocols.</li>
+<li>The <strong>size</strong> of the protocol descriptor record is stored as a 32-bit integer
+at <strong>offset 8</strong>. This is currently 72 on 64-bit platforms and 40 on 32-bit
+platforms.</li>
+<li><strong>Flags</strong> are stored as a 32-bit integer after the size. The following bits
+are currently used (counting from least significant bit zero):<ul>
+<li><strong>Bit 0</strong> is the <strong>Swift bit</strong>. It is set for all protocols defined in
+Swift and unset for protocols defined in Objective-C.</li>
+<li><strong>Bit 1</strong> is the <strong>class constraint bit</strong>. It is set if the protocol is
+<strong>not</strong> class-constrained, meaning that any struct, enum, or class type
+may conform to the protocol. It is unset if only classes can conform to
+the protocol. (The inverted meaning is for compatibility with Objective-C
+protocol records, in which the bit is never set. Objective-C protocols can
+only be conformed to by classes.)</li>
+<li><strong>Bit 2</strong> is the <strong>witness table bit</strong>. It is set if dispatch to the
+protocol&#8217;s methods is done through a witness table, which is either passed
+as an extra parameter to generic functions or included in the <a class="reference internal" href="#existential-container-layout">existential
+container layout</a> of protocol types. It is unset if dispatch is done
+through <code class="docutils literal"><span class="pre">objc_msgSend</span></code> and requires no additional information to accompany
+a value of conforming type.</li>
+<li><strong>Bit 31</strong> is set by the Objective-C runtime when it has done its
+initialization of the protocol record. It is unused by the Swift runtime.</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div class="section" id="heap-objects">
+<h2><a class="toc-backref" href="#id27">Heap Objects</a><a class="headerlink" href="#heap-objects" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="heap-metadata">
+<h3><a class="toc-backref" href="#id28">Heap Metadata</a><a class="headerlink" href="#heap-metadata" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="heap-object-header">
+<h3><a class="toc-backref" href="#id29">Heap Object Header</a><a class="headerlink" href="#heap-object-header" title="Permalink to this headline">¶</a></h3>
+</div>
+</div>
+<div class="section" id="mangling">
+<h2><a class="toc-backref" href="#id30">Mangling</a><a class="headerlink" href="#mangling" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-swift"><div class="highlight"><pre>mangled-name ::= &#39;_T&#39; global
+</pre></div>
+</div>
+<p>All Swift-mangled names begin with this prefix.</p>
+<div class="section" id="globals">
+<h3><a class="toc-backref" href="#id31">Globals</a><a class="headerlink" href="#globals" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-swift"><div class="highlight"><pre>global ::= &#39;t&#39; type                    // standalone type (for DWARF)
+global ::= &#39;M&#39; type                    // type metadata (address point)
+                                       // -- type starts with [BCOSTV]
+global ::= &#39;Mf&#39; type                   // &#39;full&#39; type metadata (start of object)
+global ::= &#39;MP&#39; type                   // type metadata pattern
+global ::= &#39;Ma&#39; type                   // type metadata access function
+global ::= &#39;ML&#39; type                   // type metadata lazy cache variable
+global ::= &#39;Mm&#39; type                   // class metaclass
+global ::= &#39;Mn&#39; nominal-type           // nominal type descriptor
+global ::= &#39;Mp&#39; protocol               // protocol descriptor
+global ::= &#39;PA&#39; .*                     // partial application forwarder
+global ::= &#39;PAo&#39; .*                    // ObjC partial application forwarder
+global ::= &#39;w&#39; value-witness-kind type // value witness
+global ::= &#39;WV&#39; type                   // value witness table
+global ::= &#39;Wo&#39; entity                 // witness table offset
+global ::= &#39;Wv&#39; directness entity      // field offset
+global ::= &#39;WP&#39; protocol-conformance   // protocol witness table
+global ::= &#39;Wa&#39; protocol-conformance   // protocol witness table accessor
+global ::= &#39;Wl&#39; type protocol-conformance // lazy protocol witness table accessor
+global ::= &#39;WL&#39; protocol-conformance   // lazy protocol witness table cache variable
+global ::= &#39;WD&#39; protocol-conformance   // dependent proto witness table generator
+global ::= &#39;Wd&#39; protocol-conformance   // dependent proto witness table template
+global ::= entity                      // some identifiable thing
+global ::= &#39;TO&#39; global                 // ObjC-as-swift thunk
+global ::= &#39;To&#39; global                 // swift-as-ObjC thunk
+global ::= &#39;TD&#39; global                 // dynamic dispatch thunk
+global ::= &#39;Td&#39; global                 // direct method reference thunk
+global ::= &#39;TR&#39; reabstract-signature   // reabstraction thunk helper function
+global ::= &#39;Tr&#39; reabstract-signature   // reabstraction thunk
+
+global ::= &#39;TS&#39; specializationinfo &#39;_&#39; mangled-name
+specializationinfo ::= &#39;g&#39; passid (type protocol-conformance* &#39;_&#39;)+            // Generic specialization info.
+specializationinfo ::= &#39;f&#39; passid (funcspecializationarginfo &#39;_&#39;)+             // Function signature specialization kind
+passid ::= integer                                                             // The id of the pass that generated this specialization.
+funcsigspecializationarginfo ::= &#39;cl&#39; closurename type*                        // Closure specialized with closed over types in argument order.
+funcsigspecializationarginfo ::= &#39;n&#39;                                           // Unmodified argument
+funcsigspecializationarginfo ::= &#39;cp&#39; funcsigspecializationconstantproppayload // Constant propagated argument
+funcsigspecializationarginfo ::= &#39;d&#39;                                           // Dead argument
+funcsigspecializationarginfo ::= &#39;g&#39; &#39;s&#39;?                                      // Owned =&gt; Guaranteed and Exploded if &#39;s&#39; present.
+funcsigspecializationarginfo ::= &#39;s&#39;                                           // Exploded
+funcsigspecializationarginfo ::= &#39;k&#39;                                           // Exploded
+funcsigspecializationconstantpropinfo ::= &#39;fr&#39; mangled-name
+funcsigspecializationconstantpropinfo ::= &#39;g&#39; mangled-name
+funcsigspecializationconstantpropinfo ::= &#39;i&#39; 64-bit-integer
+funcsigspecializationconstantpropinfo ::= &#39;fl&#39; float-as-64-bit-integer
+funcsigspecializationconstantpropinfo ::= &#39;se&#39; stringencoding &#39;v&#39; md5hash
+
+global ::= &#39;TV&#39; global                 // vtable override thunk
+global ::= &#39;TW&#39; protocol-conformance entity
+                                       // protocol witness thunk
+entity ::= nominal-type                // named type declaration
+entity ::= static? entity-kind context entity-name
+entity-kind ::= &#39;F&#39;                    // function (ctor, accessor, etc.)
+entity-kind ::= &#39;v&#39;                    // variable (let/var)
+entity-kind ::= &#39;i&#39;                    // subscript (&#39;i&#39;ndex) itself (not the individual accessors)
+entity-kind ::= &#39;I&#39;                    // initializer
+entity-name ::= decl-name type         // named declaration
+entity-name ::= &#39;A&#39; index              // default argument generator
+entity-name ::= &#39;a&#39; addressor-kind decl-name type     // mutable addressor
+entity-name ::= &#39;C&#39; type               // allocating constructor
+entity-name ::= &#39;c&#39; type               // non-allocating constructor
+entity-name ::= &#39;D&#39;                    // deallocating destructor; untyped
+entity-name ::= &#39;d&#39;                    // non-deallocating destructor; untyped
+entity-name ::= &#39;g&#39; decl-name type     // getter
+entity-name ::= &#39;i&#39;                    // non-local variable initializer
+entity-name ::= &#39;l&#39; addressor-kind decl-name type     // non-mutable addressor
+entity-name ::= &#39;m&#39; decl-name type     // materializeForSet
+entity-name ::= &#39;s&#39; decl-name type     // setter
+entity-name ::= &#39;U&#39; index type         // explicit anonymous closure expression
+entity-name ::= &#39;u&#39; index type         // implicit anonymous closure
+entity-name ::= &#39;w&#39; decl-name type     // willSet
+entity-name ::= &#39;W&#39; decl-name type     // didSet
+static ::= &#39;Z&#39;                         // entity is a static member of a type
+decl-name ::= identifier
+decl-name ::= local-decl-name
+decl-name ::= private-decl-name
+local-decl-name ::= &#39;L&#39; index identifier  // locally-discriminated declaration
+private-decl-name ::= &#39;P&#39; identifier identifier  // file-discriminated declaration
+reabstract-signature ::= (&#39;G&#39; generic-signature)? type type
+addressor-kind ::= &#39;u&#39;                 // unsafe addressor (no owner)
+addressor-kind ::= &#39;O&#39;                 // owning addressor (non-native owner)
+addressor-kind ::= &#39;o&#39;                 // owning addressor (native owner)
+addressor-kind ::= &#39;p&#39;                 // pinning addressor (native owner)
+</pre></div>
+</div>
+<p>An <code class="docutils literal"><span class="pre">entity</span></code> starts with a <code class="docutils literal"><span class="pre">nominal-type-kind</span></code> (<code class="docutils literal"><span class="pre">[COPV]</span></code>), a
+substitution (<code class="docutils literal"><span class="pre">[Ss]</span></code>) of a nominal type, or an <code class="docutils literal"><span class="pre">entity-kind</span></code>
+(<code class="docutils literal"><span class="pre">[FIiv]</span></code>).</p>
+<p>An <code class="docutils literal"><span class="pre">entity-name</span></code> starts with <code class="docutils literal"><span class="pre">[AaCcDggis]</span></code> or a <code class="docutils literal"><span class="pre">decl-name</span></code>.
+A <code class="docutils literal"><span class="pre">decl-name</span></code> starts with <code class="docutils literal"><span class="pre">[LP]</span></code> or an <code class="docutils literal"><span class="pre">identifier</span></code> (<code class="docutils literal"><span class="pre">[0-9oX]</span></code>).</p>
+<p>A <code class="docutils literal"><span class="pre">context</span></code> starts with either an <code class="docutils literal"><span class="pre">entity</span></code>, an <code class="docutils literal"><span class="pre">extension</span></code> (which starts
+with <code class="docutils literal"><span class="pre">[Ee]</span></code>), or a <code class="docutils literal"><span class="pre">module</span></code>, which might be an <code class="docutils literal"><span class="pre">identifier</span></code> (<code class="docutils literal"><span class="pre">[0-9oX]</span></code>)
+or a substitution of a module (<code class="docutils literal"><span class="pre">[Ss]</span></code>).</p>
+<p>A global mangling starts with an <code class="docutils literal"><span class="pre">entity</span></code> or <code class="docutils literal"><span class="pre">[MTWw]</span></code>.</p>
+<p>If a partial application forwarder is for a static symbol, its name will
+start with the sequence <code class="docutils literal"><span class="pre">_TPA_</span></code> followed by the mangled symbol name of the
+forwarder&#8217;s destination.</p>
+<p>A generic specialization mangling consists of a header, specifying the types
+and conformances used to specialize the generic function, followed by the
+full mangled name of the original unspecialized generic symbol.</p>
+<p>The first identifier in a <code class="docutils literal"><span class="pre">&lt;private-decl-name&gt;</span></code> is a string that represents
+the file the original declaration came from. It should be considered unique
+within the enclosing module. The second identifier is the name of the entity.</p>
+<p>Not all declarations marked <code class="docutils literal"><span class="pre">private</span></code> declarations will use the
+<code class="docutils literal"><span class="pre">&lt;private-decl-name&gt;</span></code> mangling; if the entity&#8217;s context is enough to uniquely
+identify the entity, the simple <code class="docutils literal"><span class="pre">identifier</span></code> form is preferred.</p>
+<p>The types in a <code class="docutils literal"><span class="pre">&lt;reabstract-signature&gt;</span></code> are always non-polymorphic
+<code class="docutils literal"><span class="pre">&lt;impl-function-type&gt;</span></code> types.</p>
+</div>
+<div class="section" id="direct-and-indirect-symbols">
+<h3><a class="toc-backref" href="#id32">Direct and Indirect Symbols</a><a class="headerlink" href="#direct-and-indirect-symbols" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-swift"><div class="highlight"><pre>directness ::= &#39;d&#39;                         // direct
+directness ::= &#39;i&#39;                         // indirect
+</pre></div>
+</div>
+<p>A direct symbol resolves directly to the address of an object.  An
+indirect symbol resolves to the address of a pointer to the object.
+They are distinct manglings to make a certain class of bugs
+immediately obvious.</p>
+<p>The terminology is slightly overloaded when discussing offsets.  A
+direct offset resolves to a variable holding the true offset.  An
+indirect offset resolves to a variable holding an offset to be applied
+to type metadata to get the address of the true offset.  (Offset
+variables are required when the object being accessed lies within a
+resilient structure.  When the layout of the object may depend on
+generic arguments, these offsets must be kept in metadata.  Indirect
+field offsets are therefore required when accessing fields in generic
+types where the metadata itself has unknown layout.)</p>
+</div>
+<div class="section" id="declaration-contexts">
+<h3><a class="toc-backref" href="#id33">Declaration Contexts</a><a class="headerlink" href="#declaration-contexts" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-swift"><div class="highlight"><pre>context ::= module
+context ::= extension
+context ::= entity
+module ::= substitution                    // other substitution
+module ::= identifier                      // module name
+module ::= known-module                    // abbreviation
+extension ::= &#39;E&#39; module entity
+extension ::= &#39;e&#39; module generic-signature entity
+</pre></div>
+</div>
+<p>These manglings identify the enclosing context in which an entity was declared,
+such as its enclosing module, function, or nominal type.</p>
+<p>An <code class="docutils literal"><span class="pre">extension</span></code> mangling is used whenever an entity&#8217;s declaration context is
+an extension <em>and</em> the entity being extended is in a different module. In this
+case the extension&#8217;s module is mangled first, followed by the entity being
+extended. If the extension and the extended entity are in the same module, the
+plain <code class="docutils literal"><span class="pre">entity</span></code> mangling is preferred. If the extension is constrained, the
+constraints on the extension are mangled in its generic signature.</p>
+<p>When mangling the context of a local entity within a constructor or
+destructor, the non-allocating or non-deallocating variant is used.</p>
+</div>
+<div class="section" id="types">
+<h3><a class="toc-backref" href="#id34">Types</a><a class="headerlink" href="#types" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-swift"><div class="highlight"><pre>type ::= &#39;Bb&#39;                              // Builtin.BridgeObject
+type ::= &#39;BB&#39;                              // Builtin.UnsafeValueBuffer
+type ::= &#39;Bf&#39; natural &#39;_&#39;                  // Builtin.Float&lt;n&gt;
+type ::= &#39;Bi&#39; natural &#39;_&#39;                  // Builtin.Int&lt;n&gt;
+type ::= &#39;BO&#39;                              // Builtin.ObjCPointer
+type ::= &#39;Bo&#39;                              // Builtin.ObjectPointer
+type ::= &#39;Bp&#39;                              // Builtin.RawPointer
+type ::= &#39;Bv&#39; natural type                 // Builtin.Vec&lt;n&gt;x&lt;type&gt;
+type ::= &#39;Bw&#39;                              // Builtin.Word
+type ::= nominal-type
+type ::= associated-type
+type ::= &#39;a&#39; context identifier            // Type alias (DWARF only)
+type ::= &#39;b&#39; type type                     // objc block function type
+type ::= &#39;c&#39; type type                     // C function pointer type
+type ::= &#39;F&#39; throws-annotation? type type  // function type
+type ::= &#39;f&#39; throws-annotation? type type  // uncurried function type
+type ::= &#39;G&#39; type &lt;type&gt;+ &#39;_&#39;              // generic type application
+type ::= &#39;K&#39; type type                     // @auto_closure function type
+type ::= &#39;M&#39; type                          // metatype without representation
+type ::= &#39;XM&#39; metatype-repr type           // metatype with representation
+type ::= &#39;P&#39; protocol-list &#39;_&#39;             // protocol type
+type ::= &#39;PM&#39; type                         // existential metatype without representation
+type ::= &#39;XPM&#39; metatype-repr type          // existential metatype with representation
+type ::= archetype
+type ::= &#39;R&#39; type                          // inout
+type ::= &#39;T&#39; tuple-element* &#39;_&#39;            // tuple
+type ::= &#39;t&#39; tuple-element* &#39;_&#39;            // variadic tuple
+type ::= &#39;Xo&#39; type                         // @unowned type
+type ::= &#39;Xu&#39; type                         // @unowned(unsafe) type
+type ::= &#39;Xw&#39; type                         // @weak type
+type ::= &#39;XF&#39; impl-function-type           // function implementation type
+type ::= &#39;Xf&#39; type type                    // @thin function type
+nominal-type ::= known-nominal-type
+nominal-type ::= substitution
+nominal-type ::= nominal-type-kind declaration-name
+nominal-type-kind ::= &#39;C&#39;                  // class
+nominal-type-kind ::= &#39;O&#39;                  // enum
+nominal-type-kind ::= &#39;V&#39;                  // struct
+declaration-name ::= context decl-name
+archetype ::= &#39;Q&#39; index                    // archetype with depth=0, idx=N
+archetype ::= &#39;Qd&#39; index index             // archetype with depth=M+1, idx=N
+archetype ::= associated-type
+archetype ::= qualified-archetype
+associated-type ::= substitution
+associated-type ::= &#39;Q&#39; protocol-context     // self type of protocol
+associated-type ::= &#39;Q&#39; archetype identifier // associated type
+qualified-archetype ::= &#39;Qq&#39; index context   // archetype+context (DWARF only)
+protocol-context ::= &#39;P&#39; protocol
+tuple-element ::= identifier? type
+metatype-repr ::= &#39;t&#39;                      // Thin metatype representation
+metatype-repr ::= &#39;T&#39;                      // Thick metatype representation
+metatype-repr ::= &#39;o&#39;                      // ObjC metatype representation
+throws-annotation ::= &#39;z&#39;                  // &#39;throws&#39; annotation on function types
+
+
+type ::= &#39;u&#39; generic-signature type        // generic type
+type ::= &#39;x&#39;                               // generic param, depth=0, idx=0
+type ::= &#39;q&#39; generic-param-index           // dependent generic parameter
+type ::= &#39;q&#39; type assoc-type-name          // associated type of non-generic param
+type ::= &#39;w&#39; generic-param-index assoc-type-name // associated type
+type ::= &#39;W&#39; generic-param-index assoc-type-name+ &#39;_&#39; // associated type at depth
+
+generic-param-index ::= &#39;x&#39;                // depth = 0,   idx = 0
+generic-param-index ::= index              // depth = 0,   idx = N+1
+generic-param-index ::= &#39;d&#39; index index    // depth = M+1, idx = N
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">&lt;type&gt;</span></code> never begins or ends with a number.
+<code class="docutils literal"><span class="pre">&lt;type&gt;</span></code> never begins with an underscore.
+<code class="docutils literal"><span class="pre">&lt;type&gt;</span></code> never begins with <code class="docutils literal"><span class="pre">d</span></code>.
+<code class="docutils literal"><span class="pre">&lt;type&gt;</span></code> never begins with <code class="docutils literal"><span class="pre">z</span></code>.</p>
+<p>Note that protocols mangle differently as types and as contexts. A protocol
+context always consists of a single protocol name and so mangles without a
+trailing underscore. A protocol type can have zero, one, or many protocol bounds
+which are juxtaposed and terminated with a trailing underscore.</p>
+<div class="highlight-swift"><div class="highlight"><pre>assoc-type-name ::= (&#39;P&#39; protocol-name)? identifier
+assoc-type-name ::= substitution
+</pre></div>
+</div>
+<p>Associated types use an abbreviated mangling when the base generic parameter
+or associated type is constrained by a single protocol requirement. The
+associated type in this case can be referenced unambiguously by name alone.
+If the base has multiple conformance constraints, then the protocol name is
+mangled in to disambiguate.</p>
+<div class="highlight-swift"><div class="highlight"><pre>impl-function-type ::=
+  impl-callee-convention impl-function-attribute* generic-signature? &#39;_&#39;
+  impl-parameter* &#39;_&#39; impl-result* &#39;_&#39;
+impl-callee-convention ::= &#39;t&#39;              // thin
+impl-callee-convention ::= impl-convention  // thick, callee transferred with given convention
+impl-convention ::= &#39;a&#39;                     // direct, autoreleased
+impl-convention ::= &#39;d&#39;                     // direct, no ownership transfer
+impl-convention ::= &#39;D&#39;                     // direct, no ownership transfer,
+                                            // dependent on &#39;self&#39; parameter
+impl-convention ::= &#39;g&#39;                     // direct, guaranteed
+impl-convention ::= &#39;e&#39;                     // direct, deallocating
+impl-convention ::= &#39;i&#39;                     // indirect, ownership transfer
+impl-convention ::= &#39;l&#39;                     // indirect, inout
+impl-convention ::= &#39;G&#39;                     // indirect, guaranteed
+impl-convention ::= &#39;o&#39;                     // direct, ownership transfer
+impl-convention ::= &#39;z&#39; impl-convention     // error result
+impl-function-attribute ::= &#39;Cb&#39;            // compatible with C block invocation function
+impl-function-attribute ::= &#39;Cc&#39;            // compatible with C global function
+impl-function-attribute ::= &#39;Cm&#39;            // compatible with Swift method
+impl-function-attribute ::= &#39;CO&#39;            // compatible with ObjC method
+impl-function-attribute ::= &#39;Cw&#39;            // compatible with protocol witness
+impl-function-attribute ::= &#39;N&#39;             // noreturn
+impl-function-attribute ::= &#39;G&#39;             // generic
+impl-parameter ::= impl-convention type
+impl-result ::= impl-convention type
+</pre></div>
+</div>
+<p>For the most part, manglings follow the structure of formal language
+types.  However, in some cases it is more useful to encode the exact
+implementation details of a function type.</p>
+<p>Any <code class="docutils literal"><span class="pre">&lt;impl-function-attribute&gt;</span></code> productions must appear in the order
+in which they are specified above: e.g. a noreturn C function is
+mangled with <code class="docutils literal"><span class="pre">CcN</span></code>.</p>
+<p>Note that the convention and function-attribute productions do not
+need to be disambiguated from the start of a <code class="docutils literal"><span class="pre">&lt;type&gt;</span></code>.</p>
+</div>
+<div class="section" id="generics">
+<h3><a class="toc-backref" href="#id35">Generics</a><a class="headerlink" href="#generics" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-swift"><div class="highlight"><pre>protocol-conformance ::= (&#39;u&#39; generic-signature)? type protocol module
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">&lt;protocol-conformance&gt;</span></code> refers to a type&#8217;s conformance to a protocol. The
+named module is the one containing the extension or type declaration that
+declared the conformance.</p>
+<div class="highlight-swift"><div class="highlight"><pre>generic-signature ::= (generic-param-count+)? (&#39;R&#39; requirement*)? &#39;r&#39;
+generic-param-count ::= &#39;z&#39;       // zero parameters
+generic-param-count ::= index     // N+1 parameters
+requirement ::= type-param protocol-name // protocol requirement
+requirement ::= type-param type          // base class requirement
+                                         // type starts with [CS]
+requirement ::= type-param &#39;z&#39; type      // &#39;z&#39;ame-type requirement
+
+// Special type mangling for type params that saves the initial &#39;q&#39; on
+// generic params
+type-param ::= generic-param-index       // generic parameter
+type-param ::= &#39;w&#39; generic-param-index assoc-type-name // associated type
+type-param ::= &#39;W&#39; generic-param-index assoc-type-name+ &#39;_&#39;
+</pre></div>
+</div>
+<p>A generic signature begins by describing the number of generic parameters at
+each depth of the signature, followed by the requirements. As a special case,
+no <code class="docutils literal"><span class="pre">generic-param-count</span></code> values indicates a single generic parameter at
+the outermost depth:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">urFq_q_</span><span class="w">                           </span><span class="c1">// &lt;T_0_0&gt; T_0_0 -&gt; T_0_0</span>
+<span class="n">u_0_rFq_qd_0_</span><span class="w">                     </span><span class="c1">// &lt;T_0_0&gt;&lt;T_1_0, T_1_1&gt; T_0_0 -&gt; T_1_1</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="value-witnesses">
+<h3><a class="toc-backref" href="#id36">Value Witnesses</a><a class="headerlink" href="#value-witnesses" title="Permalink to this headline">¶</a></h3>
+<p>TODO: document these</p>
+<div class="highlight-swift"><div class="highlight"><pre>value-witness-kind ::= &#39;al&#39;           // allocateBuffer
+value-witness-kind ::= &#39;ca&#39;           // assignWithCopy
+value-witness-kind ::= &#39;ta&#39;           // assignWithTake
+value-witness-kind ::= &#39;de&#39;           // deallocateBuffer
+value-witness-kind ::= &#39;xx&#39;           // destroy
+value-witness-kind ::= &#39;XX&#39;           // destroyBuffer
+value-witness-kind ::= &#39;Xx&#39;           // destroyArray
+value-witness-kind ::= &#39;CP&#39;           // initializeBufferWithCopyOfBuffer
+value-witness-kind ::= &#39;Cp&#39;           // initializeBufferWithCopy
+value-witness-kind ::= &#39;cp&#39;           // initializeWithCopy
+value-witness-kind ::= &#39;TK&#39;           // initializeBufferWithTakeOfBuffer
+value-witness-kind ::= &#39;Tk&#39;           // initializeBufferWithTake
+value-witness-kind ::= &#39;tk&#39;           // initializeWithTake
+value-witness-kind ::= &#39;pr&#39;           // projectBuffer
+value-witness-kind ::= &#39;xs&#39;           // storeExtraInhabitant
+value-witness-kind ::= &#39;xg&#39;           // getExtraInhabitantIndex
+value-witness-kind ::= &#39;Cc&#39;           // initializeArrayWithCopy
+value-witness-kind ::= &#39;Tt&#39;           // initializeArrayWithTakeFrontToBack
+value-witness-kind ::= &#39;tT&#39;           // initializeArrayWithTakeBackToFront
+value-witness-kind ::= &#39;ug&#39;           // getEnumTag
+value-witness-kind ::= &#39;up&#39;           // destructiveProjectEnumData
+value-witness-kind ::= &#39;ui&#39;           // destructiveInjectEnumTag
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">&lt;value-witness-kind&gt;</span></code> differentiates the kinds of value
+witness functions for a type.</p>
+</div>
+<div class="section" id="identifiers">
+<h3><a class="toc-backref" href="#id37">Identifiers</a><a class="headerlink" href="#identifiers" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-swift"><div class="highlight"><pre>identifier ::= natural identifier-start-char identifier-char*
+identifier ::= &#39;o&#39; operator-fixity natural operator-char+
+
+operator-fixity ::= &#39;p&#39;                    // prefix operator
+operator-fixity ::= &#39;P&#39;                    // postfix operator
+operator-fixity ::= &#39;i&#39;                    // infix operator
+
+operator-char ::= &#39;a&#39;                      // &amp; &#39;and&#39;
+operator-char ::= &#39;c&#39;                      // @ &#39;commercial at&#39;
+operator-char ::= &#39;d&#39;                      // / &#39;divide&#39;
+operator-char ::= &#39;e&#39;                      // = &#39;equals&#39;
+operator-char ::= &#39;g&#39;                      // &gt; &#39;greater&#39;
+operator-char ::= &#39;l&#39;                      // &lt; &#39;less&#39;
+operator-char ::= &#39;m&#39;                      // * &#39;multiply&#39;
+operator-char ::= &#39;n&#39;                      // ! &#39;not&#39;
+operator-char ::= &#39;o&#39;                      // | &#39;or&#39;
+operator-char ::= &#39;p&#39;                      // + &#39;plus&#39;
+operator-char ::= &#39;q&#39;                      // ? &#39;question&#39;
+operator-char ::= &#39;r&#39;                      // % &#39;remainder&#39;
+operator-char ::= &#39;s&#39;                      // - &#39;subtract&#39;
+operator-char ::= &#39;t&#39;                      // ~ &#39;tilde&#39;
+operator-char ::= &#39;x&#39;                      // ^ &#39;xor&#39;
+operator-char ::= &#39;z&#39;                      // . &#39;zperiod&#39;
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">&lt;identifier&gt;</span></code> is run-length encoded: the natural indicates how many
+characters follow.  Operator characters are mapped to letter characters as
+given. In neither case can an identifier start with a digit, so
+there&#8217;s no ambiguity with the run-length.</p>
+<div class="highlight-swift"><div class="highlight"><pre>identifier ::= &#39;X&#39; natural identifier-start-char identifier-char*
+identifier ::= &#39;X&#39; &#39;o&#39; operator-fixity natural identifier-char*
+</pre></div>
+</div>
+<p>Identifiers that contain non-ASCII characters are encoded using the Punycode
+algorithm specified in RFC 3492, with the modifications that <code class="docutils literal"><span class="pre">_</span></code> is used
+as the encoding delimiter, and uppercase letters A through J are used in place
+of digits 0 through 9 in the encoding character set. The mangling then
+consists of an <code class="docutils literal"><span class="pre">X</span></code> followed by the run length of the encoded string and the
+encoded string itself. For example, the identifier <code class="docutils literal"><span class="pre">vergüenza</span></code> is mangled
+to <code class="docutils literal"><span class="pre">X12vergenza_JFa</span></code>. (The encoding in standard Punycode would be
+<code class="docutils literal"><span class="pre">vergenza-95a</span></code>)</p>
+<p>Operators that contain non-ASCII characters are mangled by first mapping the
+ASCII operator characters to letters as for pure ASCII operator names, then
+Punycode-encoding the substituted string. The mangling then consists of
+<code class="docutils literal"><span class="pre">Xo</span></code> followed by the fixity, run length of the encoded string, and the encoded
+string itself. For example, the infix operator <code class="docutils literal"><span class="pre">«+»</span></code> is mangled to
+<code class="docutils literal"><span class="pre">Xoi7p_qcaDc</span></code> (<code class="docutils literal"><span class="pre">p_qcaDc</span></code> being the encoding of the substituted
+string <code class="docutils literal"><span class="pre">«p»</span></code>).</p>
+</div>
+<div class="section" id="substitutions">
+<h3><a class="toc-backref" href="#id38">Substitutions</a><a class="headerlink" href="#substitutions" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-swift"><div class="highlight"><pre>substitution ::= &#39;S&#39; index
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">&lt;substitution&gt;</span></code> is a back-reference to a previously mangled entity. The mangling
+algorithm maintains a mapping of entities to substitution indices as it runs.
+When an entity that can be represented by a substitution (a module, nominal
+type, or protocol) is mangled, a substitution is first looked for in the
+substitution map, and if it is present, the entity is mangled using the
+associated substitution index. Otherwise, the entity is mangled normally, and
+it is then added to the substitution map and associated with the next
+available substitution index.</p>
+<p>For example,  in mangling a function type
+<code class="docutils literal"><span class="pre">(zim.zang.zung,</span> <span class="pre">zim.zang.zung,</span> <span class="pre">zim.zippity)</span> <span class="pre">-&gt;</span> <span class="pre">zim.zang.zoo</span></code> (with module
+<code class="docutils literal"><span class="pre">zim</span></code> and class <code class="docutils literal"><span class="pre">zim.zang</span></code>),
+the recurring contexts <code class="docutils literal"><span class="pre">zim</span></code>, <code class="docutils literal"><span class="pre">zim.zang</span></code>, and <code class="docutils literal"><span class="pre">zim.zang.zung</span></code>
+will be mangled using substitutions after being mangled
+for the first time. The first argument type will mangle in long form,
+<code class="docutils literal"><span class="pre">CC3zim4zang4zung</span></code>, and in doing so, <code class="docutils literal"><span class="pre">zim</span></code> will acquire substitution <code class="docutils literal"><span class="pre">S_</span></code>,
+<code class="docutils literal"><span class="pre">zim.zang</span></code> will acquire substitution <code class="docutils literal"><span class="pre">S0_</span></code>, and <code class="docutils literal"><span class="pre">zim.zang.zung</span></code> will
+acquire <code class="docutils literal"><span class="pre">S1_</span></code>. The second argument is the same as the first and will mangle
+using its substitution, <code class="docutils literal"><span class="pre">S1_</span></code>. The
+third argument type will mangle using the substitution for <code class="docutils literal"><span class="pre">zim</span></code>,
+<code class="docutils literal"><span class="pre">CS_7zippity</span></code>. (It also acquires substitution <code class="docutils literal"><span class="pre">S2_</span></code> which would be used
+if it mangled again.) The result type will mangle using the substitution for
+<code class="docutils literal"><span class="pre">zim.zang</span></code>, <code class="docutils literal"><span class="pre">CS0_3zoo</span></code> (and acquire substitution <code class="docutils literal"><span class="pre">S3_</span></code>). The full
+function type thus mangles as <code class="docutils literal"><span class="pre">fTCC3zim4zang4zungS1_CS_7zippity_CS0_3zoo</span></code>.</p>
+<div class="highlight-swift"><div class="highlight"><pre>substitution ::= &#39;s&#39;
+</pre></div>
+</div>
+<p>The special substitution <code class="docutils literal"><span class="pre">s</span></code> is used for the <code class="docutils literal"><span class="pre">Swift</span></code> standard library
+module.</p>
+</div>
+<div class="section" id="predefined-substitutions">
+<h3><a class="toc-backref" href="#id39">Predefined Substitutions</a><a class="headerlink" href="#predefined-substitutions" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-swift"><div class="highlight"><pre>known-module ::= &#39;s&#39;                       // Swift
+known-module ::= &#39;SC&#39;                      // C
+known-module ::= &#39;So&#39;                      // Objective-C
+known-nominal-type ::= &#39;Sa&#39;                // Swift.Array
+known-nominal-type ::= &#39;Sb&#39;                // Swift.Bool
+known-nominal-type ::= &#39;Sc&#39;                // Swift.UnicodeScalar
+known-nominal-type ::= &#39;Sd&#39;                // Swift.Float64
+known-nominal-type ::= &#39;Sf&#39;                // Swift.Float32
+known-nominal-type ::= &#39;Si&#39;                // Swift.Int
+known-nominal-type ::= &#39;SP&#39;                // Swift.UnsafePointer
+known-nominal-type ::= &#39;Sp&#39;                // Swift.UnsafeMutablePointer
+known-nominal-type ::= &#39;SQ&#39;                // Swift.ImplicitlyUnwrappedOptional
+known-nominal-type ::= &#39;Sq&#39;                // Swift.Optional
+known-nominal-type ::= &#39;SR&#39;                // Swift.UnsafeBufferPointer
+known-nominal-type ::= &#39;Sr&#39;                // Swift.UnsafeMutableBufferPointer
+known-nominal-type ::= &#39;SS&#39;                // Swift.String
+known-nominal-type ::= &#39;Su&#39;                // Swift.UInt
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">&lt;known-module&gt;</span></code> and <code class="docutils literal"><span class="pre">&lt;known-nominal-type&gt;</span></code> are built-in substitutions for
+certain common entities.  Like any other substitution, they all start
+with &#8216;S&#8217;.</p>
+<p>The Objective-C module is used as the context for mangling Objective-C
+classes as <code class="docutils literal"><span class="pre">&lt;type&gt;</span></code>s.</p>
+</div>
+<div class="section" id="indexes">
+<h3><a class="toc-backref" href="#id40">Indexes</a><a class="headerlink" href="#indexes" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-swift"><div class="highlight"><pre>index ::= &#39;_&#39;                              // 0
+index ::= natural &#39;_&#39;                      // N+1
+natural ::= [0-9]+
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">&lt;index&gt;</span></code> is a production for encoding numbers in contexts that can&#8217;t
+end in a digit; it&#8217;s optimized for encoding smaller numbers.</p>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

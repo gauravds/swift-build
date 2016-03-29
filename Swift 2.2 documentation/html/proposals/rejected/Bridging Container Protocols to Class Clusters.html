@@ -1,0 +1,237 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Bridging Container Protocols to Class Clusters &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../../_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="../../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../../index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Bridging Container Protocols to Class Clusters</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This proposal was rejected. We ultimately decided to keep Array as
+a dual-representation struct.</p>
+</div>
+<div class="section" id="bridging-container-protocols-to-class-clusters">
+<h1>Bridging Container Protocols to Class Clusters<a class="headerlink" href="#bridging-container-protocols-to-class-clusters" title="Permalink to this headline">¶</a></h1>
+<p>I think that attempting to bridge <code class="docutils literal"><span class="pre">NSArray</span></code> to a concrete type like
+<code class="docutils literal"><span class="pre">Array&lt;T&gt;</span></code> will be a poor compromise, losing both the flexibility of NSArray&#8217;s
+polymorphism and the performance afforded by <code class="docutils literal"><span class="pre">Array&lt;T&gt;</span></code>&#8216;s simplicity.
+Here&#8217;s what I propose instead:</p>
+<ul class="simple">
+<li>Rename our current <code class="docutils literal"><span class="pre">Array</span></code> back to <code class="docutils literal"><span class="pre">Vector</span></code> or perhaps something like
+<code class="docutils literal"><span class="pre">ContiguousArray</span></code>.</li>
+<li>Redefine <code class="docutils literal"><span class="pre">Array</span></code> as a refinement of the <code class="docutils literal"><span class="pre">Collection</span></code> protocol
+that has integer indices.</li>
+<li>Implement an <code class="docutils literal"><span class="pre">ArrayOf&lt;T&gt;</span></code> generic container, like <code class="docutils literal"><span class="pre">AnyGenerator</span></code> and
+<code class="docutils literal"><span class="pre">AnySequence</span></code>, that can hold an arbitrary type conforming to <code class="docutils literal"><span class="pre">Array</span></code>.</li>
+<li>Bridge <code class="docutils literal"><span class="pre">NSArray</span></code> from ObjC to Swift <code class="docutils literal"><span class="pre">ArrayOf&lt;AnyObject&gt;</span></code> with value
+semantics.</li>
+<li>Bridge <code class="docutils literal"><span class="pre">Array</span></code>-conforming types with class element types in Swift to
+ObjC as <code class="docutils literal"><span class="pre">NSArray</span></code>.</li>
+</ul>
+<p>Although I&#8217;ll be talking about arrays in this proposal, I think the same
+approach would work for <code class="docutils literal"><span class="pre">NSDictionary</span></code> and <code class="docutils literal"><span class="pre">NSSet</span></code> as well, mapping them
+to generic containers for associative map and unordered container protocols
+respectively.</p>
+<div class="section" id="nsarray-vs-array">
+<h2>NSArray vs Array<a class="headerlink" href="#nsarray-vs-array" title="Permalink to this headline">¶</a></h2>
+<p>Despite their similar names, <code class="docutils literal"><span class="pre">NSArray</span></code> and Swift&#8217;s <code class="docutils literal"><span class="pre">Array</span></code> have
+fundamentally incompatible design goals. As the root of a class cluster,
+<code class="docutils literal"><span class="pre">NSArray</span></code> provides abstraction over many underlying data structures, trading
+weaker algorithmic guarantees for better representational flexibility and
+implementation encapsulation. Swift&#8217;s <code class="docutils literal"><span class="pre">Array</span></code>, on the other hand, is intended to be a direct
+representation of a contiguous region of memory, more like a C array or C++&#8217;s
+<code class="docutils literal"><span class="pre">vector</span></code>, minimizing abstraction in order to provide tight algorithmic
+guarantees.  Many <code class="docutils literal"><span class="pre">NSArray</span></code> implementations are lazy,
+such as those over KVO properties or Core Data aggregates, and
+transforming them to concrete <code class="docutils literal"><span class="pre">Array</span></code>s would have unintended semantic
+effects. And on the other side, the overhead of having to accommodate an
+arbitrary <code class="docutils literal"><span class="pre">NSArray</span></code> implementation inside <code class="docutils literal"><span class="pre">Array</span></code> destroys <code class="docutils literal"><span class="pre">Array</span></code>
+as a simple, high-performance container. Attempting to bridge these two types
+will result in an unattractive compromise to both sides, weakening the
+algorithmic guarantees of Array while forgoing the full flexibility of
+<code class="docutils literal"><span class="pre">NSArray</span></code>.</p>
+</div>
+<div class="section" id="array-as-a-refinement-of-the-collection-protocol">
+<h2>&#8220;Array&#8221; as a Refinement of the Collection Protocol<a class="headerlink" href="#array-as-a-refinement-of-the-collection-protocol" title="Permalink to this headline">¶</a></h2>
+<p>Swift&#8217;s answer to container polymorphism is its generics system. The
+<code class="docutils literal"><span class="pre">Collection</span></code> protocol provides a common interface to indexable containers
+that can be used generically, which is exactly what <code class="docutils literal"><span class="pre">NSArray</span></code> provides in
+Cocoa for integer-indexable container implementations. <code class="docutils literal"><span class="pre">Array</span></code> could be
+described as a refinement of <code class="docutils literal"><span class="pre">Collection</span></code> with integer indices:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">protocol </span><span class="nc">Array</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">Collection</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">where</span><span class="w"> </span><span class="n">IndexType</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Int</span>
+<span class="p">}</span>
+<span class="kd">protocol </span><span class="nc">MutableArray</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="no">MutableCollection</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">where</span><span class="w"> </span><span class="n">IndexType</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Int</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The familiar <code class="docutils literal"><span class="pre">NSArray</span></code> API can then be exposed using default implementations
+in the <code class="docutils literal"><span class="pre">Array</span></code> protocol, or perhaps even on the more abstract <code class="docutils literal"><span class="pre">Collection</span></code>
+and <code class="docutils literal"><span class="pre">Sequence</span></code> protocols, and we can bridge <code class="docutils literal"><span class="pre">NSArray</span></code> in a way that plays
+nicely with generic containers.</p>
+<p>This naming scheme would of course require us to rename the concrete
+<code class="docutils literal"><span class="pre">Array&lt;T&gt;</span></code> container yet again. <code class="docutils literal"><span class="pre">Vector</span></code> is an obvious candidate, albeit
+one with a C++-ish bent. Something more descriptive like <code class="docutils literal"><span class="pre">ContiguousArray</span></code>
+might feel more Cocoa-ish.</p>
+</div>
+<div class="section" id="the-arrayof-t-type">
+<h2>The ArrayOf&lt;T&gt; Type<a class="headerlink" href="#the-arrayof-t-type" title="Permalink to this headline">¶</a></h2>
+<p>Although the language as implemented does not yet support protocol types for
+protocols with associated types, DaveA devised a technique for implementing
+types that provide the same effect in the library, such as his <code class="docutils literal"><span class="pre">AnyGenerator&lt;T&gt;</span></code>
+and <code class="docutils literal"><span class="pre">AnySequence&lt;T&gt;</span></code> containers for arbitrary <code class="docutils literal"><span class="pre">Stream</span></code> and <code class="docutils literal"><span class="pre">Sequence</span></code>
+types. This technique can be extended to the <code class="docutils literal"><span class="pre">Array</span></code> protocol, using class
+inheritance to hide the concrete implementing type behind an abstract base:</p>
+<div class="highlight-swift"><div class="highlight"><pre>// Abstract base class that forwards the Array protocol
+class ArrayOfImplBase&lt;T&gt; {
+  var startIndex: Int { fatal() }
+  var endIndex: Int { fatal() }
+
+  func __getitem__(i: Int) -&gt; T { fatal() }
+
+  // For COW
+  func _clone() -&gt; Self { fatal() }
+}
+
+// Concrete derived class containing a specific Array implementation
+class ArrayOfImpl&lt;T, ArrayT: Array where ArrayT.Element == T&gt;
+  : ArrayOfImplBase&lt;T&gt;
+{
+  var value: ArrayT
+  var startIndex: Int { return value.startIndex }
+  var endIndex: Int { return value.endIndex }
+  func __getitem__(i: Int) -&gt; T { return __getitem__(i) }
+
+  // For COW
+  func _clone() -&gt; Self { return self(value) }
+}
+
+// Wrapper type that uses the base class to erase the concrete type of
+// an Array
+struct ArrayOf&lt;T&gt; : Array {
+  var value: ArrayOfImplBase&lt;T&gt;
+
+  var startIndex: Int { return value.startIndex }
+  var endIndex: Int { return value.endIndex }
+  func __getitem__(i: Int) -&gt; T { return value.__getitem__(i) }
+
+  init&lt;ArrayT : Array where ArrayT.Element == T&gt;(arr: ArrayT) {
+    value = ArrayOfImpl&lt;T, ArrayT&gt;(arr)
+  }
+}
+</pre></div>
+</div>
+<p>The mutable variant can use COW optimization to preserve value semantics:</p>
+<div class="highlight-swift"><div class="highlight"><pre>struct MutableArrayOf&lt;T&gt; : MutableArray {
+  /* ...other forwarding methods... */
+
+  func __setitem__(i: Int, x: T) {
+    if !isUniquelyReferenced(value) {
+      value = value._clone()
+    }
+    value.__setitem__(i, x)
+  }
+}
+</pre></div>
+</div>
+</div>
+<div class="section" id="bridging-nsarray-into-swift">
+<h2>Bridging <code class="docutils literal"><span class="pre">NSArray</span></code> into Swift<a class="headerlink" href="#bridging-nsarray-into-swift" title="Permalink to this headline">¶</a></h2>
+<p>We could simply make <code class="docutils literal"><span class="pre">NSArray</span></code> conform to <code class="docutils literal"><span class="pre">Array</span></code>, which would be
+sufficient to allow it to be stored in an <code class="docutils literal"><span class="pre">ArrayOf&lt;AnyObject&gt;</span></code> container.
+However, a good experience for <code class="docutils literal"><span class="pre">NSArray</span></code> still requires special-case
+behavior. In particular, <code class="docutils literal"><span class="pre">NSArray</span></code> in Cocoa is considered a value class,
+and best practice dictates that it be defensively <code class="docutils literal"><span class="pre">copy</span></code>-ed when used. In
+Swift, we should give bridged NSArrays COW value semantics by default, like
+<code class="docutils literal"><span class="pre">NSString</span></code>. One way to handle this is by adding a case to the <code class="docutils literal"><span class="pre">ArrayOf</span></code>
+implementation, allowing it to either contain a generic value or an <code class="docutils literal"><span class="pre">NSArray</span></code>
+with COW semantics.</p>
+</div>
+<div class="section" id="bridging-swift-containers-to-nsarray">
+<h2>Bridging Swift Containers to <code class="docutils literal"><span class="pre">NSArray</span></code><a class="headerlink" href="#bridging-swift-containers-to-nsarray" title="Permalink to this headline">¶</a></h2>
+<p>We could have an implicit conversion to <code class="docutils literal"><span class="pre">NSArray</span></code> from an arbitrary type
+conforming to <code class="docutils literal"><span class="pre">Array</span></code> with a class element type, allowing ObjC APIs to work
+naturally with generic Swift containers. Assuming we had support for
+<code class="docutils literal"><span class="pre">conversion_to</span></code> functions, it could look like this:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class NSArrayOf&lt;ArrayT: Array where ArrayT.Element : class&gt; : NSArray {
+  /* ...implement NSArray methods... */
+}
+
+extension NSArray {
+  @conversion_to
+  func __conversion_to&lt;
+    ArrayT: Array where ArrayT.Element : class
+  &gt;(arr: ArrayT) -&gt; NSArray {
+    return NSArrayOf&lt;ArrayT&gt;(arr)
+  }
+}
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">NSArray</span></code> has reference semantics in ObjC, which is a mismatch with
+Swift&#8217;s value semantics, but because <code class="docutils literal"><span class="pre">NSArray</span></code> is a value class, this is
+probably not a problem in practice, because it will be <code class="docutils literal"><span class="pre">copy</span></code>-ed as
+necessary as a best practice. There also needs to be a special case for bridging
+an <code class="docutils literal"><span class="pre">ArrayOf&lt;T&gt;</span></code> that contains an <code class="docutils literal"><span class="pre">NSArray</span></code>; such a container should be
+bridged directly back to the underlying unchanged <code class="docutils literal"><span class="pre">NSArray</span></code>.</p>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,333 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Git Workflows &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Git Workflows</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="git-workflows">
+<h1>Git Workflows<a class="headerlink" href="#git-workflows" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="purpose">
+<h2>Purpose<a class="headerlink" href="#purpose" title="Permalink to this headline">¶</a></h2>
+<p>Swift development has been based on SVN since its inception.  As part of the
+transition to Git this document helps to address questions about how common SVN
+workflows we use today translate to their Git counterparts as well as to discuss
+Git workflow practices we plan on having — at least initially — after the Git
+transition.  Notably we will follow a model where commits to trunk — which is
+the ‘master’ branch in Git — has commits land (in the common case) via rebasing
+instead of merging.  This model is open to evolution later, but this mimics the
+workflow we have today with SVN.</p>
+</div>
+</div>
+<div class="section" id="svn-git-workflows">
+<h1>SVN -&gt; GIT Workflows<a class="headerlink" href="#svn-git-workflows" title="Permalink to this headline">¶</a></h1>
+<p>The general SVN workflow consists of the following commands:</p>
+<ol class="arabic simple">
+<li>Checkout: This means checking out/setting up a new repository.</li>
+<li>Update: Pulling the latest remote changes into a local repository.</li>
+<li>Committing: Committing a change to the remote repository.</li>
+<li>Reverting: Reverting a change from a remote repository.</li>
+<li>Browsing: Looking at commits.</li>
+</ol>
+<p>This document will show how to translate these commands to Git and additionally
+how to configure Git. It assumes that one is attempting to manipulate a Git
+repository via bash in a terminal. A lot of information since this is supposed
+to be a short, actionable guide. For more information, please see the Git crash
+course guide for SVN users at &lt;<a class="reference external" href="https://git-scm.com/course/SVN.html">https://git-scm.com/course/SVN.html</a>&gt;</p>
+<p><em>NOTE</em> Whenever we say the Swift repository, we mean any repository in the
+Swift project.</p>
+<div class="section" id="quicksetup-tldr">
+<h2>Quicksetup (TLDR)<a class="headerlink" href="#quicksetup-tldr" title="Permalink to this headline">¶</a></h2>
+<p>For those who do not want to read the full document, use the following commands
+to perform a simple repo setup for the Swift repository:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git config --global user.name &quot;&lt;My Name&gt;&quot;
+$ git config --global user.email &quot;&lt;My Email&gt;&quot;
+$ mkdir swift-source &amp;&amp; cd swift-source
+$ git clone &lt;LLVM_REPO_URL&gt;
+$ git clone &lt;CLANG_REPO_URL&gt;
+$ git clone &lt;SWIFT_REPO_URL&gt;
+$ (cd swift &amp;&amp; git config branch.autosetuprebase always)
+$ git clone &lt;CMARK_REPO_URL&gt;
+$ git clone &lt;NINJA_REPO_URL&gt;
+</pre></div>
+</div>
+<p>Then to commit a new commit to the remote swift repository:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git commit
+$ git push origin master
+</pre></div>
+</div>
+<p>and to pull new commits from the remote swift repository:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git pull origin master
+</pre></div>
+</div>
+<p>In order to ease updating all repositories, consider using the script in
+&#8216;./utils/update-checkout&#8217;. This will automate updating the repositories in the
+proper way.</p>
+</div>
+<div class="section" id="preliminary">
+<h2>Preliminary<a class="headerlink" href="#preliminary" title="Permalink to this headline">¶</a></h2>
+<p>Before beginning, we need to perform some global configuration of Git. Git
+includes a username/email of the committer in every commit. By default this is
+the current logged in user and the hostname of the machine. This is /not/ what
+one wants. We configure Git globally (i.e. across all repositories) to have our
+proper name and email by running the following commands:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git config --global user.name &quot;&lt;My Name&gt;&quot;
+$ git config --global user.email &quot;&lt;My Email&gt;&quot;
+</pre></div>
+</div>
+</div>
+<div class="section" id="checkout">
+<h2>Checkout<a class="headerlink" href="#checkout" title="Permalink to this headline">¶</a></h2>
+<p>Normally if one wishes to checkout a repository in SVN, one would use a command
+like this:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ SVN co &lt;repository url&gt; &lt;local directory&gt;
+</pre></div>
+</div>
+<p>This would then checkout the latest revision from the repository specified by
+&#8216;repository url&#8217; and place it into the directory &#8216;local directory&#8217;. In Git,
+instead of checking out the repository, one clones the repository. This is done
+as follows:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git clone &lt;repository url&gt; &lt;local directory&gt;
+</pre></div>
+</div>
+<p>This will cause Git to clone the repository at &#8216;repository url&#8217; and check out
+the &#8216;master&#8217; branch. The &#8216;master&#8217; branch corresponds to &#8216;trunk&#8217; in SVN. For more
+information about branching in Git please see
+&lt;<a class="reference external" href="https://git-scm.com/course/SVN.html#branch">https://git-scm.com/course/SVN.html#branch</a>&gt;</p>
+<p>Before beginning to commit though, we /must/ perform some default configuration
+of our repository to match the Swift repository default configuration by
+enabling default rebasing.</p>
+</div>
+<div class="section" id="repository-configuration-enabling-default-rebasing">
+<h2>Repository Configuration (Enabling Default Rebasing)<a class="headerlink" href="#repository-configuration-enabling-default-rebasing" title="Permalink to this headline">¶</a></h2>
+<p>Once we have cloned the repository, we need to configure the repository for our
+use. Specifically we want to configure the swift repository so that we rebase
+whenever we update the repository (see the update section below for more
+details):</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git config branch.autosetuprebase always
+</pre></div>
+</div>
+<p>By default when updating, Git will attempt to merge the remote changes and your
+local changes. Ignoring what that sentence means, this is not an SVN-esque
+model. Instead we want any local changes that we have to be applied on top of
+any new remote changes. The &#8216;branch.autosetuprebase&#8217; flag causes this to be done
+automatically when ever one updates the local repository.</p>
+</div>
+<div class="section" id="update">
+<h2>Update<a class="headerlink" href="#update" title="Permalink to this headline">¶</a></h2>
+<p>In SVN, one updates your local repository by running the update command:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ SVN update
+</pre></div>
+</div>
+<p>In Git, instead of performing SVN update, one pulls from the remote repository:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git pull --rebase origin master
+</pre></div>
+</div>
+<p>This will pull any new remote commits into your local repository and then replay
+your current local commits on top of those new commits.</p>
+<p>By default the &#8216;&#8211;rebase&#8217; flag is not necessary for the Swift repository because
+it is configured to always rebase by setting the &#8216;branch.autosetuprebase&#8217; flag
+(see the section &#8216;Repository Configuration (Enabling Default Rebasing)&#8217; above).</p>
+</div>
+<div class="section" id="commit">
+<h2>Commit<a class="headerlink" href="#commit" title="Permalink to this headline">¶</a></h2>
+<p>In SVN, committing always means submitting changes to a remote repository. In
+Git, committing refers to the process of first telling Git to track a change by
+staging the change and then committing all staged changes into a change in the
+local repository. One can have many such commits. Then when one is ready, one
+pushes the new local changes to the remote repository. We go through these steps
+in more detail below:</p>
+<p>In terms of replicating the SVN model, there are now two steps. In order to
+commit changes one first stages a changed file using &#8216;git add&#8217;:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git add &lt;path&gt;
+</pre></div>
+</div>
+<p>Then once all changes that you want to be apart of the commit have been staged,
+a commit is created in the local repository via the &#8216;commit&#8217; command:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git commit
+</pre></div>
+</div>
+<p>As a shortcut to commit /all/ changes to local files that are already being
+tracked by Git to the local repository, you can use the &#8216;-a&#8217; command:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git commit -a
+</pre></div>
+</div>
+<p>In both of these cases, an editor will pop up to accept a commit message. To
+specify a short commit message at the commandline, you can use the &#8216;-m&#8217; flag:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git commit -m &#39;My great commit message.&#39;
+</pre></div>
+</div>
+<p>In order to see the diff of changes that have not been staged, run the command:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git diff
+</pre></div>
+</div>
+<p>To see all changes that have been staged, run the command:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git diff --staged
+</pre></div>
+</div>
+<p>To get a diff for a specific revision/path, perform the following command:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git diff &lt;revision&gt; &lt;path&gt;
+</pre></div>
+</div>
+<p>In order to get a more concise view of the files that have staged and or
+unstaged changes, run the command:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git status
+</pre></div>
+</div>
+<p>In order to restore a file from the last revision, one uses the checkout
+command:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git checkout &lt;path&gt;
+</pre></div>
+</div>
+<p>To restore a file to a specific revision, one must use a longer form of the
+command:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git checkout &lt;revision&gt; -- &lt;path&gt;
+</pre></div>
+</div>
+<p>To unstage a file, one uses the &#8216;reset&#8217; command:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git reset &lt;path&gt;
+</pre></div>
+</div>
+<p>This tells Git to reset &#8216;&lt;path&gt;&#8217; in the staging area to the top of tree commit
+(which in Git is called &#8216;HEAD&#8217;). In order to correct a mistake, you can pass the
+&#8216;amend&#8217; flag to Git:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git commit --amend
+</pre></div>
+</div>
+<p>This will cause all staged changes to be merged into &#8216;HEAD&#8217;. Once one has made
+all the relevant commits, in order to push the changes to the remote repository
+the &#8216;push&#8217; command is used:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git push origin master
+</pre></div>
+</div>
+<p>If a different committer has committed changes such that there are remote
+commits that are not present locally, this will fail. In order to get around
+this issue, perform:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git pull --rebase origin master
+</pre></div>
+</div>
+<p>in order to pull the new remote commits and replay your new commits on top. Then
+try to push again. See the &#8216;Checkout&#8217; section above how to configure the local
+swift repository to always rebase allowing you to drop the &#8216;&#8211;rebase&#8217; flag.</p>
+</div>
+<div class="section" id="revert">
+<h2>Revert<a class="headerlink" href="#revert" title="Permalink to this headline">¶</a></h2>
+<p>In SVN reverting a commit implies performing a reverse merge. In Git, this is no
+longer true. Instead one now just uses the &#8216;revert&#8217; command:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git revert &lt;revision&gt;
+</pre></div>
+</div>
+<p>This will cause Git to perform the reverse merge of that revision for you
+against HEAD and bring up a message window for you to write a commit
+message. This will be autofilled in with the title of the commit that is going
+to be reverted and the revision number of that commit like so:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">Revert</span><span class="w"> </span><span class="s">&quot;&lt;FIRST LINE OF REVERTED COMMITS COMMIT MSG&gt;&quot;</span>
+
+<span class="n">This</span><span class="w"> </span><span class="n">reverts</span><span class="w"> </span><span class="n">commit</span><span class="w"> </span><span class="o">&lt;</span><span class="n">REVISION</span><span class="o">&gt;</span><span class="p">.</span>
+</pre></div>
+</div>
+<p>One can edit this message as one sees fit. Once this has been done, the revert
+will become a normal commit in your repository like any other commit. Thus to
+revert the commit in the remote repository, you need to perform a Git push:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git push origin master
+</pre></div>
+</div>
+</div>
+<div class="section" id="browsing">
+<h2>Browsing<a class="headerlink" href="#browsing" title="Permalink to this headline">¶</a></h2>
+<p>This section explains how one can view Git changes. In order to view a history
+of all changes on a branch to the beginning of time use the &#8216;log&#8217; command:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git log
+</pre></div>
+</div>
+<p>This will for each commit show the following information:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">commit</span><span class="w"> </span><span class="o">&lt;</span><span class="n">REVISION</span><span class="o">&gt;</span>
+<span class="n">Author</span><span class="p">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">AUTHOR</span><span class="w"> </span><span class="n">NAME</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="n">AUTHOR</span><span class="w"> </span><span class="n">EMAIL</span><span class="o">&gt;</span>
+<span class="n">Date</span><span class="p">:</span><span class="w">   </span><span class="o">&lt;</span><span class="n">TIMESTAMP</span><span class="o">&gt;</span>
+
+<span class="w">    </span><span class="o">&lt;</span><span class="n">COMMIT</span><span class="w"> </span><span class="n">MSG</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>To see history starting at a specific commit use the following form of a Git log
+command:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git log &lt;REVISION&gt;
+</pre></div>
+</div>
+<p>To see a oneline summary that includes just the title of the commit and its
+hash, pass the &#8216;&#8211;oneline&#8217; command:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git log --oneline
+</pre></div>
+</div>
+<p>It will not show you what was actually changed in each commit. In order to see
+what was actually changed in a commit, use the command &#8216;show&#8217;:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git show
+</pre></div>
+</div>
+<p>This will show the aforementioned information shown by Git log, but additionally
+will perform a diff against top of tree showing you the contents of the
+change. To see the changes for a specific commit, pass the revision to Git
+show:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ git show &lt;REVISION&gt;
+</pre></div>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

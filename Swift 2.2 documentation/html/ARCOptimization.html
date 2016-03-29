@@ -1,0 +1,289 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>ARC Optimization for Swift &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>ARC Optimization for Swift</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="arc-optimization-for-swift">
+<h1><a class="toc-backref" href="#id1">ARC Optimization for Swift</a><a class="headerlink" href="#arc-optimization-for-swift" title="Permalink to this headline">¶</a></h1>
+<div class="contents topic" id="contents">
+<p class="topic-title first">Contents</p>
+<ul class="simple">
+<li><a class="reference internal" href="#arc-optimization-for-swift" id="id1">ARC Optimization for Swift</a><ul>
+<li><a class="reference internal" href="#reference-counting-instructions" id="id2">Reference Counting Instructions</a></li>
+<li><a class="reference internal" href="#memory-behavior-of-arc-operations" id="id3">Memory Behavior of ARC Operations</a></li>
+<li><a class="reference internal" href="#rc-identity" id="id4">RC Identity</a></li>
+<li><a class="reference internal" href="#copy-on-write-considerations" id="id5">Copy-On-Write Considerations</a><ul>
+<li><a class="reference internal" href="#is-unique-instruction" id="id6">is_unique instruction</a></li>
+<li><a class="reference internal" href="#builtin-isunique" id="id7">Builtin.isUnique</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="admonition-todo admonition">
+<p class="first admonition-title">TODO</p>
+<p class="last">This is currently a place holder for design documentation on ARC
+optimization.</p>
+</div>
+<div class="section" id="reference-counting-instructions">
+<h2><a class="toc-backref" href="#id2">Reference Counting Instructions</a><a class="headerlink" href="#reference-counting-instructions" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>strong_retain</li>
+<li>strong_release</li>
+<li>strong_retain_unowned</li>
+<li>unowned_retain</li>
+<li>unowned_release</li>
+<li>load_weak</li>
+<li>store_weak</li>
+<li>fix_lifetime</li>
+<li>mark_dependence</li>
+<li>is_unique</li>
+<li>is_unique_or_pinned</li>
+<li>copy_block</li>
+</ul>
+</div>
+<div class="section" id="memory-behavior-of-arc-operations">
+<h2><a class="toc-backref" href="#id3">Memory Behavior of ARC Operations</a><a class="headerlink" href="#memory-behavior-of-arc-operations" title="Permalink to this headline">¶</a></h2>
+<p>At SIL level, reference counting and reference checking instructions
+are attributed with MayHaveSideEffects to prevent arbitrary passes
+from reordering them.</p>
+<p>At IR level, retains are marked NoModRef with respect to load and
+store instructions so they don&#8217;t pessimize memory dependence. (Note
+the Retains are still considered to write to memory with respect to
+other calls because getModRefBehavior is not overridden.) Releases
+cannot be marked NoModRef because they can have arbitrary side
+effects. Is_unique calls cannot be marked NoModRef because they cannot
+be reordered with other operations that may modify the reference
+count.</p>
+<div class="admonition-todo admonition">
+<p class="first admonition-title">TODO</p>
+<p class="last">Marking runtime calls with NoModRef in LLVM is misleading (they
+write memory), inconsistent (getModRefBehavior returns Unknown),
+and fragile (e.g. if we inline ARC operations at IR level). To be
+robust and allow stronger optimization, TBAA tags should be used to
+indicate functions that only access object metadata. This would
+also enable more LLVM level optimization in the presence of
+is_unique checks which currently appear to arbitrarily write memory.</p>
+</div>
+</div>
+<div class="section" id="rc-identity">
+<h2><a class="toc-backref" href="#id4">RC Identity</a><a class="headerlink" href="#rc-identity" title="Permalink to this headline">¶</a></h2>
+<p>A core ARC concept in Swift optimization is the concept of <code class="docutils literal"><span class="pre">Reference</span> <span class="pre">Count</span>
+<span class="pre">Identity</span></code> (RC Identity) and RC Identity preserving instructions. An instruction
+<code class="docutils literal"><span class="pre">I</span></code> with n SSA arguments and m SSA results is (i,j) RC Identity preserving if
+performing a <code class="docutils literal"><span class="pre">retain_value</span></code> on the ith SSA argument immediately before <code class="docutils literal"><span class="pre">I</span></code>
+is executed is equivalent to performing a <code class="docutils literal"><span class="pre">retain_value</span></code> on the jth SSA result
+of <code class="docutils literal"><span class="pre">I</span></code> immediately following the execution of <code class="docutils literal"><span class="pre">I</span></code>. For example in the
+following, if:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">retain_value</span><span class="w"> </span><span class="o">%</span><span class="n">x</span>
+<span class="o">%</span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">unary_instruction</span><span class="w"> </span><span class="o">%</span><span class="n">x</span>
+</pre></div>
+</div>
+<p>is equivalent to:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="o">%</span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">unary_instruction</span><span class="w"> </span><span class="o">%</span><span class="n">x</span>
+<span class="n">retain_value</span><span class="w"> </span><span class="o">%</span><span class="n">y</span>
+</pre></div>
+</div>
+<p>then we say that unary_instruction is a (0,0) RC Identity preserving
+operation. In a case of a unary instruction, we omit (0,0) and just say that
+the instruction is RC Identity preserving.</p>
+<p>In practice generally RC Identical operations are unary operations such as
+casts. This would make it seem like RC Identity is an extension of alias
+analysis. But RC Identity also has significantly more power than alias analysis
+since:</p>
+<blockquote>
+<div><ul class="simple">
+<li><code class="docutils literal"><span class="pre">struct</span></code> is an RC identity preserving operation if the <code class="docutils literal"><span class="pre">struct</span></code> literal
+only has one non-trivial operand. This means for instance that any struct with
+one reference counted field used as an owning pointer is RC Identical with its
+owning pointer (a useful property for Arrays).</li>
+<li>An <code class="docutils literal"><span class="pre">enum</span></code> instruction is always RC Identical with the given tuple payload.</li>
+<li>A <code class="docutils literal"><span class="pre">tuple</span></code> instruction is an RC identity preserving operation if the
+<code class="docutils literal"><span class="pre">tuple</span></code> literal has one non-trivial operand.</li>
+<li><code class="docutils literal"><span class="pre">init_class_existential</span></code> is an RC identity preserving operation since
+performing a retain_value on a class existential is equivalent to performing
+a retain_value on the class itself.</li>
+</ul>
+</div></blockquote>
+<p>The corresponding value projection operations have analogous properties.</p>
+<p>Given two SSA values <code class="docutils literal"><span class="pre">%a</span></code>, <code class="docutils literal"><span class="pre">%b</span></code>, we define <code class="docutils literal"><span class="pre">%a</span></code> as immediately RC
+identical to <code class="docutils literal"><span class="pre">%b</span></code> if there exists an instruction <code class="docutils literal"><span class="pre">I</span></code> such that:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">%a</span></code> is the jth result of <code class="docutils literal"><span class="pre">I</span></code>.</li>
+<li><code class="docutils literal"><span class="pre">%b</span></code> is the ith argument of <code class="docutils literal"><span class="pre">I</span></code>.</li>
+<li><code class="docutils literal"><span class="pre">I</span></code> is (i,j) RC identity preserving.</li>
+</ul>
+<p>Easily the immediate RC identical relation must be reflexive and symmetric but
+by its nature is not transitive. Then define the equivalence relation RC
+Identity, <code class="docutils literal"><span class="pre">~rc</span></code>, by the relations that <code class="docutils literal"><span class="pre">%a</span> <span class="pre">~rc</span> <span class="pre">%b</span></code> if <code class="docutils literal"><span class="pre">%a</span></code> is immediately
+RC identical to <code class="docutils literal"><span class="pre">%b</span></code> or if there is a finite sequence of n SSA values
+<code class="docutils literal"><span class="pre">{%a[i]}</span></code> such that <code class="docutils literal"><span class="pre">%a</span></code> is immediately RC identical to <code class="docutils literal"><span class="pre">%a[0]</span></code> and <code class="docutils literal"><span class="pre">%b</span></code>
+is immediately RC identical to <code class="docutils literal"><span class="pre">%a[n]</span></code>. We currently always assume that each
+equivalence class has one dominating definition.</p>
+<p>These equivalence classes consisting of chains of RC identical values are
+computed via the SILAnalysis called <code class="docutils literal"><span class="pre">RC</span> <span class="pre">Identity</span> <span class="pre">Analysis</span></code>. By performing ARC
+optimization on RC Identical operations, our optimizations are able to operate
+on the level of granularity that we actually care about, ignoring superficial
+changes in SSA form that still yield manipulations of the same reference count.</p>
+<dl class="docutils">
+<dt><em>NOTE</em> RCIdentityAnalysis is a flow insensitive analysis. Dataflow that needs to</dt>
+<dd>be flow sensitive must handle phi nodes in the dataflow itself.</dd>
+</dl>
+<p><em>NOTE</em> An important consequence of RC Identity is that value types with only one
+RCIdentity are a simple case for ARC optimization to handle. The ARC optimizer
+relies on other optimizations like SROA, Function Signature Opts, and
+SimplifyCFG (for block arguments) to try and eliminate cases where value types
+have multiple reference counted subtypes.</p>
+</div>
+<div class="section" id="copy-on-write-considerations">
+<h2><a class="toc-backref" href="#id5">Copy-On-Write Considerations</a><a class="headerlink" href="#copy-on-write-considerations" title="Permalink to this headline">¶</a></h2>
+<p>The copy-on-write capabilities of some data structures, such as Array
+and Set, are efficiently implemented via Builtin.isUnique calls which
+lower directly to is_unique instructions in SIL.</p>
+<p>The is_unique instruction takes the address of a reference, and
+although it does not actually change the reference, the reference must
+appear mutable to the optimizer. This forces the optimizer to preserve
+a retain distinct from what’s required to maintain lifetime for any of
+the reference&#8217;s source-level copies, because the called function is
+allowed to replace the reference, thereby releasing the
+referent. Consider the following sequence of rules:</p>
+<ol class="arabic simple">
+<li>An operation taking the address of a variable is allowed to
+replace the reference held by that variable. The fact that
+is_unique will not actually replace it is opaque to the optimizer.</li>
+<li>If the refcount is 1 when the reference is replaced, the referent
+is deallocated.</li>
+<li>A different source-level variable pointing at the same referent
+must not be changed/invalidated by such a call.</li>
+<li>If such a variable exists, the compiler must guarantee the
+refcount is &gt; 1 going into the call.</li>
+</ol>
+<p>With the is_unique instruction, the variable whose reference is being
+checked for uniqueness appears mutable at the level of an individual
+SIL instruction. After IRGen, is_unique instructions are expanded into
+runtime calls that no longer take the address of the
+variable. Consequently, LLVM-level ARC optimization must be more
+conservative. It must not remove retain/release pairs of this form:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">retain</span><span class="w"> </span><span class="n">X</span>
+<span class="n">retain</span><span class="w"> </span><span class="n">X</span>
+<span class="n">_swift_isUniquelyReferenced</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+<span class="n">release</span><span class="w"> </span><span class="n">X</span>
+<span class="n">release</span><span class="w"> </span><span class="n">X</span>
+</pre></div>
+</div>
+<p>To prevent removal of the apparently redundant inner retain/release
+pair, the LLVM ARC optimizer should model _swift_isUniquelyReferenced
+as a function that may release X, use X, and exit the program (the
+subsequent release instruction does not prove safety).</p>
+<div class="section" id="is-unique-instruction">
+<span id="arcopts-is-unique"></span><h3><a class="toc-backref" href="#id6">is_unique instruction</a><a class="headerlink" href="#is-unique-instruction" title="Permalink to this headline">¶</a></h3>
+<p>As explained above, the SIL-level is_unique instruction enforces the
+semantics of uniqueness checks in the presence of ARC
+optimization. The kind of reference count checking that
+is_unique performs depends on the argument type:</p>
+<blockquote>
+<div><ul class="simple">
+<li>Native object types are directly checked by reading the strong
+reference count:
+(Builtin.NativeObject, known native class reference)</li>
+<li>Objective-C object types require an additional check that the
+dynamic object type uses native swift reference counting:
+(Builtin.UnknownObject, unknown class reference, class existential)</li>
+<li>Bridged object types allow the dynamic object type check to be
+bypassed based on the pointer encoding:
+(Builtin.BridgeObject)</li>
+</ul>
+</div></blockquote>
+<p>Any of the above types may also be wrapped in an optional.  If the
+static argument type is optional, then a null check is also performed.</p>
+<p>Thus, is_unique only returns true for non-null, native swift object
+references with a strong reference count of one.</p>
+<p>is_unique_or_pinned has the same semantics as is_unique except that it
+also returns true if the object is marked pinned (by strong_pin)
+regardless of the reference count. This allows for simultaneous
+non-structural modification of multiple subobjects.</p>
+</div>
+<div class="section" id="builtin-isunique">
+<h3><a class="toc-backref" href="#id7">Builtin.isUnique</a><a class="headerlink" href="#builtin-isunique" title="Permalink to this headline">¶</a></h3>
+<p>Builtin.isUnique and Builtin.isUniqueOrPinned give the standard
+library access to optimization safe uniqueness checking. Because the
+type of reference check is derived from the builtin argument&#8217;s static
+type, the most efficient check is automatically generated. However, in
+some cases, the standard library can dynamically determine that it has
+a native reference even though the static type is a bridge or unknown
+object. Unsafe variants of the builtin are available to allow the
+additional pointer bit mask and dynamic class lookup to be bypassed in
+these cases:</p>
+<ul class="simple">
+<li>isUnique_native : &lt;T&gt; (inout T[?]) -&gt; Int1</li>
+<li>isUniqueOrPinned_native : &lt;T&gt; (inout T[?]) -&gt; Int1</li>
+</ul>
+<p>These builtins perform an implicit cast to NativeObject before
+checking uniqueness. There’s no way at SIL level to cast the address
+of a reference, so we need to encapsulate this operation as part of
+the builtin.</p>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

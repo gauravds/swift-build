@@ -1,0 +1,2300 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Swift String Design &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Swift String Design</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <style>
+
+.repl, .emph, .look {color:rgb(47,175,187)}
+.emph {font-weight:bold}
+
+pre, .pre { font-family: Monaco, monospace; font-size:90% }
+
+pre.literal-block {
+  overflow: hidden;
+}
+
+span.look, span.look1 {
+  position: relative;
+  border-bottom: .2em dotted rgb(255,165,165);
+}
+
+span.aside { font-family: sans-serif; white-space: normal; }
+
+span.look + span.aside, span.look1 + span.aside { display: none; }
+
+span.look:hover, span.look1:hover {
+  background-color:greenyellow;
+}
+
+span.look:hover {
+  color:rgb(23,87,94);
+}
+
+/* Main speech bubble*/
+span.look:hover + span.aside, span.look1:hover + span.aside{
+  display: inline-block;
+  position: relative;
+  margin-top: -1000em;
+  margin-bottom: -1000em;
+  margin-right: -1000em;
+  padding: 0.3em 1em 0.3em 1em;
+  /*text-align: justify;*/
+  max-width: 70%;
+  /*width: 50%;*/
+  left: 2em;
+  background: gray;
+  -moz-border-radius:10px;
+  -webkit-border-radius:10px;
+  border-radius:10px;
+  color: #fff;
+  z-index: 1;
+}
+
+/* Little triangle on the left */
+span.look:hover + span.aside:after, span.look1:hover + span.aside:after {
+  content: "";
+  position: absolute;
+  bottom: 0.3em;
+  left: -1.5em;
+  border-style: solid;
+  border-width: 0.6em 2em 0.6em 0;
+  border-color: transparent gray;
+  display: inline;
+  width: 0;
+  z-index: 2;
+}
+
+/*a:link {color:blue}*/
+</style><div class="section" id="swift-string-design">
+<h1><a class="toc-backref" href="#id23">Swift String Design</a><a class="headerlink" href="#swift-string-design" title="Permalink to this headline">¶</a></h1>
+<div class="note admonition">
+<p class="first admonition-title">This Document</p>
+<ul class="last simple">
+<li>contains interactive HTML commentary that does not
+currently appear in printed output.  Hover your mouse over
+elements with a dotted pink underline to view the hidden
+commentary.</li>
+<li>represents the intended design of Swift strings, not their
+current implementation state.</li>
+<li>is being delivered in installments.  Content still to come is
+outlined in <a class="reference internal" href="#coming-installments">Coming Installments</a>.</li>
+</ul>
+</div>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This document was used in planning Swift 1.0; it has not been kept
+up to date and does not describe the current or planned behavior of Swift.</p>
+</div>
+<div class="contents topic" id="contents">
+<p class="topic-title first">Contents</p>
+<ul class="simple">
+<li><a class="reference internal" href="#swift-string-design" id="id23">Swift String Design</a><ul>
+<li><a class="reference internal" href="#introduction" id="id24">Introduction</a><ul>
+<li><a class="reference internal" href="#goals" id="id25">Goals</a></li>
+<li><a class="reference internal" href="#non-goals" id="id26">Non-Goals</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#overview-by-example" id="id27">Overview By Example</a><ul>
+<li><a class="reference internal" href="#string-is-a-first-class-type" id="id28"><code class="docutils literal"><span class="pre">String</span></code> is a First-Class Type</a></li>
+<li><a class="reference internal" href="#strings-are-efficient" id="id29">Strings are <strong>Efficient</strong></a></li>
+<li><a class="reference internal" href="#strings-are-mutable" id="id30">Strings are <strong>Mutable</strong></a></li>
+<li><a class="reference internal" href="#strings-are-value-types" id="id31">Strings are <strong>Value Types</strong></a></li>
+<li><a class="reference internal" href="#strings-are-unicode-aware" id="id32">Strings are <strong>Unicode-Aware</strong></a></li>
+<li><a class="reference internal" href="#strings-are-locale-agnostic" id="id33">Strings are <strong>Locale-Agnostic</strong></a></li>
+<li><a class="reference internal" href="#strings-are-containers" id="id34">Strings are <strong>Containers</strong></a></li>
+<li><a class="reference internal" href="#strings-are-composed-of-characters" id="id35">Strings are Composed of <code class="docutils literal"><span class="pre">Character</span></code>s</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#strings-support-flexible-segmentation" id="id36">Strings Support Flexible Segmentation</a><ul>
+<li><a class="reference internal" href="#strings-are-sliceable" id="id37">Strings are <strong>Sliceable</strong></a></li>
+<li><a class="reference internal" href="#strings-are-encoded-as-utf-8" id="id38">Strings are <strong>Encoded as UTF-8</strong></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#coming-installments" id="id39">Coming Installments</a></li>
+<li><a class="reference internal" href="#reference-manual" id="id40">Reference Manual</a></li>
+<li><a class="reference internal" href="#cocoa-bridging-strategy" id="id41">Cocoa Bridging Strategy</a></li>
+<li><a class="reference internal" href="#rationales" id="id42">Rationales</a><ul>
+<li><a class="reference internal" href="#why-a-built-in-string-type" id="id43">Why a Built-In String Type?</a></li>
+<li><a class="reference internal" href="#how-would-you-design-it" id="id44">How Would You Design It?</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#comparisons-with-nsstring" id="id45">Comparisons with <code class="docutils literal"><span class="pre">NSString</span></code></a><ul>
+<li><a class="reference internal" href="#high-level-comparison-with-nsstring" id="id46">High-Level Comparison with <code class="docutils literal"><span class="pre">NSString</span></code></a></li>
+<li><a class="reference internal" href="#nsstring-member-by-member-comparison" id="id47"><code class="docutils literal"><span class="pre">NSString</span></code> Member-by-Member Comparison</a></li>
+<li><a class="reference internal" href="#unavailable-on-swift-strings" id="id48">Unavailable on Swift Strings</a></li>
+<li><a class="reference internal" href="#why-yagni" id="id49">Why YAGNI</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="introduction">
+<h2><a class="toc-backref" href="#id24">Introduction</a><a class="headerlink" href="#introduction" title="Permalink to this headline">¶</a></h2>
+<p>Like all things Swift, our approach to strings begins with a deep
+respect for the lessons learned from many languages and libraries,
+especially Objective-C and Cocoa.</p>
+<div class="section" id="goals">
+<h3><a class="toc-backref" href="#id25">Goals</a><a class="headerlink" href="#goals" title="Permalink to this headline">¶</a></h3>
+<p><code class="docutils literal"><span class="pre">String</span></code> should:</p>
+<ul class="simple">
+<li>honor industry standards such as Unicode</li>
+<li>when handling non-ASCII text, deliver “reasonably correct”
+results to users thinking only in terms of ASCII</li>
+<li>when handling ASCII text, provide “expected behavior” to users
+thinking only in terms of ASCII</li>
+<li>be hard to use incorrectly</li>
+<li>be easy to use correctly</li>
+<li>provide near-optimal efficiency for 99% of use cases</li>
+<li>provide a foundation upon which proper locale-sensitive operations
+can be built</li>
+</ul>
+</div>
+<div class="section" id="non-goals">
+<h3><a class="toc-backref" href="#id26">Non-Goals</a><a class="headerlink" href="#non-goals" title="Permalink to this headline">¶</a></h3>
+<p><code class="docutils literal"><span class="pre">String</span></code> need not:</p>
+<ul class="simple">
+<li>have behavior appropriate to all locales and contexts</li>
+<li>be an appropriate type (or base type) for all text storage
+applications</li>
+</ul>
+</div>
+</div>
+<div class="section" id="overview-by-example">
+<h2><a class="toc-backref" href="#id27">Overview By Example</a><a class="headerlink" href="#overview-by-example" title="Permalink to this headline">¶</a></h2>
+<p>In this section, we&#8217;ll walk through some basic examples of Swift
+string usage while discovering its essential properties.</p>
+<div class="section" id="string-is-a-first-class-type">
+<h3><code class="docutils literal"><span class="pre">String</span></code> is a <a class="reference external" href="http://en.wikipedia.org/wiki/First-class_citizen">First-Class Type</a><a class="headerlink" href="#string-is-a-first-class-type" title="Permalink to this headline">¶</a></h3>
+<pre class="literal-block">
+(swift) var s = &quot;Yo&quot;
+<span class="repl">// s:</span> <span class="emph">String</span> <span class="repl">= &quot;Yo&quot;</span>
+</pre>
+<p>Unlike, say, C&#8217;s <code class="docutils literal"><span class="pre">char*</span></code>, the meaning of a swift string is always
+unambiguous.</p>
+</div>
+<div class="section" id="strings-are-efficient">
+<h3><a class="toc-backref" href="#id29">Strings are <strong>Efficient</strong></a><a class="headerlink" href="#strings-are-efficient" title="Permalink to this headline">¶</a></h3>
+<p>The implementation of <code class="docutils literal"><span class="pre">String</span></code> takes advantage of state-of-the-art
+optimizations, including:</p>
+<ul class="simple">
+<li>Storing short strings without heap allocation</li>
+<li>Sharing allocated buffers among copies and slices</li>
+<li>In-place modification of uniquely-owned buffers</li>
+</ul>
+<p>As a result, <a class="reference internal" href="#copying">copying</a> and <a class="reference internal" href="#sliceable">slicing</a> strings, in particular, can be
+viewed by most programmers as being “almost free.”</p>
+</div>
+<div class="section" id="strings-are-mutable">
+<h3><a class="toc-backref" href="#id30">Strings are <strong>Mutable</strong></a><a class="headerlink" href="#strings-are-mutable" title="Permalink to this headline">¶</a></h3>
+<div class="sidebar">
+<p class="first sidebar-title">Why Mention It?</p>
+<p class="last">The ability to change a string&#8217;s value might not be worth noting
+except that <em>some languages make all strings immutable</em>, as a way
+of working around problems that Swift has defined away—by making
+strings pure values (see below).</p>
+</div>
+<pre class="literal-block">
+(swift) extension String {
+          func addEcho() {
+            self += self
+          }
+        }
+(swift) <span class="look1">s.addEcho()</span><span class="aside">s is modified in place</span>
+(swift) s
+<span class="repl">// s: String =</span> <span class="emph">&quot;YoYo&quot;</span>
+</pre>
+</div>
+<div class="section" id="strings-are-value-types">
+<span id="copying"></span><h3><a class="toc-backref" href="#id31">Strings are <strong>Value Types</strong></a><a class="headerlink" href="#strings-are-value-types" title="Permalink to this headline">¶</a></h3>
+<p>Distinct string variables have independent values: when you pass
+someone a string they get a copy of the value, and when someone
+passes you a string <em>you own it</em>.  Nobody can change a string value
+“behind your back.”</p>
+<pre class="literal-block">
+(swift) class Cave {
+          // Utter something in the cave
+          func say(msg: String) -&gt; String {
+            <span class="look1">msg.addEcho()</span><span class="aside">Modifying a parameter is safe because the callee sees a copy of the argument</span>
+            self.lastSound = msg
+            <span class="look1">return self.lastSound</span><span class="aside">Returning a stored value is safe because the caller sees a copy of the value</span>
+          }
+
+          var lastSound: String   // a Cave remembers the last sound made
+        }
+(swift) var c = Cave()
+<span class="repl">// c: Cave = &lt;Cave instance&gt;</span>
+(swift) s = &quot;Hey&quot;
+(swift) var t = <span class="look1">c.say(s)</span><span class="aside">this call can't change s…</span>
+<span class="repl">// t: String = &quot;HeyHey&quot;</span>
+(swift) s
+<span class="repl">// s: String =</span> <span class="look">&quot;Hey&quot;</span><span class="aside">…and it doesn't.</span>
+(swift) <span class="look1">t.addEcho()</span><span class="aside">this call can't change c.lastSound…</span>
+(swift) [s, c.lastSound, t]
+<span class="repl">// r0: String[] = [&quot;Hey&quot;,</span> <span class="look">&quot;HeyHey&quot;</span><span class="aside">…and it doesn't.</span><span class="repl">, &quot;HeyHeyHeyHey&quot;]</span>
+</pre>
+</div>
+<div class="section" id="strings-are-unicode-aware">
+<h3><a class="toc-backref" href="#id32">Strings are <strong>Unicode-Aware</strong></a><a class="headerlink" href="#strings-are-unicode-aware" title="Permalink to this headline">¶</a></h3>
+<div class="sidebar">
+<p class="first sidebar-title">Deviations from Unicode</p>
+<p>Any deviation from what Unicode
+specifies requires careful justification.  So far, we have found two
+possible points of deviation for Swift <code class="docutils literal"><span class="pre">String</span></code>:</p>
+<ol class="last arabic simple">
+<li>The <a class="reference external" href="http://www.unicode.org/reports/tr29">Unicode Text Segmentation Specification</a> says, “<a class="reference external" href="http://www.unicode.org/reports/tr29/#GB2">do not
+break between CR and LF</a>.”  However, breaking extended
+grapheme clusters between CR and LF may necessary if we wish
+<code class="docutils literal"><span class="pre">String</span></code> to “behave normally” for users of pure ASCII.  This
+point is still open for discussion.</li>
+<li>The <a class="reference external" href="http://www.unicode.org/reports/tr29">Unicode Text Segmentation Specification</a> says,
+“<a class="reference external" href="http://www.unicode.org/reports/tr29/#GB8">do not break between regional indicator symbols</a>.”  However, it also
+says “(Sequences of more than two RI characters should be separated
+by other characters, such as U+200B ZWSP).”  Although the
+parenthesized note probably has less official weight than the other
+admonition, breaking pairs of RI characters seems like the right
+thing for us to do given that Cocoa already forms strings with
+several adjacent pairs of RI characters, and the Unicode spec <em>can</em>
+be read as outlawing such strings anyway.</li>
+</ol>
+</div>
+<p>Swift applies Unicode algorithms wherever possible.  For example,
+distinct sequences of code points are treated as equal if they
+represent the same character: <a class="footnote-reference" href="#canonical" id="id5">[2]</a></p>
+<pre class="literal-block">
+(swift) var n1 = &quot;<span class="look1">\u006E\u0303</span><span class="aside">Multiple code points, but only one Character</span>&quot;
+<span class="repl">// n1 : String =</span> <strong>&quot;ñ&quot;</strong>
+(swift) var n2 = &quot;\u00F1&quot;
+<span class="repl">// n2 : String =</span> <strong>&quot;ñ&quot;</strong>
+(swift) n1 == n2
+<span class="repl">// r0 : Bool =</span> <strong>true</strong>
+</pre>
+<p>Note that individual code points are still observable by explicit request:</p>
+<pre class="literal-block">
+(swift) n1.codePoints == n2.codePoints
+<span class="repl">// r0 : Bool =</span> <strong>false</strong>
+</pre>
+</div>
+<div class="section" id="strings-are-locale-agnostic">
+<span id="locale-agnostic"></span><h3><a class="toc-backref" href="#id33">Strings are <strong>Locale-Agnostic</strong></a><a class="headerlink" href="#strings-are-locale-agnostic" title="Permalink to this headline">¶</a></h3>
+<p>Strings neither carry their own locale information, nor provide
+behaviors that depend on a global locale setting.  Thus, for any pair
+of strings <code class="docutils literal"><span class="pre">s1</span></code> and <code class="docutils literal"><span class="pre">s2</span></code>, “<code class="docutils literal"><span class="pre">s1</span> <span class="pre">==</span> <span class="pre">s2</span></code>” yields the same result
+regardless of system state.  Strings <em>do</em> provide a suitable
+foundation on which to build locale-aware interfaces.<a class="footnote-reference" href="#locales" id="id6">[3]</a></p>
+</div>
+<div class="section" id="strings-are-containers">
+<h3><a class="toc-backref" href="#id34">Strings are <strong>Containers</strong></a><a class="headerlink" href="#strings-are-containers" title="Permalink to this headline">¶</a></h3>
+<div class="sidebar">
+<p class="first sidebar-title">String Indices</p>
+<p><code class="docutils literal"><span class="pre">String</span></code> implements the <code class="docutils literal"><span class="pre">Container</span></code> protocol, but
+<strong>cannot be indexed by integers</strong>.  Instead,
+<code class="docutils literal"><span class="pre">String.IndexType</span></code> is a library type conforming to the
+<code class="docutils literal"><span class="pre">BidirectionalIndex</span></code> protocol.</p>
+<p class="last">This might seem surprising at first, but code that indexes
+strings with arbitrary integers is seldom Unicode-correct in
+the first place, and Swift provides alternative interfaces
+that encourage Unicode-correct code.  For example, instead
+of <code class="docutils literal"><span class="pre">s[0]</span> <span class="pre">==</span> <span class="pre">'S'</span></code> you&#8217;d write <code class="docutils literal"><span class="pre">s.startsWith(&quot;S&quot;)</span></code>.</p>
+</div>
+<pre class="literal-block">
+(swift) var s = &quot;Strings are awesome&quot;
+<span class="repl">// s : String = &quot;Strings are awesome&quot;</span>
+(swift) var r = s.find(&quot;awe&quot;)
+<span class="repl">// r : Range&lt;StringIndex&gt; = &lt;&quot;…are a̲w̲e̲some&quot;&gt;</span>
+(swift) s[r.start]
+<span class="repl">// r0 : Character =</span> <span class="look">Character(&quot;a&quot;)</span><span class="aside">String elements have type Character (see below)</span>
+</pre>
+</div>
+<div class="section" id="strings-are-composed-of-characters">
+<span id="character"></span><h3><a class="toc-backref" href="#id35">Strings are Composed of <code class="docutils literal"><span class="pre">Character</span></code>s</a><a class="headerlink" href="#strings-are-composed-of-characters" title="Permalink to this headline">¶</a></h3>
+<p><code class="docutils literal"><span class="pre">Character</span></code>, the element type of <code class="docutils literal"><span class="pre">String</span></code>, represents a <strong>grapheme
+cluster</strong>, as specified by a default or tailored Unicode segmentation
+algorithm.  This term is <a class="reference external" href="http://www.unicode.org/glossary/#grapheme_cluster">precisely defined</a> by the Unicode
+specification, but it roughly means <a class="reference external" href="http://useless-factor.blogspot.com/2007/08/unicode-implementers-guide-part-4.html">what the user thinks of when she
+hears “character”</a>. For example, the pair of code points “LATIN
+SMALL LETTER N, COMBINING TILDE” forms a single grapheme cluster, “ñ”.</p>
+<p>Access to lower-level elements is still possible by explicit request:</p>
+<pre class="literal-block">
+(swift) s.codePoints[s.codePoints.start]
+<span class="repl">// r1 : CodePoint = CodePoint(83) /* S */</span>
+(swift) s.bytes[s.bytes.start]
+<span class="repl">// r2 : UInt8 = UInt8(83)</span>
+</pre>
+</div>
+</div>
+<div class="section" id="strings-support-flexible-segmentation">
+<h2><a class="toc-backref" href="#id36">Strings Support Flexible Segmentation</a><a class="headerlink" href="#strings-support-flexible-segmentation" title="Permalink to this headline">¶</a></h2>
+<p>The <code class="docutils literal"><span class="pre">Character</span></code>s enumerated when simply looping over elements of a
+Swift string are <a class="reference external" href="http://www.unicode.org/glossary/#extended_grapheme_cluster">extended grapheme clusters</a> as determined by
+Unicode&#8217;s <a class="reference external" href="http://www.unicode.org/reports/tr29/#Default_Grapheme_Cluster_Table">Default Grapheme Cluster Boundary
+Specification</a>. <a class="footnote-reference" href="#char" id="id9">[5]</a></p>
+<p>This segmentation offers naïve users of English, Chinese, French, and
+probably a few other languages what we think of as the “expected
+results.”  However, not every <a class="reference external" href="http://www.unicode.org/glossary/#script">script</a> can be segmented uniformly for
+all purposes.  For example, searching and collation require different
+segmentations in order to handle Indic scripts correctly.  To that
+end, strings support properties for more-specific segmentations:</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The following example needs a more interesting string in
+order to demonstrate anything interesting.  Hopefully Aki
+has some advice for us.</p>
+</div>
+<pre class="literal-block">
+(swift) for c in s { print(&quot;Extended Grapheme Cluster: (c)&quot;) }
+<span class="repl">Extended Grapheme Cluster: f</span>
+<span class="repl">Extended Grapheme Cluster: o</span>
+<span class="repl">Extended Grapheme Cluster: o</span>
+(swift) for c in s.collationCharacters {
+          print(&quot;Collation Grapheme Cluster: (c)&quot;)
+        }
+<span class="repl">Collation Grapheme Cluster: f</span>
+<span class="repl">Collation Grapheme Cluster: o</span>
+<span class="repl">Collation Grapheme Cluster: o</span>
+(swift) for c in s.searchCharacters {
+          print(&quot;Search Grapheme Cluster: (c)&quot;)
+        }
+<span class="repl">Search Grapheme Cluster: f</span>
+<span class="repl">Search Grapheme Cluster: o</span>
+<span class="repl">Search Grapheme Cluster: o</span>
+</pre>
+<p>Also, each such segmentation provides a unique <code class="docutils literal"><span class="pre">IndexType</span></code>, allowing
+a string to be indexed directly with different indexing schemes:</p>
+<div class="highlight-swift"><div class="highlight"><pre>|swift| var i = s.searchCharacters.startIndex
+`// r2 : UInt8 = UInt8(83)`
+</pre></div>
+</div>
+<div class="section" id="strings-are-sliceable">
+<span id="sliceable"></span><h3><a class="toc-backref" href="#id37">Strings are <strong>Sliceable</strong></a><a class="headerlink" href="#strings-are-sliceable" title="Permalink to this headline">¶</a></h3>
+<pre class="literal-block">
+(swift) s[r.start...r.end]
+<span class="repl">// r2 : String = &quot;awe&quot;</span>
+(swift) s[<span class="look1">r.start...</span>]<span class="aside">postfix slice operator means “through the end”</span>
+<span class="repl">// r3 : String = &quot;awesome&quot;</span>
+(swift) s[<span class="look1">...r.start</span>]<span class="aside">prefix slice operator means “from the beginning”</span>
+<span class="repl">// r4 : String = &quot;Strings are &quot;</span>
+(swift) <span class="look1">s[r]</span><span class="aside">indexing with a range is the same as slicing</span>
+<span class="repl">// r5 : String = &quot;awe&quot;</span>
+(swift) s[r] = &quot;hand&quot;
+(swift) s
+<span class="repl">// s : String = &quot;Strings are</span> <span class="look">handsome</span><span class="aside">slice replacement can resize the string</span><span class="repl">&quot;</span>
+</pre>
+</div>
+<div class="section" id="strings-are-encoded-as-utf-8">
+<span id="extending"></span><h3><a class="toc-backref" href="#id38">Strings are <strong>Encoded as UTF-8</strong></a><a class="headerlink" href="#strings-are-encoded-as-utf-8" title="Permalink to this headline">¶</a></h3>
+<div class="sidebar">
+<p class="first sidebar-title">Encoding Conversion</p>
+<p class="last">Conversion to and from other encodings is out-of-scope for
+<code class="docutils literal"><span class="pre">String</span></code> itself, but could be provided, e.g., by an <code class="docutils literal"><span class="pre">Encoding</span></code>
+module.</p>
+</div>
+<pre class="literal-block">
+(swift) for x in &quot;bump&quot;<strong>.bytes</strong> {
+         print(x)
+       }
+98
+117
+109
+112
+</pre>
+</div>
+</div>
+<div class="section" id="coming-installments">
+<h2><a class="toc-backref" href="#id39">Coming Installments</a><a class="headerlink" href="#coming-installments" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>Reference Manual</li>
+<li>Rationales</li>
+<li>Cocoa Bridging Strategy</li>
+<li>Comparisons with NSString<ul>
+<li>High Level</li>
+<li>Member-by-member</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="reference-manual">
+<h2><a class="toc-backref" href="#id40">Reference Manual</a><a class="headerlink" href="#reference-manual" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>s.bytes</li>
+<li>s.indices</li>
+<li>s[i]</li>
+<li>s[start...end]</li>
+<li>s == t, s != t</li>
+<li>s &lt; t, s &gt; t, s &lt;= t, s &gt;= t</li>
+<li>s.hash()</li>
+<li>s.startsWith(), s.endsWith()</li>
+<li>s + t, s += t, s.append(t)</li>
+<li>s.split(), s.split(n), s.split(sep, n)</li>
+<li>s.strip(), s.stripStart(), s.stripEnd()</li>
+<li>s.commonPrefix(t), s.mismatch(t)</li>
+<li>s.toUpper(), s.toLower()</li>
+<li>s.trim(predicate)</li>
+<li>s.replace(old, new, count)</li>
+<li>s.join(sequenceOfStrings)</li>
+</ul>
+</div>
+<div class="section" id="cocoa-bridging-strategy">
+<h2><a class="toc-backref" href="#id41">Cocoa Bridging Strategy</a><a class="headerlink" href="#cocoa-bridging-strategy" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="rationales">
+<h2><a class="toc-backref" href="#id42">Rationales</a><a class="headerlink" href="#rationales" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="why-a-built-in-string-type">
+<h3><a class="toc-backref" href="#id43">Why a Built-In String Type?</a><a class="headerlink" href="#why-a-built-in-string-type" title="Permalink to this headline">¶</a></h3>
+<div class="admonition-davez-sez admonition">
+<p class="first admonition-title">DaveZ Sez</p>
+<p class="last">In the &#8220;why a built-in string type&#8221; section, I think the main
+narrative is that two string types is bad, but that we have two
+string types in Objective-C for historically good reasons. To get
+one string type, we need to merge the high-level features of
+Objective-C with the performance of C, all while not having the
+respective bad the bad semantics of either (reference semantics and
+&#8220;anarchy&#8221; memory-management respectively). Furthermore, I&#8217;d write
+&#8220;value semantics&#8221; in place of &#8220;C++ semantics&#8221;. I know that is what
+you meant, but we need to tread carefully in the final document.</p>
+</div>
+<p><code class="docutils literal"><span class="pre">NSString</span></code> and <code class="docutils literal"><span class="pre">NSMutableString</span></code>—the string types provided by
+Cocoa—are full-featured classes with high-level functionality for
+writing fully-localized applications.  They have served Apple
+programmers well; so, why does Swift have its own string type?</p>
+<ul class="simple">
+<li>ObjCMessageSend</li>
+<li>Error Prone Mutability
+Reference semantics don&#8217;t line up with how people think about strings</li>
+<li>2 is too many string types.
+two APIs
+duplication of effort
+documentation
+Complexity adds decisions for users
+etc.</li>
+<li>ObjC needed to innovate because C strings suck
+O(N) length
+no localization
+no memory management
+no specified encoding</li>
+<li>C strings had to stay around for performance reasons and
+interoperability</li>
+</ul>
+<p>Want performance of C, sane semantics of C++ strings, and high-level
+goodness of ObjC.</p>
+<blockquote>
+<div>The design of <code class="docutils literal"><span class="pre">NSString</span></code> is <em>very</em> different from the string
+designs of most modern programming languages, which all tend to be
+very similar to one another.  Although existing <code class="docutils literal"><span class="pre">NSString</span></code> users
+are a critical constituency today, current trends indicate that
+most of our <em>future</em> target audience will not be <code class="docutils literal"><span class="pre">NSString</span></code>
+users. Absent compelling justification, it&#8217;s important to make the
+Swift programming environment as familiar as possible for them.</div></blockquote>
+</div>
+<div class="section" id="how-would-you-design-it">
+<h3><a class="toc-backref" href="#id44">How Would You Design It?</a><a class="headerlink" href="#how-would-you-design-it" title="Permalink to this headline">¶</a></h3>
+<div class="admonition-davez-sez admonition">
+<p class="first admonition-title">DaveZ Sez</p>
+<p class="last">In the &#8220;how would you design it&#8221; section, the main narrative is
+twofold: how does it &#8220;feel&#8221; and how efficient is it? The former is
+about feeling built in, which we can easily argue that both C
+strings or Cocoa strings fail at for their respective semantic (and
+often memory management related) reasons. Additionally, the &#8220;feel&#8221;
+should be modern, which is where the Cocoa framework and the
+Unicode standard body do better than C. Nevertheless, we can still
+do better than Objective-C and your strong work at helping people
+reason about grapheme clusters instead of code points (or worse,
+units) is wonderful and it feels right to developers. The second
+part of the narrative is about being efficient, which is where
+arguing for UTF8 is the non-obvious but &#8220;right&#8221; answer for the
+reasons we have discussed.</p>
+</div>
+<ul class="simple">
+<li>It&#8217;d be an independent <em>value</em> so you don&#8217;t have to micromanage
+sharing and mutation</li>
+<li>It&#8217;d be UTF-8 because:<ul>
+<li>UTF-8 has been the clear <a class="reference external" href="http://www.artima.com/weblogs/viewpost.jsp?thread=230157">winner</a> among Unicode encodings since at
+least 2008; Swift should interoperate smoothly and efficiently
+with the rest of the world&#8217;s systems</li>
+<li>UTF-8 is a fairly efficient storage format, especially for ASCII
+but also for the most common non-ASCII code points.</li>
+<li><a class="reference external" href="http://research.swtch.com/2010/03/utf-8-bits-bytes-and-benefits.html">This</a> posting elaborates on some other nice qualities of UTF-8:<ol class="arabic">
+<li>All ASCII files are already UTF-8 files</li>
+<li>ASCII bytes always represent themselves in UTF-8 files. They
+never appear as part of other UTF-8 sequences</li>
+<li>ASCII code points are always represented as themselves in UTF-8
+files. They cannot be hidden inside multibyte UTF-8
+sequences</li>
+<li>UTF-8 is self-synchronizing</li>
+<li>CodePoint substring search is just byte string search</li>
+<li>Most programs that handle 8-bit files safely can handle UTF-8 safely</li>
+<li>UTF-8 sequences sort in code point order.</li>
+<li>UTF-8 has no “byte order.”</li>
+</ol>
+</li>
+</ul>
+</li>
+<li>It would be efficient, taking advantage of state-of-the-art
+optimizations, including:<ul>
+<li>Storing short strings without heap allocation</li>
+<li>Sharing allocated buffers among copies and slices</li>
+<li>In-place modification of uniquely-owned buffers</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div class="section" id="comparisons-with-nsstring">
+<h2><a class="toc-backref" href="#id45">Comparisons with <code class="docutils literal"><span class="pre">NSString</span></code></a><a class="headerlink" href="#comparisons-with-nsstring" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="high-level-comparison-with-nsstring">
+<h3><a class="toc-backref" href="#id46">High-Level Comparison with <code class="docutils literal"><span class="pre">NSString</span></code></a><a class="headerlink" href="#high-level-comparison-with-nsstring" title="Permalink to this headline">¶</a></h3>
+<div class="admonition-davez-sez admonition">
+<p class="first admonition-title">DaveZ Sez</p>
+<p class="last">I think the main message of the API breadth subsection is that
+URLs, paths, etc would be modeled as formal types in Swift
+(i.e. not as extensions on String). Second, I&#8217;d speculate less on
+what Foundation could do (like extending String) and instead focus
+on the fact that NSString still exists as an escape hatch for those
+that feel that they need or want it. Furthermore, I&#8217;d move up the
+&#8220;element access&#8221; discussion above the &#8220;escape hatch&#8221; discussion
+(which should be last in the comparison with NSString discussion).</p>
+</div>
+<div class="section" id="api-breadth">
+<h4>API Breadth<a class="headerlink" href="#api-breadth" title="Permalink to this headline">¶</a></h4>
+<p>The <code class="docutils literal"><span class="pre">NSString</span></code> interface clearly shows the effects of 20 years of
+evolution through accretion.  It is broad, with functionality
+addressing encodings, paths, URLs, localization, and more.  By
+contrast, the interface to Swift&#8217;s <code class="docutils literal"><span class="pre">String</span></code> is much narrower.</p>
+<p id="tbd">Of course, there&#8217;s a reason for every <code class="docutils literal"><span class="pre">NSString</span></code> method, and the
+full breadth of <code class="docutils literal"><span class="pre">NSString</span></code> functionality must remain accessible to
+the Cocoa/Swift programmer.  Fortunately, there are many ways to
+address this need.  For example:</p>
+<ul>
+<li><p class="first">The <code class="docutils literal"><span class="pre">Foundation</span></code> module can extend <code class="docutils literal"><span class="pre">String</span></code> with the methods of
+<code class="docutils literal"><span class="pre">NSString</span></code>.  The extent to which we provide an identical-feeling
+interface and/or correct any <code class="docutils literal"><span class="pre">NSString</span></code> misfeatures is still TBD
+and wide open for discussion.</p>
+</li>
+<li><p class="first">We can create a new modular interface in pure Swift, including a
+<code class="docutils literal"><span class="pre">Locale</span></code> module that addresses localized string operations, an
+<code class="docutils literal"><span class="pre">Encoding</span></code> module that addresses character encoding schemes, a
+<code class="docutils literal"><span class="pre">Regex</span></code> module that provides regular expression functionality,
+etc.  Again, the specifics are TBD.</p>
+</li>
+<li><p class="first">When all else fails, users can convert their Swift <code class="docutils literal"><span class="pre">String</span></code>s to
+<code class="docutils literal"><span class="pre">NSString</span></code>s when they want to access <code class="docutils literal"><span class="pre">NSString</span></code>-specific
+functionality:</p>
+<pre class="literal-block">
+<strong>NString(mySwiftString)</strong>.localizedStandardCompare(otherSwiftString)
+</pre>
+</li>
+</ul>
+<p>For Swift version 1.0, we err on the side of keeping the string
+interface small, coherent, and sufficient for implementing
+higher-level functionality.</p>
+</div>
+<div class="section" id="element-access">
+<h4>Element Access<a class="headerlink" href="#element-access" title="Permalink to this headline">¶</a></h4>
+<p><code class="docutils literal"><span class="pre">NSString</span></code> exposes UTF-16 <a class="reference external" href="http://www.unicode.org/glossary/#code_unit">code units</a> as the primary element on
+which indexing, slicing, and iteration operate.  Swift&#8217;s UTF-8 code
+units are only available as a secondary interface.</p>
+<p><code class="docutils literal"><span class="pre">NSString</span></code> is indexable and sliceable using <code class="docutils literal"><span class="pre">Int</span></code>s, and so
+exposes a <code class="docutils literal"><span class="pre">length</span></code> attribute. Swift&#8217;s <code class="docutils literal"><span class="pre">String</span></code> is indexable and
+sliceable using an abstract <code class="docutils literal"><span class="pre">BidirectionalIndex</span></code> type, and <a class="reference internal" href="#length">does not
+expose its length</a>.</p>
+</div>
+<div class="section" id="sub-strings">
+<h4>Sub-Strings<a class="headerlink" href="#sub-strings" title="Permalink to this headline">¶</a></h4>
+<p id="range">Creating substrings in Swift is very fast. Therefore, Cocoa APIs that
+operate on a substring given as an <code class="docutils literal"><span class="pre">NSRange</span></code> are replaced with Swift
+APIs that just operate on <code class="docutils literal"><span class="pre">String</span></code>s. One can use range-based
+subscripting to achieve the same effect. For example: <code class="docutils literal"><span class="pre">[str</span> <span class="pre">doFoo:arg</span>
+<span class="pre">withRange:subrange]</span></code> becomes <code class="docutils literal"><span class="pre">str[subrange].doFoo(arg)</span></code>.</p>
+</div>
+</div>
+<div class="section" id="nsstring-member-by-member-comparison">
+<h3><a class="toc-backref" href="#id47"><code class="docutils literal"><span class="pre">NSString</span></code> Member-by-Member Comparison</a><a class="headerlink" href="#nsstring-member-by-member-comparison" title="Permalink to this headline">¶</a></h3>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Notes:</th><td class="field-body"><ul class="first last simple">
+<li>The following are from public headers from public frameworks, which
+are AppKit and Foundation (verified).</li>
+<li>Deprecated Cocoa APIs are not considered</li>
+<li>A status of “<em>Remove</em>” below indicates a feature whose removal is
+anticipated.  Rationale is provided for these cases.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="indexing">
+<h4>Indexing<a class="headerlink" href="#indexing" title="Permalink to this headline">¶</a></h4>
+<hr class="docutils" id="length" />
+<div class="sidebar">
+<p class="first sidebar-title">Why doesn&#8217;t <code class="docutils literal"><span class="pre">String</span></code> support <code class="docutils literal"><span class="pre">.length</span></code>?</p>
+<p>In Swift, by convention, <code class="docutils literal"><span class="pre">x.length</span></code> is used to represent
+the number of elements in a container, and since <code class="docutils literal"><span class="pre">String</span></code> is a
+container of abstract <a class="reference internal" href="#character"><code class="docutils literal"><span class="pre">Character</span></code></a>s, <code class="docutils literal"><span class="pre">length</span></code> would have to
+count those.</p>
+<p class="last">This meaning of <code class="docutils literal"><span class="pre">length</span></code> is unimplementable in O(1).  It can be
+cached, although not in the memory block where the characters are
+stored, since we want a <code class="docutils literal"><span class="pre">String</span></code> to share storage with its
+slices.  Since the body of the <code class="docutils literal"><span class="pre">String</span></code> must already store the
+<code class="docutils literal"><span class="pre">String</span></code>&#8216;s <em>byte length</em>, caching the <code class="docutils literal"><span class="pre">length</span></code> would
+increase the footprint of the top-level String object.  Finally,
+even if <code class="docutils literal"><span class="pre">length</span></code> were provided, doing things with <code class="docutils literal"><span class="pre">String</span></code>
+that depend on a specific numeric <code class="docutils literal"><span class="pre">length</span></code> is error-prone.</p>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSUInteger)<strong>length</strong>
+- (unichar)<strong>characterAtIndex:</strong>(NSUInteger)index;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><p class="first"><em>not directly provided</em>, but similar functionality is
+available:</p>
+<pre class="last literal-block">
+for j in 0...<strong>s.bytes.length</strong> {
+  doSomethingWith(<strong>s.bytes[j]</strong>)
+}
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSRange)<strong>rangeOfComposedCharacterSequenceAtIndex:</strong>(NSUInteger)index;
+- (NSRange)<strong>rangeOfComposedCharacterSequencesForRange:</strong>(NSRange)range;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first literal-block">
+typealias IndexType = ...
+func <strong>indices</strong>() -&gt; Range&lt;IndexType&gt;
+<strong>subscript</strong>(i: IndexType) -&gt; Character
+</pre>
+<div class="admonition-usage last admonition">
+<p class="first admonition-title">Usage</p>
+<pre class="last literal-block">
+for i in someString.indices() {
+  doSomethingWith(<strong>someString[i]</strong>)
+}
+
+var (i,j) = <strong>someString.indices().bounds</strong>
+while (i != j) {
+  doSomethingElseWith(<strong>someString[i]</strong>)
+  ++i
+}
+</pre>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="slicing">
+<h4>Slicing<a class="headerlink" href="#slicing" title="Permalink to this headline">¶</a></h4>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (void)<strong>getCharacters:</strong>(unichar *)<strong>buffer range:</strong>(NSRange)aRange;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+typealias IndexType = ...
+<strong>subscript</strong>(r: Range&lt;IndexType&gt;) -&gt; Character
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="id16">
+<h4>Indexing<a class="headerlink" href="#id16" title="Permalink to this headline">¶</a></h4>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSString *)<strong>substringToIndex:</strong>(NSUInteger)to;
+- (NSString *)<strong>substringFromIndex:</strong>(NSUInteger)from;
+- (NSString *)<strong>substringWithRange:</strong>(NSRange)range;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first literal-block">
+<strong>subscript</strong>(range : Range&lt;IndexType&gt;) -&gt; String
+</pre>
+<div class="admonition-example last admonition" id="id17">
+<p class="first admonition-title">Example</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">s</span><span class="p">[</span><span class="n">beginning</span><span class="o">..</span><span class="p">.</span><span class="n">ending</span><span class="p">]</span><span class="w"> </span><span class="c1">// [s substringWithRange: NSMakeRange( beginning, ending )]</span>
+<span class="n">s</span><span class="p">[</span><span class="n">beginning</span><span class="o">..</span><span class="p">.]</span><span class="w">       </span><span class="c1">// [s substringFromIndex: beginning]</span>
+<span class="n">s</span><span class="p">[</span><span class="o">..</span><span class="p">.</span><span class="n">ending</span><span class="p">]</span><span class="w">          </span><span class="c1">// [s substringToIndex: ending]</span>
+</pre></div>
+</div>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Note:</th><td class="field-body">Swift may need additional interfaces to support
+<code class="docutils literal"><span class="pre">index...</span></code> and <code class="docutils literal"><span class="pre">...index</span></code> notations.  This part of the
+<code class="docutils literal"><span class="pre">Container</span></code> protocol design isn&#8217;t worked out yet.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="comparison">
+<h4>Comparison<a class="headerlink" href="#comparison" title="Permalink to this headline">¶</a></h4>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (BOOL)<strong>isEqualToString:</strong>(NSString *)aString;
+- (NSComparisonResult)<strong>compare:</strong>(NSString *)string;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+func <strong>==</strong> (lhs: String, rhs: String) -&gt; Bool
+func <strong>!=</strong> (lhs: String, rhs: String) -&gt; Bool
+func <strong>&lt;</strong>  (lhs: String, rhs: String) -&gt; Bool
+func <strong>&gt;</strong>  (lhs: String, rhs: String) -&gt; Bool
+func <strong>&lt;=</strong> (lhs: String, rhs: String) -&gt; Bool
+func <strong>&gt;=</strong> (lhs: String, rhs: String) -&gt; Bool
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<p><code class="docutils literal"><span class="pre">NSString</span></code> comparison is “literal” by default.  As the documentation
+says of <code class="docutils literal"><span class="pre">isEqualToString</span></code>,</p>
+<blockquote>
+<div>“Ö” represented as the composed character sequence “O” and umlaut
+would not compare equal to “Ö” represented as one Unicode character.</div></blockquote>
+<p>By contrast, Swift string&#8217;s primary comparison interface uses
+Unicode&#8217;s default <a class="reference external" href="http://www.unicode.org/reports/tr10/">collation</a> algorithm, and is thus always
+“Unicode-correct.”  Unlike comparisons that depend on locale, it is
+also stable across changes in system state.  However, <em>just like</em>
+<code class="docutils literal"><span class="pre">NSString</span></code>&#8216;s <code class="docutils literal"><span class="pre">isEqualToString</span></code> and <code class="docutils literal"><span class="pre">compare</span></code> methods, it
+should not be expected to yield ideal (or even “proper”) results in
+all contexts.</p>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSComparisonResult)<strong>compare:</strong>(NSString *)string <strong>options:</strong>(NSStringCompareOptions)mask;
+- (NSComparisonResult)<strong>compare:</strong>(NSString *)string <strong>options:</strong>(NSStringCompareOptions)mask <strong>range:</strong>(NSRange)compareRange;
+- (NSComparisonResult)<strong>caseInsensitiveCompare:</strong>(NSString *)string;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><p class="first last"><em>various compositions of primitive operations</em> / <a class="reference internal" href="#tbd">TBD</a></p>
+</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><p class="first">As noted <a class="reference internal" href="#range">above</a>, instead of passing sub-range arguments, we expect
+Swift users to compose <a class="reference internal" href="#id17">slicing</a> with whole-string operations.</p>
+</li>
+<li><p class="first">Other details of these interfaces are distinguished by an
+<code class="docutils literal"><span class="pre">NSStringCompareOptions</span></code> mask, of which
+<code class="docutils literal"><span class="pre">caseInsensitiveCompare:</span></code> is essentially a special case:</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name" colspan="2"><code class="docutils literal"><span class="pre">NSCaseInsensitiveSearch</span></code>:</th></tr>
+<tr class="field-odd field"><td>&nbsp;</td><td class="field-body"><p class="first">Whether a direct interface is needed
+at all in Swift, and if so, its form, are <a class="reference internal" href="#tbd">TBD</a>.  However, we
+should consider following the lead of Python 3, wherein case
+conversion also <a class="reference external" href="http://stackoverflow.com/a/11573384/125349">normalizes letterforms</a>.  Then one can combine
+<code class="docutils literal"><span class="pre">String.toLower()</span></code> with default comparison to get a
+case-insensitive comparison:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="p">{</span><span class="w"> </span><span class="nv">$0</span><span class="p">.</span><span class="n">toLower</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nv">$1</span><span class="p">.</span><span class="n">toLower</span><span class="p">()</span><span class="w"> </span><span class="p">}</span>
+</pre></div>
+</div>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name" colspan="2"><code class="docutils literal"><span class="pre">NSLiteralSearch</span></code>:</th></tr>
+<tr class="field-even field"><td>&nbsp;</td><td class="field-body"><p class="first">Though it is the default for <code class="docutils literal"><span class="pre">NSString</span></code>,
+this option is essentially only useful as a performance
+optimization when the string content is known to meet certain
+restrictions (i.e. is known to be pure ASCII).  When such
+optimization is absolutely necessary, Swift standard library
+algorithms can be used directly on the <code class="docutils literal"><span class="pre">String</span></code>&#8216;s UTF8 code
+units.  However, Swift will also perform these optimizations
+automatically (at the cost of a single test/branch) in many
+cases, because each <code class="docutils literal"><span class="pre">String</span></code> stores a bit indicating whether
+its content is known to be ASCII.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name" colspan="2"><code class="docutils literal"><span class="pre">NSBackwardsSearch</span></code>:</th></tr>
+<tr class="field-odd field"><td>&nbsp;</td><td class="field-body"><p class="first">It&#8217;s unclear from the docs how this option
+interacts with other <code class="docutils literal"><span class="pre">NSString</span></code> options, if at all, but basic
+cases can be handled in Swift by <code class="docutils literal"><span class="pre">s1.endsWith(s2)</span></code>.</p>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name" colspan="2"><code class="docutils literal"><span class="pre">NSAnchoredSearch</span></code>:</th></tr>
+<tr class="field-even field"><td>&nbsp;</td><td class="field-body"><p class="first">Not applicable to whole-string comparisons</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name" colspan="2"><code class="docutils literal"><span class="pre">NSNumericSearch</span></code>:</th></tr>
+<tr class="field-odd field"><td>&nbsp;</td><td class="field-body"><p class="first">While it&#8217;s legitimate to defer this
+functionality to Cocoa, it&#8217;s (probably—see
+&lt;<a class="reference external" href="rdar://problem/14724804">rdar://problem/14724804</a>&gt;) locale-independent and
+easy enough to implement in Swift.  <a class="reference internal" href="#tbd">TBD</a></p>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name" colspan="2"><code class="docutils literal"><span class="pre">NSDiacriticInsensitiveSearch</span></code>:</th></tr>
+<tr class="field-even field"><td>&nbsp;</td><td class="field-body"><p class="first">Ditto; <a class="reference internal" href="#tbd">TBD</a></p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name" colspan="2"><code class="docutils literal"><span class="pre">NSWidthInsensitiveSearch</span></code>:</th></tr>
+<tr class="field-odd field"><td>&nbsp;</td><td class="field-body"><p class="first">Ditto; <a class="reference internal" href="#tbd">TBD</a></p>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name" colspan="2"><code class="docutils literal"><span class="pre">NSForcedOrderingSearch</span></code>:</th></tr>
+<tr class="field-even field"><td>&nbsp;</td><td class="field-body"><p class="first">Ditto; <a class="reference internal" href="#tbd">TBD</a>.  Also see
+&lt;<a class="reference external" href="rdar://problem/14724888">rdar://problem/14724888</a>&gt;</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name" colspan="2"><code class="docutils literal"><span class="pre">NSRegularExpressionSearch</span></code>:</th></tr>
+<tr class="field-odd field"><td>&nbsp;</td><td class="field-body"><p class="first last">We can defer this functionality to
+Cocoa, or dispatch directly to ICU
+as an optimization.  It&#8217;s unlikely
+that we&#8217;ll be building Swift its own
+regexp engine for 1.0.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</li>
+</ul>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSComparisonResult)<strong>localizedCompare:</strong>(NSString *)string;
+- (NSComparisonResult)<strong>localizedCaseInsensitiveCompare:</strong>(NSString *)string;
+- (NSComparisonResult)<strong>localizedStandardCompare:</strong>(NSString *)string;
+- (NSComparisonResult)<strong>compare:</strong>(NSString *)string <strong>options:</strong>(NSStringCompareOptions)mask <strong>range:</strong>(NSRange)compareRange <strong>locale:</strong>(id)locale;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><p class="first last">As these all depend on locale, they are <a class="reference internal" href="#tbd">TBD</a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="searching">
+<h4>Searching<a class="headerlink" href="#searching" title="Permalink to this headline">¶</a></h4>
+<div class="sidebar">
+<p class="first sidebar-title">Rationale</p>
+<p class="last">Modern languages (Java, C#, Python, Ruby…) have standardized on
+variants of <code class="docutils literal"><span class="pre">startsWith</span></code>/<code class="docutils literal"><span class="pre">endsWith</span></code>.  There&#8217;s no reason Swift
+should deviate from de-facto industry standards here.</p>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (BOOL)<strong>hasPrefix:</strong>(NSString *)aString;
+- (BOOL)<strong>hasSuffix:</strong>(NSString *)aString;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+func <strong>startsWith</strong>(prefix: String)
+func <strong>endsWith</strong>(suffix: String)
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSRange)<strong>rangeOfString:</strong>(NSString *)aString;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first literal-block">
+func <strong>find</strong>(sought: String) -&gt; Range&lt;String.IndexType&gt;
+</pre>
+<div class="last admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Most other languages provide something like
+<code class="docutils literal"><span class="pre">s1.indexOf(s2)</span></code>, which returns only the starting index of
+the first match.  This is far less useful than the range of
+the match, and is always available via
+<code class="docutils literal"><span class="pre">s1.find(s2).bounds.0</span></code></p>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first last literal-block">
+- (NSRange)<strong>rangeOfCharacterFromSet:</strong>(NSCharacterSet *)aSet;
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="sidebar">
+<p class="first sidebar-title">Naming</p>
+<p class="last">The Swift function is just an algorithm that comes from conformance
+to the <code class="docutils literal"><span class="pre">Container</span></code> protocol, which explains why it doesn&#8217;t have a
+<code class="docutils literal"><span class="pre">String</span></code>-specific name.</p>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first literal-block">
+func <strong>find</strong>(match: (Character)-&gt;Bool) -&gt; Range&lt;String.IndexType&gt;
+</pre>
+<div class="admonition-usage-example last admonition">
+<p class="first admonition-title">Usage Example</p>
+<p>The <code class="docutils literal"><span class="pre">NSString</span></code> semantics can be achieved as follows:</p>
+<div class="last highlight-swift"><div class="highlight"><pre><span class="n">someString</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="w"> </span><span class="p">{</span><span class="n">someCharSet</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="nv">$0</span><span class="p">)}</span><span class="w"> </span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSRange)<strong>rangeOfString:</strong>(NSString *)aString <strong>options:</strong>(NSStringCompareOptions)mask;
+- (NSRange)<strong>rangeOfString:</strong>(NSString *)aString <strong>options:</strong>(NSStringCompareOptions)mask <strong>range:</strong>(NSRange)searchRange;
+- (NSRange)<strong>rangeOfString:</strong>(NSString *)aString <strong>options:</strong>(NSStringCompareOptions)mask <strong>range:</strong>(NSRange)searchRange <strong>locale:</strong>(NSLocale *)locale;
+
+- (NSRange)<strong>rangeOfCharacterFromSet:</strong>(NSCharacterSet *)aSet <strong>options:</strong>(NSStringCompareOptions)mask;
+- (NSRange)<strong>rangeOfCharacterFromSet:</strong>(NSCharacterSet *)aSet <strong>options:</strong>(NSStringCompareOptions)mask <strong>range:</strong>(NSRange)searchRange;
+</pre>
+<p>These functions</p>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><p class="first last"><em>various compositions of primitive operations</em> / <a class="reference internal" href="#tbd">TBD</a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="building">
+<h4>Building<a class="headerlink" href="#building" title="Permalink to this headline">¶</a></h4>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first last literal-block">
+- (NSString *)<strong>stringByAppendingString:</strong>(NSString *)aString;
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="sidebar">
+<p class="first sidebar-title"><code class="docutils literal"><span class="pre">append</span></code></p>
+<p class="last">the <code class="docutils literal"><span class="pre">append</span></code> method is a consequence of <code class="docutils literal"><span class="pre">String</span></code>&#8216;s
+conformance to <code class="docutils literal"><span class="pre">OutputStream</span></code>.  See the <em>Swift
+formatting proposal</em> for details.</p>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+func <strong>+</strong> (lhs: String, rhs: String) -&gt; String
+func [infix,assignment] <strong>+=</strong> (lhs: [inout] String, rhs: String)
+func <strong>append</strong>(suffix: String)
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="dynamic-formatting">
+<h4>Dynamic Formatting<a class="headerlink" href="#dynamic-formatting" title="Permalink to this headline">¶</a></h4>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSString *)<strong>stringByAppendingFormat:</strong>(NSString *)format, ... NS_FORMAT_FUNCTION(1,2);
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><p class="first last"><em>Not directly provided</em>—see the <em>Swift formatting proposal</em></p>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="extracting-numeric-values">
+<h4>Extracting Numeric Values<a class="headerlink" href="#extracting-numeric-values" title="Permalink to this headline">¶</a></h4>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (double)doubleValue;
+- (float)floatValue;
+- (int)intValue;
+- (NSInteger)integerValue;
+- (long long)longLongValue;
+- (BOOL)boolValue;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><p class="first last">Not in <code class="docutils literal"><span class="pre">String</span></code>—It is up to other types to provide their
+conversions to and from String.  See also this <a class="reference internal" href="#extending">rationale</a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="splitting">
+<h4>Splitting<a class="headerlink" href="#splitting" title="Permalink to this headline">¶</a></h4>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSArray *)<strong>componentsSeparatedByString:</strong>(NSString *)separator;
+- (NSArray *)<strong>componentsSeparatedByCharactersInSet:</strong>(NSCharacterSet *)separator;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><div class="first highlight-swift"><div class="highlight"><pre>func split(maxSplit: Int = Int.max()) -&gt; String[]
+func split(separator: Character, maxSplit: Int = Int.max()) -&gt; String[]
+</pre></div>
+</div>
+<p>The semantics of these functions were taken from Python, which seems
+to be a fairly good representative of what modern languages are
+currently doing.  The first overload splits on all whitespace
+characters; the second only on specific characters.  The universe of
+possible splitting functions is quite broad, so the particulars of
+this interface are <strong>wide open for discussion</strong>.  In Swift right
+now, these methods (on <code class="docutils literal"><span class="pre">CodePoints</span></code>) are implemented in terms of a
+generic algorithm:</p>
+<pre class="last literal-block">
+func <strong>split</strong>&lt;Seq: Sliceable, IsSeparator: Predicate
+    where IsSeparator.Arguments == Seq.Element
+&gt;(seq: Seq, isSeparator: IsSeparator, maxSplit: Int = Int.max(),
+  allowEmptySlices: Bool = false  ) -&gt; Seq[]
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="id21">
+<h4>Splitting<a class="headerlink" href="#id21" title="Permalink to this headline">¶</a></h4>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSString *)<strong>commonPrefixWithString:</strong>(NSString *)aString <strong>options:</strong>(NSStringCompareOptions)mask;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+func <strong>commonPrefix</strong>(other: String) -&gt; String
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="upper-lowercase">
+<h4>Upper/Lowercase<a class="headerlink" href="#upper-lowercase" title="Permalink to this headline">¶</a></h4>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first last literal-block">
+- (NSString *)<strong>uppercaseString</strong>;
+- (NSString *)<strong>uppercaseStringWithLocale:</strong>(NSLocale *)locale;
+- (NSString *)<strong>lowercaseString</strong>;
+- (NSString *)<strong>lowercaseStringWithLocale:</strong>(NSLocale *)locale;
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="sidebar">
+<p class="first sidebar-title">Naming</p>
+<p class="last">Other languages have overwhelmingly settled on <code class="docutils literal"><span class="pre">upper()</span></code> or
+<code class="docutils literal"><span class="pre">toUpper()</span></code> for this functionality</p>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+func <strong>toUpper</strong>() -&gt; String
+func <strong>toLower</strong>() -&gt; String
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="capitalization">
+<h4>Capitalization<a class="headerlink" href="#capitalization" title="Permalink to this headline">¶</a></h4>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSString *)<strong>capitalizedString</strong>;
+- (NSString *)<strong>capitalizedStringWithLocale:</strong>(NSLocale *)locale;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><p class="first last"><strong>TBD</strong></p>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last"><code class="docutils literal"><span class="pre">NSString</span></code> capitalizes the first letter of each substring
+separated by spaces, tabs, or line terminators, which is in
+no sense “Unicode-correct.”  In most other languages that
+support a <code class="docutils literal"><span class="pre">capitalize</span></code> method, it operates only on the
+first character of the string, and capitalization-by-word is
+named something like “<code class="docutils literal"><span class="pre">title</span></code>.”  If Swift <code class="docutils literal"><span class="pre">String</span></code>
+supports capitalization by word, it should be
+Unicode-correct, but how we sort this particular area out is
+still <strong>TBD</strong>.</p>
+</div>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSString *)<strong>stringByTrimmingCharactersInSet:</strong>(NSCharacterSet *)set;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first literal-block">
+trim <strong>trim</strong>(match: (Character)-&gt;Bool) -&gt; String
+</pre>
+<div class="admonition-usage-example last admonition">
+<p class="first admonition-title">Usage Example</p>
+<p>The <code class="docutils literal"><span class="pre">NSString</span></code> semantics can be achieved as follows:</p>
+<div class="last highlight-swift"><div class="highlight"><pre><span class="n">someString</span><span class="p">.</span><span class="n">trim</span><span class="p">(</span><span class="w"> </span><span class="p">{</span><span class="n">someCharSet</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="nv">$0</span><span class="p">)}</span><span class="w"> </span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSString *)<strong>stringByPaddingToLength:</strong>(NSUInteger)newLength <strong>withString:</strong>(NSString *)padString <strong>startingAtIndex:</strong>(NSUInteger)padIndex;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<em>Not provided</em>.  It's not clear whether this is
+useful at all for non-ASCII strings, and
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (void)<strong>getLineStart:</strong>(NSUInteger *)startPtr <strong>end:</strong>(NSUInteger *)lineEndPtr <strong>contentsEnd:</strong>(NSUInteger *)contentsEndPtr <strong>forRange:</strong>(NSRange)range;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSRange)<strong>lineRangeForRange:</strong>(NSRange)range;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (void)<strong>getParagraphStart:</strong>(NSUInteger *)startPtr <strong>end:</strong>(NSUInteger *)parEndPtr <strong>contentsEnd:</strong>(NSUInteger *)contentsEndPtr <strong>forRange:</strong>(NSRange)range;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSRange)<strong>paragraphRangeForRange:</strong>(NSRange)range;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (void)<strong>enumerateSubstringsInRange:</strong>(NSRange)range <strong>options:</strong>(NSStringEnumerationOptions)opts <strong>usingBlock:</strong>(void (^)(NSString *substring, NSRange substringRange, NSRange enclosingRange, BOOL *stop))block;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (void)<strong>enumerateLinesUsingBlock:</strong>(void (^)(NSString *line, BOOL *stop))block;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSString *)description;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSUInteger)hash;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSStringEncoding)fastestEncoding;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSStringEncoding)smallestEncoding;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSData *)<strong>dataUsingEncoding:</strong>(NSStringEncoding)encoding <strong>allowLossyConversion:</strong>(BOOL)lossy;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSData *)<strong>dataUsingEncoding:</strong>(NSStringEncoding)encoding;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li>(BOOL)<strong>canBeConvertedToEncoding:</strong>(NSStringEncoding)encoding;</li>
+</ul>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (__strong const char *)<strong>cStringUsingEncoding:</strong>(NSStringEncoding)encoding NS_RETURNS_INNER_POINTER;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (BOOL)<strong>getCString:</strong>(char *)buffer <strong>maxLength:</strong>(NSUInteger)maxBufferCount <strong>encoding:</strong>(NSStringEncoding)encoding;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (BOOL)<strong>getBytes:</strong>(void *)buffer <strong>maxLength:</strong>(NSUInteger)maxBufferCount <strong>usedLength:</strong>(NSUInteger *)usedBufferCount <strong>encoding:</strong>(NSStringEncoding)encoding <strong>options:</strong>(NSStringEncodingConversionOptions)options <strong>range:</strong>(NSRange)range <strong>remainingRange:</strong>(NSRangePointer)leftover;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSUInteger)<strong>maximumLengthOfBytesUsingEncoding:</strong>(NSStringEncoding)enc;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSUInteger)<strong>lengthOfBytesUsingEncoding:</strong>(NSStringEncoding)enc;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSString *)decomposedStringWithCanonicalMapping;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSString *)precomposedStringWithCanonicalMapping;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSString *)decomposedStringWithCompatibilityMapping;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSString *)precomposedStringWithCompatibilityMapping;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSString *)<strong>stringByFoldingWithOptions:</strong>(NSStringCompareOptions)options <strong>locale:</strong>(NSLocale *)locale;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSString *)<strong>stringByReplacingOccurrencesOfString:</strong>(NSString *)target <strong>withString:</strong>(NSString *)replacement <strong>options:</strong>(NSStringCompareOptions)options <strong>range:</strong>(NSRange)searchRange;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSString *)<strong>stringByReplacingOccurrencesOfString:</strong>(NSString *)target <strong>withString:</strong>(NSString *)replacement;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first last literal-block">
+- (NSString *)<strong>stringByReplacingCharactersInRange:</strong>(NSRange)range <strong>withString:</strong>(NSString *)replacement;
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (__strong const char *)UTF8String NS_RETURNS_INNER_POINTER;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
++ (NSStringEncoding)defaultCStringEncoding;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
++ (const NSStringEncoding *)availableStringEncodings;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first last literal-block">
++ (NSString *)<strong>localizedNameOfStringEncoding:</strong>(NSStringEncoding)encoding;
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="constructors">
+<h4>Constructors<a class="headerlink" href="#constructors" title="Permalink to this headline">¶</a></h4>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first last literal-block">
+- (instancetype)init;
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first last literal-block">
+- (instancetype)<strong>initWithString:</strong>(NSString *)aString;
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first last literal-block">
++ (instancetype)string;
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first last literal-block">
++ (instancetype)<strong>stringWithString:</strong>(NSString *)string;
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<p>Not available (too error prone)</p>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (instancetype)<strong>initWithCharactersNoCopy:</strong>(unichar *)characters <strong>length:</strong>(NSUInteger)length <strong>freeWhenDone:</strong>(BOOL)freeBuffer;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (instancetype)<strong>initWithCharacters:</strong>(const unichar *)characters <strong>length:</strong>(NSUInteger)length;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (instancetype)<strong>initWithUTF8String:</strong>(const char *)nullTerminatedCString;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (instancetype)<strong>initWithFormat:</strong>(NSString *)format, ... NS_FORMAT_FUNCTION(1,2);
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (instancetype)<strong>initWithFormat:</strong>(NSString *)format <strong>arguments:</strong>(va_list)argList NS_FORMAT_FUNCTION(1,0);
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (instancetype)<strong>initWithFormat:</strong>(NSString *)format <strong>locale:</strong>(id)locale, ... NS_FORMAT_FUNCTION(1,3);
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (instancetype)<strong>initWithFormat:</strong>(NSString *)format <strong>locale:</strong>(id)locale <strong>arguments:</strong>(va_list)argList NS_FORMAT_FUNCTION(1,0);
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (instancetype)<strong>initWithData:</strong>(NSData *)data <strong>encoding:</strong>(NSStringEncoding)encoding;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (instancetype)<strong>initWithBytes:</strong>(const void *)bytes <strong>length:</strong>(NSUInteger)len <strong>encoding:</strong>(NSStringEncoding)encoding;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (instancetype)<strong>initWithBytesNoCopy:</strong>(void *)bytes <strong>length:</strong>(NSUInteger)len <strong>encoding:</strong>(NSStringEncoding)encoding <strong>freeWhenDone:</strong>(BOOL)freeBuffer;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
++ (instancetype)<strong>stringWithCharacters:</strong>(const unichar *)characters <strong>length:</strong>(NSUInteger)length;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
++ (instancetype)<strong>stringWithUTF8String:</strong>(const char *)nullTerminatedCString;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
++ (instancetype)<strong>stringWithFormat:</strong>(NSString *)format, ... NS_FORMAT_FUNCTION(1,2);
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
++ (instancetype)<strong>localizedStringWithFormat:</strong>(NSString *)format, ... NS_FORMAT_FUNCTION(1,2);
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (instancetype)<strong>initWithCString:</strong>(const char *)nullTerminatedCString <strong>encoding:</strong>(NSStringEncoding)encoding;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first last literal-block">
++ (instancetype)<strong>stringWithCString:</strong>(const char *)cString <strong>encoding:</strong>(NSStringEncoding)enc;
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="linguistic-analysis">
+<h4>Linguistic Analysis<a class="headerlink" href="#linguistic-analysis" title="Permalink to this headline">¶</a></h4>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Cocoa:</th><td class="field-body"><pre class="first literal-block">
+- (NSArray *)<strong>linguisticTagsInRange:</strong>(NSRange)range <strong>scheme:</strong>(NSString *)tagScheme <strong>options:</strong>(NSLinguisticTaggerOptions)opts <strong>orthography:</strong>(NSOrthography *)orthography <strong>tokenRanges:</strong>(NSArray **)tokenRanges;
+- (void)<strong>enumerateLinguisticTagsInRange:</strong>(NSRange)range <strong>scheme:</strong>(NSString *)tagScheme <strong>options:</strong>(NSLinguisticTaggerOptions)opts <strong>orthography:</strong>(NSOrthography *)orthography <strong>usingBlock:</strong>(void (^)(NSString *tag, NSRange tokenRange, NSRange sentenceRange, BOOL *stop))block;
+</pre>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Swift:</th><td class="field-body"><pre class="first last literal-block">
+<strong>TBD</strong>
+</pre>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="section" id="unavailable-on-swift-strings">
+<h3><a class="toc-backref" href="#id48">Unavailable on Swift Strings</a><a class="headerlink" href="#unavailable-on-swift-strings" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="url-handling">
+<h4>URL Handling<a class="headerlink" href="#url-handling" title="Permalink to this headline">¶</a></h4>
+<pre class="literal-block">
+- (instancetype)<strong>initWithContentsOfURL:</strong>(NSURL *)url <strong>encoding:</strong>(NSStringEncoding)enc <strong>error:</strong>(NSError **)error;
++ (instancetype)<strong>stringWithContentsOfURL:</strong>(NSURL *)url <strong>encoding:</strong>(NSStringEncoding)enc <strong>error:</strong>(NSError **)error;
+- (instancetype)<strong>initWithContentsOfURL:</strong>(NSURL *)url <strong>usedEncoding:</strong>(NSStringEncoding *)enc <strong>error:</strong>(NSError **)error;
++ (instancetype)<strong>stringWithContentsOfURL:</strong>(NSURL *)url <strong>usedEncoding:</strong>(NSStringEncoding *)enc <strong>error:</strong>(NSError **)error;
+- (BOOL)<strong>writeToURL:</strong>(NSURL *)url <strong>atomically:</strong>(BOOL)useAuxiliaryFile <strong>encoding:</strong>(NSStringEncoding)enc <strong>error:</strong>(NSError **)error;
+- (NSString *)<strong>stringByAddingPercentEncodingWithAllowedCharacters:</strong>(NSCharacterSet *)allowedCharacters;
+- (NSString *)stringByRemovingPercentEncoding;
+- (NSString *)<strong>stringByAddingPercentEscapesUsingEncoding:</strong>(NSStringEncoding)enc;
+- (NSString *)<strong>stringByReplacingPercentEscapesUsingEncoding:</strong>(NSStringEncoding)enc;
+</pre>
+<p>See: class File</p>
+<pre class="literal-block">
+- (instancetype)<strong>initWithContentsOfFile:</strong>(NSString *)path <strong>encoding:</strong>(NSStringEncoding)enc <strong>error:</strong>(NSError **)error;
++ (instancetype)<strong>stringWithContentsOfFile:</strong>(NSString *)path <strong>encoding:</strong>(NSStringEncoding)enc <strong>error:</strong>(NSError **)error;
+- (instancetype)<strong>initWithContentsOfFile:</strong>(NSString *)path <strong>usedEncoding:</strong>(NSStringEncoding *)enc <strong>error:</strong>(NSError **)error;
++ (instancetype)<strong>stringWithContentsOfFile:</strong>(NSString *)path <strong>usedEncoding:</strong>(NSStringEncoding *)enc <strong>error:</strong>(NSError **)error;
+- (BOOL)<strong>writeToFile:</strong>(NSString *)path <strong>atomically:</strong>(BOOL)useAuxiliaryFile <strong>encoding:</strong>(NSStringEncoding)enc <strong>error:</strong>(NSError **)error;
+</pre>
+</div>
+<div class="section" id="path-handling">
+<h4>Path Handling<a class="headerlink" href="#path-handling" title="Permalink to this headline">¶</a></h4>
+<pre class="literal-block">
++ (NSString *)<strong>pathWithComponents:</strong>(NSArray *)components;
+- (NSArray *)pathComponents;
+- (BOOL)isAbsolutePath;
+- (NSString *)lastPathComponent;
+- (NSString *)stringByDeletingLastPathComponent;
+- (NSString *)<strong>stringByAppendingPathComponent:</strong>(NSString *)str;
+- (NSString *)pathExtension;
+- (NSString *)stringByDeletingPathExtension;
+- (NSString *)<strong>stringByAppendingPathExtension:</strong>(NSString *)str;
+- (NSString *)stringByAbbreviatingWithTildeInPath;
+- (NSString *)stringByExpandingTildeInPath;
+- (NSString *)stringByStandardizingPath;
+- (NSString *)stringByResolvingSymlinksInPath;
+- (NSArray *)<strong>stringsByAppendingPaths:</strong>(NSArray *)paths;
+- (NSUInteger)<strong>completePathIntoString:</strong>(NSString **)outputName <strong>caseSensitive:</strong>(BOOL)flag <strong>matchesIntoArray:</strong>(NSArray **)outputArray <strong>filterTypes:</strong>(NSArray *)filterTypes;
+- (__strong const char *)fileSystemRepresentation NS_RETURNS_INNER_POINTER;
+- (BOOL)<strong>getFileSystemRepresentation:</strong>(char *)cname <strong>maxLength:</strong>(NSUInteger)max;
+</pre>
+</div>
+<div class="section" id="property-lists">
+<h4>Property Lists<a class="headerlink" href="#property-lists" title="Permalink to this headline">¶</a></h4>
+<p>Property lists are a feature of Cocoa.</p>
+<pre class="literal-block">
+- (id)propertyList;
+- (NSDictionary *)propertyListFromStringsFileFormat;
+Not applicable. Swift does not provide GUI support.
+
+- (NSSize)<strong>sizeWithAttributes:</strong>(NSDictionary *)attrs;
+- (void)<strong>drawAtPoint:</strong>(NSPoint)point <strong>withAttributes:</strong>(NSDictionary *)attrs;
+- (void)<strong>drawInRect:</strong>(NSRect)rect <strong>withAttributes:</strong>(NSDictionary *)attrs;
+- (void)<strong>drawWithRect:</strong>(NSRect)rect <strong>options:</strong>(NSStringDrawingOptions)options <strong>attributes:</strong>(NSDictionary *)attributes;
+- (NSRect)<strong>boundingRectWithSize:</strong>(NSSize)size <strong>options:</strong>(NSStringDrawingOptions)options <strong>attributes:</strong>(NSDictionary *)attributes;
+- (NSArray *)<strong>writableTypesForPasteboard:</strong>(NSPasteboard *)pasteboard;
+- (NSPasteboardWritingOptions)<strong>writingOptionsForType:</strong>(NSString *)type <strong>pasteboard:</strong>(NSPasteboard *)pasteboard;
+- (id)<strong>pasteboardPropertyListForType:</strong>(NSString *)type;
++ (NSArray *)<strong>readableTypesForPasteboard:</strong>(NSPasteboard *)pasteboard;
++ (NSPasteboardReadingOptions)<strong>readingOptionsForType:</strong>(NSString *)type <strong>pasteboard:</strong>(NSPasteboard *)pasteboard;
+- (id)<strong>initWithPasteboardPropertyList:</strong>(id)propertyList <strong>ofType:</strong>(NSString *)type;
+</pre>
+</div>
+<div class="section" id="deprecated-apis">
+<h4>Deprecated APIs<a class="headerlink" href="#deprecated-apis" title="Permalink to this headline">¶</a></h4>
+<p>Already deprecated in Cocoa.</p>
+<pre class="literal-block">
+- (const char *)cString;
+- (const char *)lossyCString;
+- (NSUInteger)cStringLength;
+- (void)<strong>getCString:</strong>(char *)bytes;
+- (void)<strong>getCString:</strong>(char *)bytes <strong>maxLength:</strong>(NSUInteger)maxLength;
+- (void)<strong>getCString:</strong>(char *)bytes <strong>maxLength:</strong>(NSUInteger)maxLength <strong>range:</strong>(NSRange)aRange <strong>remainingRange:</strong>(NSRangePointer)leftoverRange;
+- (BOOL)<strong>writeToFile:</strong>(NSString *)path <strong>atomically:</strong>(BOOL)useAuxiliaryFile;
+- (BOOL)<strong>writeToURL:</strong>(NSURL *)url <strong>atomically:</strong>(BOOL)atomically;
+- (id)<strong>initWithContentsOfFile:</strong>(NSString *)path;
+- (id)<strong>initWithContentsOfURL:</strong>(NSURL *)url;
++ (id)<strong>stringWithContentsOfFile:</strong>(NSString *)path;
++ (id)<strong>stringWithContentsOfURL:</strong>(NSURL *)url;
+- (id)<strong>initWithCStringNoCopy:</strong>(char *)bytes <strong>length:</strong>(NSUInteger)length <strong>freeWhenDone:</strong>(BOOL)freeBuffer;
+- (id)<strong>initWithCString:</strong>(const char *)bytes <strong>length:</strong>(NSUInteger)length;
+- (id)<strong>initWithCString:</strong>(const char *)bytes;
++ (id)<strong>stringWithCString:</strong>(const char *)bytes <strong>length:</strong>(NSUInteger)length;
++ (id)<strong>stringWithCString:</strong>(const char *)bytes;
+- (void)<strong>getCharacters:</strong>(unichar *)buffer;
+</pre>
+</div>
+</div>
+<hr class="docutils" />
+<div class="section" id="why-yagni">
+<h3><a class="toc-backref" href="#id49">Why YAGNI</a><a class="headerlink" href="#why-yagni" title="Permalink to this headline">¶</a></h3>
+<ul class="simple">
+<li>Retroactive Modeling</li>
+<li>Derivation</li>
+<li>...</li>
+</ul>
+<table class="docutils footnote" frame="void" id="agnostic" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[1]</td><td>Unicode specifies default (“un-tailored”)
+locale-independent <a class="reference external" href="http://www.unicode.org/reports/tr10/">collation</a> and <a class="reference external" href="http://www.unicode.org/reports/tr29/#GB1">segmentation</a> algorithms that
+make reasonable sense in most contexts.  Using these algorithms
+allows strings to be naturally compared and combined, generating
+the expected results when the content is ASCII</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="canonical" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id5">[2]</a></td><td>Technically, <code class="docutils literal"><span class="pre">==</span></code> checks for <a class="reference external" href="http://www.unicode.org/reports/tr15/tr15-18.html#Introduction">Unicode canonical
+equivalence</a></td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="locales" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id6">[3]</a></td><td>We have some specific ideas for locale-sensitive
+interfaces, but details are still TBD and wide open for
+discussion.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="re-sort" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[4]</td><td>Collections that automatically re-sort based on locale
+changes are out of scope for the core Swift language</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="char" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id9">[5]</a></td><td>The type currently called <code class="docutils literal"><span class="pre">Char</span></code> in Swift represents a
+Unicode code point.  This document refers to it as <code class="docutils literal"><span class="pre">CodePoint</span></code>,
+in anticipation of renaming.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="code-points" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[6]</td><td>When the user writes a string literal, she
+specifies a particular sequence of code points.  We guarantee that
+those code points are stored without change in the resulting
+<code class="docutils literal"><span class="pre">String</span></code>.  The user can explicitly request normalization, and
+Swift can use a bit to remember whether a given string buffer has
+been normalized, thus speeding up comparison operations.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="elements" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[7]</td><td>Since <code class="docutils literal"><span class="pre">String</span></code> is <a class="reference internal" href="#locale-agnostic">locale-agnostic</a>, its elements are
+determined using Unicode&#8217;s default, “un-tailored” <a class="reference external" href="http://www.unicode.org/reports/tr29/#GB1">segmentation</a>
+algorithm.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

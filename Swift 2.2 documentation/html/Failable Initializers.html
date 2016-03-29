@@ -1,0 +1,247 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Failable initializers &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Failable initializers</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <p>This proposal describes the work required to address
+<a class="reference external" href="rdar://problem/18216578">rdar://problem/18216578</a>.</p>
+<p>Some terminology used below:</p>
+<ul class="simple">
+<li><strong>deallocating</strong> refers to freeing the memory of an object without running
+any destructors.</li>
+<li><strong>releasing</strong> refers to giving up a reference, which will result in running
+the destructor and deallocation of the object if this was the last
+reference.</li>
+<li>A <strong>destructor</strong> is a Swift-generated entry point which call the user-defined
+deinitializer, then releases all stored properties.</li>
+<li>A <strong>deinitializer</strong> is an optional user-defined entry point in a Swift class
+which handles any necessary cleanup beyond releasing stored properties.</li>
+<li>A <strong>slice</strong> of an object is the set of stored properties defined in one
+particular class forming the superclass chain of the instance.</li>
+</ul>
+<div class="section" id="failable-initializers">
+<h1>Failable initializers<a class="headerlink" href="#failable-initializers" title="Permalink to this headline">¶</a></h1>
+<p>A <strong>failable initializer</strong> can return early with an error, without having
+initialized a new object. Examples can include initializers which validate
+input arguments, or attempt to acquire a limited resource.</p>
+<p>There are two types of failable initializers:</p>
+<ul class="simple">
+<li>An initializer can be declared as having an optional return type, in
+which case it can signal failure by returning nil.</li>
+<li>An initializer can be declared as throwing, in which case it can signal
+failure by throwing an error.</li>
+</ul>
+<div class="section" id="convenience-initializers">
+<h2>Convenience initializers<a class="headerlink" href="#convenience-initializers" title="Permalink to this headline">¶</a></h2>
+<p>Failing convenience initializers are the easy case, and are fully supported
+now. The failure can occur either before or after the self.init()
+delegation, and is handled as follows:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li>A failure prior to the self.init() delegation is handled by deallocating
+the completely-uninitialized self value.</li>
+<li>A failure after the self.init() delegation is handled by releasing the
+fully-initialized self.value.</li>
+</ol>
+</div></blockquote>
+</div>
+<div class="section" id="designated-initializers">
+<h2>Designated initializers<a class="headerlink" href="#designated-initializers" title="Permalink to this headline">¶</a></h2>
+<p>Failing designated initializers are more difficult, and are the subject of this
+proposal.</p>
+<p>Similarly to convenience initializers, designated initializers can fail either
+before or after the super.init() delegation (or, for a root class initializer,
+the first location where all stored properties become initialized).</p>
+<p>When failing after the super.init() delegation, we already have a
+fully-initialized self value, so releasing the self value is sufficient. The
+user-defined deinitializer, if any, is run in this case.</p>
+<p>A failure prior to the super.init() delegation on the other hand will leave us
+with a partially-initialized self value that must be deallocated. We have to
+deinitialize any stored properties of self that we initialized, but we do
+not invoke the user-defined deinitializer method.</p>
+</div>
+<div class="section" id="description-of-the-problem">
+<h2>Description of the problem<a class="headerlink" href="#description-of-the-problem" title="Permalink to this headline">¶</a></h2>
+<p>To illustrate, say we are constructing an instance of a class C, and let
+superclasses(C) be the sequence of superclasses, starting from C and ending
+at a root class C_n:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">superclasses</span><span class="p">(</span><span class="n">C</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">C</span><span class="p">,</span><span class="w"> </span><span class="n">C_1</span><span class="p">,</span><span class="w"> </span><span class="n">C_2</span><span class="p">,</span><span class="w"> </span><span class="o">..</span><span class="p">.,</span><span class="w"> </span><span class="n">C_n</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>Suppose our failure occurs in the designated initializer for class C_k. At this
+point, the self value looks like this:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li>All stored properties in <code class="docutils literal"><span class="pre">{C,</span> <span class="pre">...,</span> <span class="pre">C_(k-1)}</span></code> have been initialized.</li>
+<li>Zero or more stored properties in <code class="docutils literal"><span class="pre">C_k</span></code> have been initialized.</li>
+<li>The rest of the object <code class="docutils literal"><span class="pre">{C_(k+1),</span> <span class="pre">...,</span> <span class="pre">C_n}</span></code> is completely uninitialized.</li>
+</ol>
+</div></blockquote>
+<p>In order to fail out of the constructor without leaking memory, we have to
+destroy the initialized stored properties only without calling any Swift
+deinit methods, then deallocate the object itself.</p>
+<p>There is a further complication once we take Objective-C interoperability into
+account. Objective-C classes can override -alloc, to get the object from a
+memory pool, for example. Also, they can override -retain and -release to
+implement their own reference counting. This means that if our class has &#64;objc
+ancestry, we have to release it with -release even if it is partially
+initialized &#8211; since this will result in Swift destructors being called, they
+have to know to skip the uninitialized parts of the object.</p>
+<p>There is an issue we need to sort out, tracked by <a class="reference external" href="rdar://18720947">rdar://18720947</a>. Basically,
+if we haven&#8217;t done the <code class="docutils literal"><span class="pre">super.init()</span></code>, is it safe to call <code class="docutils literal"><span class="pre">-release</span></code>. The
+rest of this proposal assumes the answer is &#8220;yes&#8221;.</p>
+</div>
+<div class="section" id="possible-solutions">
+<h2>Possible solutions<a class="headerlink" href="#possible-solutions" title="Permalink to this headline">¶</a></h2>
+<p>One approach is to think of the super.init() delegation as having a tri-state
+return value, instead of two-state:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li>First failure case &#8211; object is fully initialized</li>
+<li>Second failure case &#8211; object is partially initialized</li>
+<li>Success</li>
+</ol>
+</div></blockquote>
+<p>This is problematic because now the ownership conventions in the initializer
+signature do not really describe the initializer&#8217;s effect on reference counts;
+we now that this special return value for the second failure case, where the
+self value looks like it should have been consumed but it wasn&#8217;t.</p>
+<p>It is also difficult to encode this tri-state return for throwing initializers.
+One can imagine changing the try_apply and throw SIL instructions to support
+returning a pair (ErrorType, AnyObject) instead of a single ErrorType. But
+this would ripple changes throughout various SIL analyses, and require IRGen
+to encode the pair return value in an efficient way.</p>
+</div>
+<div class="section" id="proposed-solution-pure-swift-case">
+<h2>Proposed solution &#8211; pure Swift case<a class="headerlink" href="#proposed-solution-pure-swift-case" title="Permalink to this headline">¶</a></h2>
+<p>A simpler approach seems to be to introduce a new partialDeinit entry point,
+referenced through a special kind of SILDeclRef. This entry point is dispatched
+through the vtable and invoked using a standard class_method sequence in SIL.</p>
+<p>This entry point&#8217;s job is to conditionally deinitialize stored properties
+of the self value, without invoking the user-defined deinitializer.</p>
+<p>When a designated initializer for class C_k fails prior to performing the
+super.init() delegation, we emit the following code sequence:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li>First, de-initialize any stored properties this initializer may have
+initialized.</li>
+<li>Second, invoke <code class="docutils literal"><span class="pre">partialDeinit(self,</span> <span class="pre">M)</span></code>, where M is the static
+metatype of <code class="docutils literal"><span class="pre">C_k</span></code>.</li>
+</ol>
+</div></blockquote>
+<p>The partialDeinit entry point is implemented as follows:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li>If the static self type of the entry point is not equal to M, first
+delegate to the superclass&#8217;s partialDeinit entry point, then
+deinitialize all stored properties in <code class="docutils literal"><span class="pre">C_k</span></code>.</li>
+<li>If the static self type is equal to M, we have finished deinitializing
+the object, and we can now call a runtime function to deallocate it.</li>
+</ol>
+</div></blockquote>
+<p>Note that we delegate to the superclass partialDeinit entry point before
+doing our own deinitialization, to ensure that stored properties are
+deinitialized in the reverse order in which they were initialized. This
+might not matter.</p>
+<p>Note that if even if a class does not have any failing initializers of its
+own, it might delegate to a failing initializer in its superclass, using
+<code class="docutils literal"><span class="pre">super.init!</span></code> or <code class="docutils literal"><span class="pre">try!</span></code>. It might be easiest to emit a partialDeinit
+entry point for all classes, except those without any stored properties.</p>
+</div>
+<div class="section" id="proposed-solution-objective-c-case">
+<h2>Proposed solution &#8211; Objective-C case<a class="headerlink" href="#proposed-solution-objective-c-case" title="Permalink to this headline">¶</a></h2>
+<p>As noted above, if the class has <code class="docutils literal"><span class="pre">&#64;objc</span></code> ancestry, the interoperability
+story becomes more complicated. In order to undo any custom logic implemented
+in an Objective-C override of <code class="docutils literal"><span class="pre">-alloc</span></code> or <code class="docutils literal"><span class="pre">-retain</span></code>, we have to free the
+partially-initialized object using <code class="docutils literal"><span class="pre">-release</span></code>.</p>
+<p>To ensure we don&#8217;t double-free any Swift stored properties, we will add
+a new hidden stored property to each class that directly defines failing
+initializers. The bit is set if this slice of the instance has been
+initialized.</p>
+<p>Note that unlike partialDeinit, if a class does not have failing initializers,
+it does not need this bit, even if its initializer delegates to a failing
+initializer in a superclass.</p>
+<p>If the bit is clear, the destructor will skip the slice and not call the
+user-defined <code class="docutils literal"><span class="pre">deinit</span></code> method, or delegate further up the chain. Note that
+since newly-allocated Objective-C objects are zeroed out, the initial state
+of this bit indicates the slice is not initialized.</p>
+<p>The constructor will set the bit before delegating to <code class="docutils literal"><span class="pre">super.init()</span></code>.</p>
+<p>If a destructor fails before delegating to <code class="docutils literal"><span class="pre">super.init()</span></code>, it will call
+the partialDeinit entry point as before, but then, release the instance
+instead of deallocating it.</p>
+<p>A possible optimization would be not generate the bit if all stored
+properties are POD, or retainable pointers. In the latter case, all zero bits
+is a valid representation (all the swift_retain/release entry points in the
+runtime check for null pointers, at least for now). However, we do not have
+to do this optimization right away.</p>
+</div>
+<div class="section" id="implementation">
+<h2>Implementation<a class="headerlink" href="#implementation" title="Permalink to this headline">¶</a></h2>
+<p>The bulk of this feature would be driven from DI. Right now, DI only implements
+failing designated initializers in their full generality for structs &#8211; we
+already have logic for tracking which stored properties have been initialized,
+but the rest of the support for the partialDeinit entry point, as well as the
+Objective-C concerns needs to be fleshed out.</p>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

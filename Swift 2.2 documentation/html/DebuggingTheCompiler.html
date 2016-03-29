@@ -1,0 +1,348 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Debugging the Swift Compiler &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="contents.html" />
+    <link rel="prev" title="Type Checker Design and Implementation" href="TypeChecker.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Debugging the Swift Compiler</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        «&#160;&#160;<a href="TypeChecker.html">Type Checker Design and Implementation</a>
+        &#160;&#160;::&#160;&#160;
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="debugging-the-swift-compiler">
+<h1><a class="toc-backref" href="#id1">Debugging the Swift Compiler</a><a class="headerlink" href="#debugging-the-swift-compiler" title="Permalink to this headline">¶</a></h1>
+<div class="contents topic" id="contents">
+<p class="topic-title first">Contents</p>
+<ul class="simple">
+<li><a class="reference internal" href="#debugging-the-swift-compiler" id="id1">Debugging the Swift Compiler</a><ul>
+<li><a class="reference internal" href="#abstract" id="id2">Abstract</a></li>
+<li><a class="reference internal" href="#printing-the-intermediate-representations" id="id3">Printing the Intermediate Representations</a><ul>
+<li><a class="reference internal" href="#debugging-on-sil-level" id="id4">Debugging on SIL Level</a><ul>
+<li><a class="reference internal" href="#options-for-dumping-the-sil" id="id5">Options for Dumping the SIL</a></li>
+<li><a class="reference internal" href="#dumping-the-sil-and-other-data-in-lldb" id="id6">Dumping the SIL and other Data in LLDB</a></li>
+<li><a class="reference internal" href="#other-utilities" id="id7">Other Utilities</a></li>
+<li><a class="reference internal" href="#using-breakpoints" id="id8">Using Breakpoints</a></li>
+<li><a class="reference internal" href="#lldb-scripts" id="id9">LLDB Scripts</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#debugging-swift-executables" id="id10">Debugging Swift Executables</a><ul>
+<li><a class="reference internal" href="#determining-the-mangled-name-of-a-function-in-lldb" id="id11">Determining the mangled name of a function in LLDB</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="abstract">
+<h2><a class="toc-backref" href="#id2">Abstract</a><a class="headerlink" href="#abstract" title="Permalink to this headline">¶</a></h2>
+<p>This document contains some useful information for debugging the
+swift compiler and swift compiler output.</p>
+</div>
+<div class="section" id="printing-the-intermediate-representations">
+<h2><a class="toc-backref" href="#id3">Printing the Intermediate Representations</a><a class="headerlink" href="#printing-the-intermediate-representations" title="Permalink to this headline">¶</a></h2>
+<p>The most important thing when debugging the compiler is to examine the IR.
+Here is how to dump the IR after the main phases of the swift compiler
+(assuming you are compiling with optimizations enabled):</p>
+<ol class="arabic">
+<li><p class="first"><strong>Parser</strong>. To print the AST after parsing:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">swiftc</span><span class="w"> </span><span class="o">-</span><span class="n">dump</span><span class="o">-</span><span class="n">ast</span><span class="w"> </span><span class="o">-</span><span class="n">O</span><span class="w"> </span><span class="n">file</span><span class="p">.</span><span class="n">swift</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first"><strong>SILGen</strong>. To print the SIL immediately after SILGen:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">swiftc</span><span class="w"> </span><span class="o">-</span><span class="n">emit</span><span class="o">-</span><span class="n">silgen</span><span class="w"> </span><span class="o">-</span><span class="n">O</span><span class="w"> </span><span class="n">file</span><span class="p">.</span><span class="n">swift</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first"><strong>Mandatory SIL passes</strong>. To print the SIL after the mandatory passes:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">swiftc</span><span class="w"> </span><span class="o">-</span><span class="n">emit</span><span class="o">-</span><span class="n">sil</span><span class="w"> </span><span class="o">-</span><span class="n">Onone</span><span class="w"> </span><span class="n">file</span><span class="p">.</span><span class="n">swift</span>
+</pre></div>
+</div>
+</li>
+</ol>
+<blockquote>
+<div>Well, this is not quite true, because the compiler is running some passes
+for -Onone after the mandatory passes, too. But for most purposes you will
+get what you want to see.</div></blockquote>
+<ol class="arabic">
+<li><p class="first"><strong>Performance SIL passes</strong>. To print the SIL after the complete SIL
+optimization pipeline:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">swiftc</span><span class="w"> </span><span class="o">-</span><span class="n">emit</span><span class="o">-</span><span class="n">sil</span><span class="w"> </span><span class="o">-</span><span class="n">O</span><span class="w"> </span><span class="n">file</span><span class="p">.</span><span class="n">swift</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first"><strong>IRGen</strong>. To print the LLVM IR after IR generation:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">swiftc</span><span class="w"> </span><span class="o">-</span><span class="n">emit</span><span class="o">-</span><span class="n">ir</span><span class="w"> </span><span class="o">-</span><span class="n">Xfrontend</span><span class="w"> </span><span class="o">-</span><span class="n">disable</span><span class="o">-</span><span class="n">llvm</span><span class="o">-</span><span class="n">optzns</span><span class="w"> </span><span class="o">-</span><span class="n">O</span><span class="w"> </span><span class="n">file</span><span class="p">.</span><span class="n">swift</span>
+</pre></div>
+</div>
+</li>
+</ol>
+<ol class="arabic" start="4">
+<li><p class="first"><strong>LLVM passes</strong>. To print the LLVM IR after LLVM passes:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">swiftc</span><span class="w"> </span><span class="o">-</span><span class="n">emit</span><span class="o">-</span><span class="n">ir</span><span class="w"> </span><span class="o">-</span><span class="n">O</span><span class="w"> </span><span class="n">file</span><span class="p">.</span><span class="n">swift</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first"><strong>Code generation</strong>. To print the final generated code:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">swiftc</span><span class="w"> </span><span class="o">-</span><span class="n">S</span><span class="w"> </span><span class="o">-</span><span class="n">O</span><span class="w"> </span><span class="n">file</span><span class="p">.</span><span class="n">swift</span>
+</pre></div>
+</div>
+</li>
+</ol>
+<p>Compilation stops at the phase where you print the output. So if you want to
+print the SIL <em>and</em> the LLVM IR, you have to run the compiler twice.
+The output of all these dump options (except <code class="docutils literal"><span class="pre">-dump-ast</span></code>) can be redirected
+with an additional <code class="docutils literal"><span class="pre">-o</span> <span class="pre">&lt;file&gt;</span></code> option.</p>
+<div class="section" id="debugging-on-sil-level">
+<h3><a class="toc-backref" href="#id4">Debugging on SIL Level</a><a class="headerlink" href="#debugging-on-sil-level" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="options-for-dumping-the-sil">
+<h4><a class="toc-backref" href="#id5">Options for Dumping the SIL</a><a class="headerlink" href="#options-for-dumping-the-sil" title="Permalink to this headline">¶</a></h4>
+<p>Often it is not sufficient to dump the SIL at the beginning or end of the
+optimization pipeline.
+The SILPassManager supports useful options to dump the SIL also between
+pass runs.</p>
+<p>The option <code class="docutils literal"><span class="pre">-Xllvm</span> <span class="pre">-sil-print-all</span></code> dumps the whole SIL module after all
+passes. Although it prints only functions which were changed by a pass, the
+output can get <em>very</em> large.</p>
+<p>It is useful if you identified a problem in the final SIL and you want to
+check which pass did introduce the wrong SIL.</p>
+<p>There are several other options available, e.g. to filter the output by
+function names (<code class="docutils literal"><span class="pre">-Xllvm</span> <span class="pre">-sil-print-only-function</span></code>/<code class="docutils literal"><span class="pre">s</span></code>) or by pass names
+(<code class="docutils literal"><span class="pre">-Xllvm</span> <span class="pre">-sil-print-before</span></code>/<code class="docutils literal"><span class="pre">after</span></code>/<code class="docutils literal"><span class="pre">around</span></code>).
+For details see <code class="docutils literal"><span class="pre">PassManager.cpp</span></code>.</p>
+</div>
+<div class="section" id="dumping-the-sil-and-other-data-in-lldb">
+<h4><a class="toc-backref" href="#id6">Dumping the SIL and other Data in LLDB</a><a class="headerlink" href="#dumping-the-sil-and-other-data-in-lldb" title="Permalink to this headline">¶</a></h4>
+<p>When debugging the swift compiler with LLDB (or Xcode, of course), there is
+even a more powerful way to examine the data in the compiler, e.g. the SIL.
+Following LLVM&#8217;s dump() convention, many SIL classes (as well as AST classes)
+provide a dump() function. You can call the dump function with LLDB&#8217;s
+<code class="docutils literal"><span class="pre">expression</span> <span class="pre">--</span></code> or <code class="docutils literal"><span class="pre">print</span></code> or <code class="docutils literal"><span class="pre">p</span></code> command.</p>
+<p>For example, to examine a SIL instruction:</p>
+<div class="highlight-swift"><div class="highlight"><pre>(lldb) p Inst-&gt;dump()
+%12 = struct_extract %10 : $UnsafeMutablePointer&lt;X&gt;, #UnsafeMutablePointer._rawValue // user: %13
+</pre></div>
+</div>
+<p>To dump a whole function at the beginning of a function pass:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="p">(</span><span class="n">lldb</span><span class="p">)</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="n">getFunction</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">dump</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>SIL modules and even functions can get very large. Often it is more convenient
+to dump their contents into a file and open the file in a separate editor.
+This can be done with:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="p">(</span><span class="n">lldb</span><span class="p">)</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="n">getFunction</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">dump</span><span class="p">(</span><span class="s">&quot;myfunction.sil&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>You can also dump the CFG (control flow graph) of a function:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="p">(</span><span class="n">lldb</span><span class="p">)</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="n">Func</span><span class="o">-&gt;</span><span class="n">viewCFG</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>This opens a preview window containing the CFG of the function. To continue
+debugging press &lt;CTRL&gt;-C on the LLDB prompt.
+Note that this only works in Xcode if the PATH variable in the scheme&#8217;s
+environment setting contains the path to the dot tool.</p>
+</div>
+<div class="section" id="other-utilities">
+<h4><a class="toc-backref" href="#id7">Other Utilities</a><a class="headerlink" href="#other-utilities" title="Permalink to this headline">¶</a></h4>
+<p>To view the CFG of a function (or code region) in a SIL file, you can use the
+script <code class="docutils literal"><span class="pre">swift/utils/viewcfg</span></code>. It also works for LLVM IR files.
+The script reads the SIL (or LLVM IR) code from stdin and displays the dot
+graph file. Note: .dot files should be associated with the Graphviz app.</p>
+</div>
+<div class="section" id="using-breakpoints">
+<h4><a class="toc-backref" href="#id8">Using Breakpoints</a><a class="headerlink" href="#using-breakpoints" title="Permalink to this headline">¶</a></h4>
+<p>LLDB has very powerful breakpoints, which can be utilized in many ways to debug
+the compiler and swift executables. The examples in this section show the LLDB
+command lines. In Xcode you can set the breakpoint properties by clicking &#8216;Edit
+breakpoint&#8217;.</p>
+<p>Let&#8217;s start with a simple example: sometimes you see a function in the SIL
+output and you want to know where the function was created in the compiler.
+In this case you can set a conditional breakpoint in SILFunction constructor
+and check for the function name in the breakpoint condition:</p>
+<div class="highlight-swift"><div class="highlight"><pre>(lldb) br set -c &#39;hasName(&quot;_TFC3nix1Xd&quot;)&#39; -f SILFunction.cpp -l 91
+</pre></div>
+</div>
+<p>Sometimes you want to know which optimization does insert, remove or move a
+certain instruction. To find out, set a breakpoint in
+<code class="docutils literal"><span class="pre">ilist_traits&lt;SILInstruction&gt;::addNodeToList</span></code> or
+<code class="docutils literal"><span class="pre">ilist_traits&lt;SILInstruction&gt;::removeNodeFromList</span></code>, which are defined in
+<code class="docutils literal"><span class="pre">SILInstruction.cpp</span></code>.
+The following command sets a breakpoint which stops if a <code class="docutils literal"><span class="pre">strong_retain</span></code>
+instruction is removed:</p>
+<div class="highlight-swift"><div class="highlight"><pre>(lldb) br set -c &#39;I-&gt;getKind() == ValueKind::StrongRetainInst&#39; -f SILInstruction.cpp -l 63
+</pre></div>
+</div>
+<p>The condition can be made more precise e.g. by also testing in which function
+this happens:</p>
+<div class="highlight-swift"><div class="highlight"><pre>(lldb) br set -c &#39;I-&gt;getKind() == ValueKind::StrongRetainInst &amp;&amp;
+           I-&gt;getFunction()-&gt;hasName(&quot;_TFC3nix1Xd&quot;)&#39;
+           -f SILInstruction.cpp -l 63
+</pre></div>
+</div>
+<p>Let&#8217;s assume the breakpoint hits somewhere in the middle of compiling a large
+file. This is the point where the problem appears. But often you want to break
+a little bit earlier, e.g. at the entrance of the optimization&#8217;s <code class="docutils literal"><span class="pre">run</span></code>
+function.</p>
+<p>To achieve this, set another breakpoint and add breakpoint commands:</p>
+<div class="highlight-swift"><div class="highlight"><pre>(lldb) br set -n GlobalARCOpts::run
+Breakpoint 2
+(lldb) br com add 2
+&gt; p int $n = $n + 1
+&gt; c
+&gt; DONE
+</pre></div>
+</div>
+<p>Run the program (this can take quite a bit longer than before). When the first
+breakpoint hits see what value $n has:</p>
+<div class="highlight-swift"><div class="highlight"><pre>(lldb) p $n
+(int) $n = 5
+</pre></div>
+</div>
+<p>Now remove the breakpoint commands from the second breakpoint (or create a new
+one) and set the ignore count to $n minus one:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="p">(</span><span class="n">lldb</span><span class="p">)</span><span class="w"> </span><span class="n">br</span><span class="w"> </span><span class="n">delete</span><span class="w"> </span><span class="mi">2</span>
+<span class="p">(</span><span class="n">lldb</span><span class="p">)</span><span class="w"> </span><span class="n">br</span><span class="w"> </span><span class="n">set</span><span class="w"> </span><span class="o">-</span><span class="n">i</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="o">-</span><span class="n">n</span><span class="w"> </span><span class="n">GlobalARCOpts</span><span class="p">::</span><span class="n">run</span>
+</pre></div>
+</div>
+<p>Run your program again and the breakpoint hits just before the first breakpoint.</p>
+<p>Another method for accomplishing the same task is to set the ignore count of the
+breakpoint to a large number, i.e.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="p">(</span><span class="n">lldb</span><span class="p">)</span><span class="w"> </span><span class="n">br</span><span class="w"> </span><span class="n">set</span><span class="w"> </span><span class="o">-</span><span class="n">i</span><span class="w"> </span><span class="mi">9999999</span><span class="w"> </span><span class="o">-</span><span class="n">n</span><span class="w"> </span><span class="n">GlobalARCOpts</span><span class="p">::</span><span class="n">run</span>
+</pre></div>
+</div>
+<p>Then whenever the debugger stops next time (due to hitting another
+breakpoint/crash/assert) you can list the current breakpoints:</p>
+<div class="highlight-swift"><div class="highlight"><pre>(lldb) br list
+1: name = &#39;GlobalARCOpts::run&#39;, locations = 1, resolved = 1, hit count = 85 Options: ignore: 1 enabled
+</pre></div>
+</div>
+<p>which will then show you the number of times that each breakpoint was hit. In
+this case, we know that <code class="docutils literal"><span class="pre">GlobalARCOpts::run</span></code> was hit 85 times. So, now
+we know to ignore swift_getGenericMetadata 84 times, i.e.:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="p">(</span><span class="n">lldb</span><span class="p">)</span><span class="w"> </span><span class="n">br</span><span class="w"> </span><span class="n">set</span><span class="w"> </span><span class="o">-</span><span class="n">i</span><span class="w"> </span><span class="mi">84</span><span class="w"> </span><span class="o">-</span><span class="n">n</span><span class="w"> </span><span class="n">GlobalARCOpts</span><span class="p">::</span><span class="n">run</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="lldb-scripts">
+<h4><a class="toc-backref" href="#id9">LLDB Scripts</a><a class="headerlink" href="#lldb-scripts" title="Permalink to this headline">¶</a></h4>
+<p>LLDB has powerful capabilities of scripting in python among other languages. An
+often overlooked, but very useful technique is the -s command to lldb. This
+essentially acts as a pseudo-stdin of commands that lldb will read commands
+from. Each time lldb hits a stopping point (i.e. a breakpoint or a
+crash/assert), it will run the earliest command that has not been run yet. As an
+example of this consider the following script (which without any loss of
+generality will be called test.lldb):</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">env</span><span class="w"> </span><span class="n">DYLD_INSERT_LIBRARIES</span><span class="o">=/</span><span class="n">usr</span><span class="o">/</span><span class="n">lib</span><span class="o">/</span><span class="n">libgmalloc</span><span class="p">.</span><span class="n">dylib</span>
+<span class="kr">break</span><span class="w"> </span><span class="n">set</span><span class="w"> </span><span class="o">-</span><span class="n">n</span><span class="w"> </span><span class="n">swift_getGenericMetadata</span>
+<span class="kr">break</span><span class="w"> </span><span class="n">mod</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="n">i</span><span class="w"> </span><span class="mi">83</span>
+<span class="n">process</span><span class="w"> </span><span class="n">launch</span><span class="w"> </span><span class="o">--</span><span class="w"> </span><span class="o">--</span><span class="n">stdlib</span><span class="o">-</span><span class="n">unittest</span><span class="o">-</span><span class="n">in</span><span class="o">-</span><span class="n">process</span><span class="w"> </span><span class="o">--</span><span class="n">stdlib</span><span class="o">-</span><span class="n">unittest</span><span class="o">-</span><span class="n">filter</span><span class="w"> </span><span class="s">&quot;DefaultedForwardMutableCollection&lt;OpaqueValue&lt;Int&gt;&gt;.Type.subscript(_: Range)/Set/semantics&quot;</span>
+<span class="kr">break</span><span class="w"> </span><span class="n">set</span><span class="w"> </span><span class="o">-</span><span class="n">l</span><span class="w"> </span><span class="mi">224</span>
+<span class="n">c</span>
+<span class="n">expr</span><span class="w"> </span><span class="n">pattern</span><span class="o">-&gt;</span><span class="n">CreateFunction</span>
+<span class="kr">break</span><span class="w"> </span><span class="n">set</span><span class="w"> </span><span class="o">-</span><span class="n">a</span><span class="w"> </span><span class="nv">$0</span>
+<span class="n">c</span>
+<span class="n">dis</span><span class="w"> </span><span class="o">-</span><span class="n">f</span>
+</pre></div>
+</div>
+<p>TODO: Change this example to apply to the swift compiler instead of to the
+stdlib unittests.</p>
+<p>Then by running <code class="docutils literal"><span class="pre">lldb</span> <span class="pre">test</span> <span class="pre">-s</span> <span class="pre">test.lldb</span></code>, lldb will:</p>
+<ol class="arabic simple">
+<li>Enable guard malloc.</li>
+<li>Set a break point on swift_getGenericMetadata and set it to be ignored for 83 hits.</li>
+<li>Launch the application and stop at swift_getGenericMetadata after 83 hits have been ignored.</li>
+<li>In the same file as swift_getGenericMetadata introduce a new breakpoint at line 224 and continue.</li>
+<li>When we break at line 224 in that file, evaluate an expression pointer.</li>
+<li>Set a breakpoint at the address of the expression pointer and continue.</li>
+<li>When we hit the breakpoint set at the function pointer&#8217;s address, disassemble
+the function that the function pointer was passed to.</li>
+</ol>
+<p>Using LLDB scripts can enable one to use complex debugger workflows without
+needing to retype the various commands perfectly every time.</p>
+</div>
+</div>
+</div>
+<div class="section" id="debugging-swift-executables">
+<h2><a class="toc-backref" href="#id10">Debugging Swift Executables</a><a class="headerlink" href="#debugging-swift-executables" title="Permalink to this headline">¶</a></h2>
+<p>One can use the previous tips for debugging the swift compiler with swift
+executables as well. Here are some additional useful techniques that one can use
+in Swift executables.</p>
+<div class="section" id="determining-the-mangled-name-of-a-function-in-lldb">
+<h3><a class="toc-backref" href="#id11">Determining the mangled name of a function in LLDB</a><a class="headerlink" href="#determining-the-mangled-name-of-a-function-in-lldb" title="Permalink to this headline">¶</a></h3>
+<p>One problem that often comes up when debugging swift code in LLDB is that LLDB
+shows the demangled name instead of the mangled name. This can lead to mistakes
+where due to the length of the mangled names one will look at the wrong
+function. Using the following command, one can find the mangled name of the
+function in the current frame:</p>
+<div class="highlight-swift"><div class="highlight"><pre>(lldb) image lookup -va $pc
+Address: CollectionType3[0x0000000100004db0] (CollectionType3.__TEXT.__text + 16000)
+Summary: CollectionType3`ext.CollectionType3.CollectionType3.MutableCollectionType2&lt;A where A: CollectionType3.MutableCollectionType2&gt;.(subscript.materializeForSet : (Swift.Range&lt;A.Index&gt;) -&gt; Swift.MutableSlice&lt;A&gt;).(closure #1)
+Module: file = &quot;/Volumes/Files/work/solon/build/build-swift/validation-test-macosx-x86_64/stdlib/Output/CollectionType.swift.gyb.tmp/CollectionType3&quot;, arch = &quot;x86_64&quot;
+Symbol: id = {0x0000008c}, range = [0x0000000100004db0-0x00000001000056f0), name=&quot;ext.CollectionType3.CollectionType3.MutableCollectionType2&lt;A where A: CollectionType3.MutableCollectionType2&gt;.(subscript.materializeForSet : (Swift.Range&lt;A.Index&gt;) -&gt; Swift.MutableSlice&lt;A&gt;).(closure #1)&quot;, mangled=&quot;_TFFeRq_15CollectionType322MutableCollectionType2_S_S0_m9subscriptFGVs5Rangeqq_s16MutableIndexable5Index_GVs12MutableSliceq__U_FTBpRBBRQPS0_MS4__T_&quot;
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        «&#160;&#160;<a href="TypeChecker.html">Type Checker Design and Implementation</a>
+        &#160;&#160;::&#160;&#160;
+        <a class="uplink" href="contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

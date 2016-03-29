@@ -1,0 +1,399 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Swift Program Structure and Compilation Model &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../../_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="../../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../../index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Swift Program Structure and Compilation Model</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="swift-program-structure-and-compilation-model">
+<span id="programstructureandcompilationmodel"></span><h1>Swift Program Structure and Compilation Model<a class="headerlink" href="#swift-program-structure-and-compilation-model" title="Permalink to this headline">¶</a></h1>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This is a very early design document discussing the features of
+a Swift build model and modules system. It should not be taken as a plan of
+record.</p>
+</div>
+<div class="section" id="commentary">
+<h2>Commentary<a class="headerlink" href="#commentary" title="Permalink to this headline">¶</a></h2>
+<p>The C spec only describes things up to translation unit granularity: no
+discussion of file system layout, build system, linking, runtime concepts of
+code (dynamic libraries, executables, plugins), dependence between parts of a
+program, Versioning + SDKs, human factors like management units, etc. It leaves
+all of this up to implementors to sort out, and we got what the unix world
+defined in the 60&#8217;s and 70&#8217;s with some minor stuff that could be shoehorned into
+the old unix toolchain model without too much trouble. C also doesn&#8217;t help with
+resources (images etc), has a miserable incremental compilation model and many,
+many, other issues.</p>
+<p>Swift should strive to make trivial programs really simple. Hello world should
+just be something like:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">print</span><span class="p">(</span><span class="s">&quot;hello world&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>while also acknowledging and strongly supporting the real world demands and
+requirements that library implementors (hey, that&#8217;s us!)  face every day. In
+particular, note how the language elements (described below) correspond directly
+to the business and management reality of the world:</p>
+<p><strong>Ownership Domain / Top Level Component</strong>: corresponds to a product that is
+shipped as a unit (Mac OS/X, iWork, Xcode), is a collection of frameworks/dylibs
+and resources. Only acyclic dependencies between different domains is
+allowed. There is some correlation in concept here to &#8220;umbrella headers&#8221; or
+&#8220;dyld shared cache&#8221; though it isn&#8217;t exact.</p>
+<p><strong>Namespace</strong>: Organizational structure within a domain, similar to C++ or
+Java. Programmers can use or abuse them however they wish.</p>
+<p><strong>Subcomponent</strong>: corresponds to an individual team or management unit, is one
+dylib + optional resources. All contributing source files and resources live in
+one directory (with optional subdirs), and have a single &#8220;project file&#8221;. Can
+contribute to multiple namespaces. The division of a domain into components is
+an implementation detail, not something externally visible as API. Can have
+cyclic dependencies between other components. Components roughly correspond to
+&#8220;xcode project&#8221; or &#8220;B&amp;I project&#8221; granularity at Apple. Can rebuild a &#8220;debug
+version&#8221; of a subcomponent and drop it into an app without rebuilding the entire
+world.</p>
+<p><strong>Source File</strong>: Organizational unit within a component.</p>
+<p>In the trivial hello world example, the source file gets implicitly dropped into
+a default component (since it doesn&#8217;t have a component declaration). The default
+component has settings that corresponds to an executable. As the app grows and
+wants to start using sub- libraries, the author would have to know about
+components. This ensures a simple model for new people, because they don&#8217;t need
+to know anything about components until they want to define a library and stable
+APIs.</p>
+<p>We&#8217;ll also eventually build tools to do things like:</p>
+<ul class="simple">
+<li>Inspect and maintain dependence graphs between components and subcomponents.</li>
+<li>Diff API [semantically, not &#8220;by symbol&#8221; like &#8216;nm&#8217;] across versions of products</li>
+<li>Provide code migration tools, like &#8220;rewrite rules&#8221; to update clients that use
+obsoleted and removed API.</li>
+<li>Pure swift apps won&#8217;t be able to use SPI (they just won&#8217;t build), but mixed
+swift/C apps could (through the C parts, similar to using things like &#8220;extern
+int Z3fooi(int)&#8221; to access C++ mangled symbols from C today). It will be
+straight-forward to write a binary verifier that cross references the NM
+output with the manifest file of the components it legitimately depends on.</li>
+<li>Lots of other cool stuff I&#8217;m sure.</li>
+</ul>
+<p>Anyway, that&#8217;s the high-level thoughts and motivation, this is what I&#8217;m
+proposing:</p>
+</div>
+<div class="section" id="program-structure">
+<h2>Program structure<a class="headerlink" href="#program-structure" title="Permalink to this headline">¶</a></h2>
+<p>Programs and frameworks in swift consist of declarations (functions, variables,
+types) that are (optionally) defined in possibly nested namespaces, which are
+nested in a component, which are (optionally) split into
+subcomponents. Components can also have associated resources like images and
+plists, as well as code written in C/C++/ObjC.</p>
+<p>A &#8220;<strong>Top Level Component</strong>&#8221; (also referred to as &#8220;an ownership domain&#8221;) is a
+unit of code that is owned by a single organization and is updated (shipped to
+customers) as a whole. Examples of different top-level components are products
+like the swift standard libraries, Mac OS/X, iOS, Xcode, iWork, and even small
+things like a theoretical third-party Perforce plugin to Xcode.</p>
+<p>Components are explicitly declared, and these declarations can include:</p>
+<ul class="simple">
+<li>whether the component should be built into a dylib or executable, or is a
+subcomponent.</li>
+<li>the version of the component (which are used for &#8220;availability macros&#8221; etc)</li>
+<li>an explicit list of dependencies on other top-level components (whose
+dependence graph is required to be acyclic) optionally with specific versions:
+&#8220;I depend on swift standard libs 1.4 or later&#8221;</li>
+<li>a list of subcomponents that contribute to the component: &#8220;mac os consists of
+appkit, coredata, …&#8221;</li>
+<li>a list of resource files and other stuff that makes up the framework</li>
+<li>A list of subdirectories to get source files out of (see filesystem layout
+below) if the component is more that one directory full of code.</li>
+<li>A list of any .c/.m/.cpp files that are built and linked into the component,
+along with build flags etc.</li>
+</ul>
+<p>Top-Level Components define the top level of the namespace stack. This means
+everything in the swift libraries are &#8220;swift.array.xyz&#8221;, everything in MacOS/X
+is &#8220;macosx.whatever&#8221;. Thus you can&#8217;t have naming conflicts across components.</p>
+<p><strong>Namespaces</strong> are for organization within a component, and are left up to the
+developer to handle however they want. They will work similarly to C++
+namespaces and aren&#8217;t described in detail here. For example, you could have a
+macosx.coredata namespace that coredata drops all its stuff into.</p>
+<p>Components can optionally be broken into a set of &#8220;<strong>Subcomponents</strong>&#8221;, which are
+organizational units within a top-level component. Subcomponents exist to
+support extremely large components that have multiple different teams
+contributing to a single large product. Subcomponents are purely an
+implementation detail of top- level components and have no runtime,
+naming/namespace, or other externally visible artifacts that persist once the
+entire domain is built. If version 1.0 of a domain is shipped, version 1.1 can
+completely reshuffle the internal subcomponent organization without affecting
+its published API or anything else a client can see.</p>
+<p>Subcomponents are explicitly declared, and these declarations can include:</p>
+<ul class="simple">
+<li>The component they belong to.</li>
+<li>The set of other (optionally versioned) top-level components they depend on.</li>
+<li>The set of components (within the current top-level component) that this
+subcomponent depends on. This dependence is an acyclic dependence: &#8220;core data
+depends on foundation&#8221;.</li>
+<li>A list of declarations they use within the current top-level component that
+aren&#8217;t provided by the subcomponents they explicitly depend on. This is used
+to handle cyclic dependencies across subcomponents within an ownership domain:
+for example: &#8220;libsystem depends on libcompiler_rt&#8221;, however, &#8220;libcompiler_rt
+depends on &#8216;func abort();&#8217; in libsystem&#8221;. This preserves the acyclic
+compilation order across components.</li>
+<li>A list of subdirectories to get source files out of (see filesystem layout
+below) if the component is more that one directory full of code.</li>
+<li>A list of any .c/.m/.cpp files that are linked into the component, with build
+flags.</li>
+</ul>
+<p><strong>Source Files</strong> and <strong>Resources</strong> make up a component. Swift source files can
+include:</p>
+<ul class="simple">
+<li>The component they belong to.</li>
+<li>Import declarations that affect their local scope lookups (similar to java
+import statements)</li>
+<li>A set of declarations of variables, functions, types etc.</li>
+<li>C and other language files are just another kind of resource to be built.</li>
+</ul>
+<p><strong>Declarations</strong> of variables, functions and types are the meat of the program,
+and populate source files. Declarations can be scoped to be externally exported
+from the component (aka API), internal to the component (aka SPI), local to a
+subcomponent (aka &#8220;visibility hidden&#8221;, the default), or local to the file (aka
+static). Top-level components also have a simple runtime representation which is
+used to ensure that reflection only returns API and decls within the current
+ownership domain: &#8220;App&#8217;s can&#8217;t get at iOS SPI&#8221;.</p>
+<p><strong>Executable expressions</strong> can also be included at file scope (outside other
+declarations). This global code is run at startup time (same as static
+constructors), eliminating the need for &#8220;main&#8221;. This initialization code is
+correctly run bottom-up in the explicit dependence graph. Order of
+initialization between multiple cyclicly dependent files within a single
+component is not defined (and perhaps we can make it be an outright error).</p>
+</div>
+<div class="section" id="file-system-layout-and-compiler-ui">
+<h2>File system layout and compiler UI<a class="headerlink" href="#file-system-layout-and-compiler-ui" title="Permalink to this headline">¶</a></h2>
+<p>The filesystem layout of a component is a directory with at least one .swift
+file in it that has the same name as the directory. A common case is that the
+component is a single directory with a bunch of .swift files and resources in
+it. The &#8220;large component&#8221; case can break up its source files and resources into
+subdirectories.</p>
+<p>Here is the minimal hello world example written as a proper app:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">myapp</span><span class="o">/</span>
+<span class="n">myapp</span><span class="p">.</span><span class="n">swift</span>
+</pre></div>
+</div>
+<p>You&#8217;d compile it like this:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ swift myapp
+myapp compiled successfully!
+</pre></div>
+</div>
+<p>or:</p>
+<div class="highlight-swift"><div class="highlight"><pre>$ cd myapp
+$ swift
+myapp compiled successfully!
+</pre></div>
+</div>
+<p>and it would produce this filesystem layout:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">myapp</span><span class="o">/</span>
+<span class="n">myapp</span><span class="p">.</span><span class="n">swift</span>
+<span class="n">products</span><span class="o">/</span>
+<span class="n">myapp</span>
+<span class="n">myapp</span><span class="p">.</span><span class="n">manifest</span>
+<span class="n">buildcache</span><span class="o">/</span>
+<span class="o">&lt;</span><span class="n">stuff</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>Here is a moderately complicated example of a library:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">mylib</span><span class="o">/</span>
+<span class="n">mylib</span><span class="p">.</span><span class="n">swift</span>
+<span class="n">a</span><span class="p">.</span><span class="n">swift</span>
+<span class="n">b</span><span class="p">.</span><span class="n">swift</span>
+<span class="no">UserManual</span><span class="p">.</span><span class="n">html</span>
+<span class="n">subdir</span><span class="o">/</span>
+<span class="n">c</span><span class="p">.</span><span class="n">swift</span>
+<span class="n">d</span><span class="p">.</span><span class="n">swift</span>
+<span class="n">e</span><span class="p">.</span><span class="n">png</span>
+</pre></div>
+</div>
+<p>mylib.swift tells the compiler about your sub directories, resources, how to
+process them, where to put them, etc. After compiling it you&#8217;d keep your source
+files and get:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">mylib</span><span class="o">/</span>
+<span class="n">products</span><span class="o">/</span>
+<span class="n">mylib</span><span class="p">.</span><span class="n">dylib</span>
+<span class="n">mylib</span><span class="p">.</span><span class="n">manifest</span>
+<span class="n">e</span><span class="p">.</span><span class="n">png</span>
+<span class="n">docs</span><span class="o">/</span>
+<span class="no">UserManual</span><span class="p">.</span><span class="n">html</span>
+<span class="n">buildcache</span><span class="o">/</span>
+<span class="o">&lt;</span><span class="n">more</span><span class="w"> </span><span class="n">stuff</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>Swift compiler command line is very simple: &#8220;swift mylib&#8221; is enough for most
+uses. For more complex use cases we&#8217;ll support specifying paths to search for
+components (similar to clang -F or -L) etc. We&#8217;ll also support a &#8220;clean&#8221; command
+that nukes buildcache/ and products/.</p>
+<p>The BuildCache directory holds object files, dependence information and other
+stuff needed for incremental [re]builds within the component The generated
+manifest file is used both the compiler when a clients lib/app import mylib (it
+contains type information for all the stuff exported from mylib) but also at
+runtime by the runtime library (e.g.  for reflection). It needs to be a
+fast-to-read but extensible format.</p>
+</div>
+<div class="section" id="what-the-build-system-does-how-it-works">
+<h2>What the build system does, how it works<a class="headerlink" href="#what-the-build-system-does-how-it-works" title="Permalink to this headline">¶</a></h2>
+<p>Assuming that we&#8217;re starting with an empty build cache, the build system starts
+by parsing the mylib.swift file (the main file for the directory). This file
+contains the component declaration. If this is a subcomponent, the subcomponent
+declares which super-component it is in (in which case, the super-component info
+is loaded). In either case, the compiler verifies that all of the depended-on
+components are built, if not, it goes off and recursively builds them before
+handling this one: the component dependence graph is acyclic, and cycles are
+diagnosed here.</p>
+<p>If this directory is a subcomponent (as opposed to a top-level component), the
+subcomponent declaration has already been read. If this subcomponent depends on
+any other components that are not up-to- date, those are recursively
+rebuilt. Explicit subcomponent dependencies are acyclic and cycles are diagnosed
+here. Now all depended-on top-level components and subcomponents are built.</p>
+<p>Now the compiler parses each swift file into an AST. We&#8217;ll keep the swift
+grammar carefully factored to keep types and values distinct, so it is possible
+to parse (but not fully typecheck) the files without first reading &#8220;all the
+headers they depend on&#8221;. This is important because we want to allow arbitrary
+type and value cyclic dependencies between files in a component. As each file is
+parsed, the compiler resolves as many intra-file references as it can, and ends
+up with a list of (namespace qualified) types and values that are imported by
+the file that are not satisfied by other components. This is the list of things
+the file requires that some other files in the component provide.</p>
+<p>Now that the compiler has the full set of dependence information between files
+in a component, it processes the files in strongly connected component (SCC)
+order processing an SCC of dependent files at a time. Given the entire SCC it is
+able to resolve values and types across the files (without needing prototypes)
+and complete type checking. Assuming type checking is successful (no errors) it
+generates code for each file in the SCC, emits a .o file for them, and emits
+some extra metadata to accelerate incremental builds. If there are .c files in
+the component, they are compiled to .o files now (they are also described in the
+component declaration).</p>
+<p>Once all of the source files are compiled into .o files, they are linked into a
+final linked image (dylib or executable). At this point, a couple of other
+random things are done: 1) metadata is checked to ensure that any explicitly
+declared cyclic dependencies match the given and actual prototype. 2) resources
+are copied or processed into the product directory. 3) the explicit dependence
+graph is verified, extraneous edges are warned about, missing edges are errors.</p>
+<p>In terms of implementation, this should be relatively straight- forward, and is
+carefully layered to be memory efficient (e.g. only processing an SCC at a time
+instead of an entire component) as well as highly parallel for multicore
+machines. For incremental builds, we will have a huge win because the
+fine-grained dependence information between .o files is tracked and we know
+exactly what dependencies to rebuild if anything changes. The build cache will
+accelerate most of this, which will eventually be a hybrid on-disk/in-memory
+data structure.</p>
+<p>The build system should be scalable enough for B&amp;I to eventually do a &#8220;swift
+macos&#8221; and have it do a full incremental (and parallel) build of something the
+scale of Mac OS. Actually implementing this will obviously be a big project that
+can happen as the installed base of swift code grows.</p>
+</div>
+<div class="section" id="sdks">
+<h2>SDKs<a class="headerlink" href="#sdks" title="Permalink to this headline">¶</a></h2>
+<p>The manifest file generated as a build product describes (among other things)
+the full list of decls exported by the top-level component (which includes their
+type information, not just symbol names). This manifest file is used when a
+client builds against the component to type check the client and ensure that its
+references are resolved.</p>
+<p>Because we have the version number as well as the full interface to the
+component available in a consumable format is that we can build a SDK generation
+tool. This tool would take manifest files for a set of releases (e.g. iOS 4.0,
+4.0.1, 4.0.2, 4.1, 4.1.1, 4.2) and build a single SDK manifest which would have
+a mapping from symbol+type -&gt; version list that indicates what the versions a
+given symbol are available in. This means that framework authors don&#8217;t have to
+worry about availability macros etc, it just naturally falls out of the system.</p>
+<p>This tool can also produce warnings/errors about cases where API is in version N
+but removed in version N+1, or when some declaration has an invalid change
+(e.g. an argument added or something else &#8220;fragile&#8221;).  Blue sky idea: We could
+conceivable extend it so that the SDK manifest file contains rewrite rules for
+obsolete APIs that the compiler could automatically apply to upgrade user&#8217;s
+source code.</p>
+</div>
+<div class="section" id="future-optimization-opportunities">
+<h2>Future optimization opportunities<a class="headerlink" href="#future-optimization-opportunities" title="Permalink to this headline">¶</a></h2>
+<p>The system has been carefully designed to allow fast builds at -O0 (including
+keeping cached dependence information and the compiler around in memory &#8220;across
+builds&#8221;), allowing a very incremental compilation model and allowing carefully
+limited/understood cyclic dependencies across components. However, we also care
+about really fast runtime performance (better than our current system), and we
+should be able to get that as well.</p>
+<p>There are several different possibilities to look at in the future:</p>
+<ol class="arabic simple">
+<li>Components are a natural unit to do &#8220;link time&#8221; optimization. Since the
+entire thing is shipped as a unit, we know that it is safe to inline
+functions and analyze side effects within the bounds of the component. This
+current LTO model should scale to the component level, but we&#8217;d need new
+(more scalable/parallel and memory efficient) approaches to optimize across
+the entire mac os product. Processing components bottom-up within a large
+component allows efficient context sensitive (and summary-based) analyzes,
+like mod/ref, interprocedural constant prop, inlining, and nocapture
+propagation. I expect nocapture to be specifically important to get stuff on
+the stack instead of causing them to get promoted to the heap all the time.</li>
+<li>The dyld shared cache can be seen as an optimization across components within
+the mac os top-level component. Though it has the capability to include third
+party and other dylibs, in practice it is rooted from a few key apps, so it
+doesn&#8217;t get &#8220;everything&#8221; in macos and it isn&#8217;t used for other stuff (like
+xcode). The proposed (but never implemented) &#8220;per-app shared cache&#8221; is a
+straight-forward extension if this were based on optimizing across
+components.</li>
+<li>There are a bunch of optimizations to take advantage of known fragility
+levels for devirtualization, inlining, and other stuff that I&#8217;m not going to
+describe here. Generalization of DaveZ&#8217;s positive/negative ivar/vtable idea.</li>
+<li>The low level tools are already factored to be mostly object file format
+independent. There is no reason that we need to keep using actual macho .o
+files if it turns out to be inconvenient. We obviously must keep around macho
+executables and dylibs.</li>
+</ol>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>

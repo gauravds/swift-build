@@ -1,0 +1,1321 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Optimizing Accessors in Swift &mdash; Swift 2.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/swift.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Swift 2.2 documentation" href="../contents.html" />
+<style type="text/css">
+  table.right { float: right; margin-left: 20px; }
+  table.right td { border: 1px solid #ccc; }
+</style>
+
+  </head>
+  <body role="document">
+      <div class="header" role="banner"><h1 class="heading"><a href="../index.html">
+          <span>Swift 2.2 documentation</span></a></h1>
+        <h2 class="heading"><span>Optimizing Accessors in Swift</span></h2>
+      </div>
+      <div class="topnav" role="navigation" aria-label="top navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="optimizing-accessors-in-swift">
+<h1>Optimizing Accessors in Swift<a class="headerlink" href="#optimizing-accessors-in-swift" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="definitions">
+<h2>Definitions<a class="headerlink" href="#definitions" title="Permalink to this headline">¶</a></h2>
+<p>An abstract storage declaration is a language construct that declares
+a means of accessing some sort of abstract entity.  I&#8217;ll just say
+&#8220;storage&#8221; hereafter.</p>
+<p>Swift provides three storage declarations:</p>
+<ul class="simple">
+<li>a single named entity, called a <em>variable</em> and declared with <code class="docutils literal"><span class="pre">var</span></code></li>
+<li>a single named entity which can never be reassigned, called a <em>constant</em> and declared with <code class="docutils literal"><span class="pre">let</span></code></li>
+<li>a compound unnamed entity accessed with an index, called a <em>subscript</em> and declared with <code class="docutils literal"><span class="pre">subscript</span></code></li>
+</ul>
+<p>These features are similar to those in other languages.  Swift notably
+lacks compound named entities, such as C#&#8217;s indexed properties; the
+design team intentionally chose to favor the use of named single
+entities of subscriptable type.</p>
+<p>It&#8217;s useful to lump the two kinds of single named entities together;
+I&#8217;ll just call them both &#8220;variables&#8221; hereafter.</p>
+<p>Subscripts must always be instance type members.  When a variable is
+a type member, it&#8217;s called a <em>property</em>.</p>
+<p>When I say that these entities are <em>abstract</em>, I mean that they&#8217;re not
+directly tied to any particular implementation.  All of them may be
+backed directly by memory storing values of the entity&#8217;s type, or they
+may simply provide a way of invoking arbitrary code to access a
+logical memory, or they may be a little of both.</p>
+</div>
+<div class="section" id="full-value-accesses">
+<h2>Full-value accesses<a class="headerlink" href="#full-value-accesses" title="Permalink to this headline">¶</a></h2>
+<p>All accesses to storage, no matter the implementation, can be performed
+with two primitive operations:</p>
+<ul class="simple">
+<li>a full-value load, which creates a new copy of the current value</li>
+<li>a full-value store, which overwrites the current value with a
+different, independent value</li>
+</ul>
+<p>A function which implements a full-value load is called a <em>getter</em>;
+a full-value store, a <em>setter</em>.</p>
+<p>An operation which calls for a full-value load into a temporary, then
+a modification of the temporary, then a full-value store of the
+temporary into the original entity, is called a <em>write-back</em>.</p>
+<p>Implementing accesses with full-value accesses introduces two
+problems: subobject clobbering and performance.</p>
+<div class="section" id="subobject-clobbering">
+<h3>Subobject clobbering<a class="headerlink" href="#subobject-clobbering" title="Permalink to this headline">¶</a></h3>
+<p>Subobject clobbering is a semantic issue.  It occurs when there are
+two changes to an entity in flight at once, as in:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">swap</span><span class="p">(</span><span class="o">&amp;</span><span class="n">point</span><span class="p">.</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">point</span><span class="p">.</span><span class="n">y</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>(By &#8220;at once&#8221;, I mean synchronously.  Unlike Java, Swift is willing to
+say that an <em>asynchronous</em> simultaneous access (mutating or not) to an
+entity that&#8217;s being modified is completely undefined behavior, with
+any sort of failure permitted, up to and including memory corruption
+and crashes.  As Swift transitions towards being a systems language,
+it can selectively choose to define some of this behavior,
+e.g. allowing racing accesses to different elements of an array.)</p>
+<p>Subobject clobbering is a problem with user expectation.  Users are
+unlikely to write code that intentionally modifies two obviously
+overlapping entities, but they might very reasonably write code that
+modifies two &#8220;separate&#8221; sub-entities.  For example, they might write
+code to swap two properties of a struct, or two elements of an array.
+The natural expansion of these subobject accesses using whole-object
+accesses generates code that &#8220;loses&#8221; the changes made to one of the
+objects:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">var </span><span class="nv">point0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point</span>
+<span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point0</span><span class="p">.</span><span class="n">x</span>
+<span class="kd">var </span><span class="nv">point1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point</span>
+<span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point1</span><span class="p">.</span><span class="n">y</span>
+<span class="n">swap</span><span class="p">(</span><span class="o">&amp;</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">y</span><span class="p">)</span>
+<span class="n">point1</span><span class="p">.</span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">y</span>
+<span class="n">point</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point1</span>
+<span class="n">point0</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span>
+<span class="n">point</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point0</span>
+</pre></div>
+</div>
+<p>Note that <code class="docutils literal"><span class="pre">point.y</span></code> is left unchanged.</p>
+<div class="section" id="local-analysis">
+<h4>Local analysis<a class="headerlink" href="#local-analysis" title="Permalink to this headline">¶</a></h4>
+<p>There are two straightforward solutions to subobject clobbering, both
+reliant on doing local analysis to recognize two accesses which
+obviously alias (like the two references to <code class="docutils literal"><span class="pre">point</span></code> in the above
+example).  Once you&#8217;ve done this, you can either:</p>
+<ul class="simple">
+<li>Emit an error, outlawing such code.  This is what Swift currently
+does (but only when the aliasing access must be implemented with
+full-value loads and stores).</li>
+<li>Use a single temporary, potentially changing the semantics.</li>
+</ul>
+<p>It&#8217;s impossible to guarantee the absence of subobject clobbering with
+this analysis without extremely heavy-handed languages changes.
+Fortunately, subobject clobbering is &#8220;only&#8221; a semantics issue, not a
+memory-safety issue, at least as long as it&#8217;s implemented with
+full-value accesses.</p>
+</div>
+<div class="section" id="reprojection">
+<h4>Reprojection<a class="headerlink" href="#reprojection" title="Permalink to this headline">¶</a></h4>
+<p>A more general solution is to re-project the modified subobject from
+scratch before writing it back.  That is, you first acquire an initial
+value like normal for the subobject you wish to modify, then modify
+that temporary copy in-place.  But instead of then recursively
+consuming all the intermediate temporaries when writing them back, you
+drop them all and recompute the current value, then write the modified
+subobject to it, then write back all the way up.  That is:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">var </span><span class="nv">point0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point</span>
+<span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point0</span><span class="p">.</span><span class="n">x</span>
+<span class="kd">var </span><span class="nv">point1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point</span>
+<span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point1</span><span class="p">.</span><span class="n">y</span>
+<span class="n">swap</span><span class="p">(</span><span class="o">&amp;</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">y</span><span class="p">)</span>
+<span class="n">point1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point</span><span class="w">      </span><span class="c1">// reload point1</span>
+<span class="n">point1</span><span class="p">.</span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">y</span>
+<span class="n">point</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point1</span>
+<span class="n">point0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point</span><span class="w">      </span><span class="c1">// reload point0</span>
+<span class="n">point0</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span>
+<span class="n">point</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point0</span>
+</pre></div>
+</div>
+<p>In this example, I&#8217;ve applied the solution consistently to all
+accesses, which protects against unseen modifications (e.g. during the
+call to <code class="docutils literal"><span class="pre">swap</span></code>) at the cost of performing two extra full-value
+loads.</p>
+<p>You can heuristically lower this by combining it with a simple local
+analysis and only re-projecting when writing back to other l-values
+besides the last.  In other words, generate code that will work as
+long as the entity is not modified behind abstraction barriers or
+through unexpected aliases:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">var </span><span class="nv">point0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point</span>
+<span class="kd">var </span><span class="nv">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point0</span><span class="p">.</span><span class="n">x</span>
+<span class="kd">var </span><span class="nv">point1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point</span>
+<span class="kd">var </span><span class="nv">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point1</span><span class="p">.</span><span class="n">y</span>
+<span class="n">swap</span><span class="p">(</span><span class="o">&amp;</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">y</span><span class="p">)</span>
+<span class="n">point1</span><span class="p">.</span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">y</span><span class="w">        </span><span class="c1">// do not reload point1</span>
+<span class="n">point</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point1</span>
+<span class="n">point0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point</span><span class="w">      </span><span class="c1">// reload point0</span>
+<span class="n">point0</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span>
+<span class="n">point</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">point0</span>
+</pre></div>
+</div>
+<p>Note that, in either solution, you&#8217;ve introduced extra full-value
+loads.  This may be quite expensive, and it&#8217;s not guaranteed to be
+semantically equivalent.</p>
+</div>
+</div>
+<div class="section" id="performance">
+<h3>Performance<a class="headerlink" href="#performance" title="Permalink to this headline">¶</a></h3>
+<p>There are three major reasons why full-value accesses are inefficient.</p>
+<div class="section" id="unnecessary-subobject-accesses">
+<h4>Unnecessary subobject accesses<a class="headerlink" href="#unnecessary-subobject-accesses" title="Permalink to this headline">¶</a></h4>
+<p>The first is that they may load or store more than is necessary.</p>
+<p>As an obvious example, imagine a variable of type <code class="docutils literal"><span class="pre">(Int,Int)</span></code>; even
+if my code only accesses the first element of the tuple, full-value
+accesses force me to read or write the second element as well.  That
+means that, even if I&#8217;m purely overwriting the first element, I
+actually have to perform a full-value load first so that I know what
+value to use for the second element when performing the full-value
+store.</p>
+<p>Additionally, while unnecessarily loading the second element of an
+<code class="docutils literal"><span class="pre">(Int,Int)</span></code> pair might seem trivial, consider that the tuple could
+actually have twenty elements, or that the second element might be
+non-trivial to copy (e.g. if it&#8217;s a retainable pointer).</p>
+</div>
+<div class="section" id="abstraction-barriers">
+<h4>Abstraction barriers<a class="headerlink" href="#abstraction-barriers" title="Permalink to this headline">¶</a></h4>
+<p>A full-value load or store which you can completely reason about is one
+thing, but if it has to be performed as a call, it can be a major
+performance drag.</p>
+<p>For one, calls do carry a significant amount of low-level overhead.</p>
+<p>For another, optimizers must be extremely conservative about what a
+call might do.  A retainable pointer might have to be retained and
+later released purely to protect against the possibility that a getter
+might, somehow, cause the pointer to otherwise be deallocated.</p>
+<p>Furthermore, the conventions of the call might restrict performance.
+One way or another, a getter for a retainable pointer generally
+returns at +1, meaning that as part of the return, it is retained,
+forcing the caller to later release.  If the access were instead
+direct to memory, this retain might be avoidable, depending on what
+the caller does with the pointer.</p>
+</div>
+<div class="section" id="copy-on-write">
+<h4>Copy-on-write<a class="headerlink" href="#copy-on-write" title="Permalink to this headline">¶</a></h4>
+<p>These problems are compounded by copy-on-write (COW) types.  In Swift,
+a copy-on-write value embeds an object reference.  Copying the value
+has low immediate cost, because it simply retains the existing
+reference.  However, modifying a value requires the reference to be
+made unique, generally by copying the data held by the value into a
+fresh object.  I&#8217;ll call this operation a <em>structural copy</em> in an
+effort to avoid the more treacherous term &#8220;deep copy&#8221;.</p>
+<p>COW types are problematic with full-value accesses for several reasons.</p>
+<p>First, COW types are often used to implement aggregates and thus often
+have several distinguishable subobjects which users are likely to
+think of as independent.  This heightens the dangers of subobject
+clobbering.</p>
+<p>Second, a full-value load of a COW type implies making the object
+reference non-unique.  Changing the value at this point will force a
+structural copy.  This means that modifying a temporary copy has
+dramatically worse performance compared to modifying the original
+entity in-place.  For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">window</span><span class="p">.</span><span class="n">name</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="s">&quot; (closing)&quot;</span>
+</pre></div>
+</div>
+<p>If <code class="docutils literal"><span class="pre">&amp;window.name</span></code> can be passed directly to the operator, and the
+string buffer is uniquely referenced by that string, then this
+operation may be as cheap as copying a few characters into the tail of
+the buffer.  But if this must be done with a write-back, then the
+temporary will never have a unique reference, and there will always
+be an unneeded structural copy.</p>
+</div>
+</div>
+</div>
+<div class="section" id="conservative-access-patterns">
+<h2>Conservative access patterns<a class="headerlink" href="#conservative-access-patterns" title="Permalink to this headline">¶</a></h2>
+<p>When you know how storage is implemented, it&#8217;s straightforward to
+generate an optimal access to it.  There are several major reasons why
+you might not know how a storage declaration is implemented, though:</p>
+<ul class="simple">
+<li>It might be an abstract declaration, not a concrete declaration.
+Currently this means a protocol member, but Swift may someday add
+abstract class members.</li>
+<li>It might be a non-final class member, where the implementation you
+can see is potentially overridable by a subclass.</li>
+<li>It might be a resilient declaration, where you know only that the
+entity exists and know nothing statically about its implementation.</li>
+</ul>
+<p>In all of these cases, you must generate code that will handle the
+worst possible case, which is that the entity is implemented with a
+getter and a setter.  Therefore, the conservative access pattern
+includes opaque getter and setter functions.</p>
+<p>However, for all the reasons discussed above, using unnecessary
+full-value accesses can be terrible for performance.  It&#8217;s really bad
+if a little conservatism &#8212; e.g. because Swift failed to devirtualize
+a property access &#8212; causes asymptotic inefficiencies.  Therefore,
+Swift&#8217;s native conservative access pattern also includes a third
+accessor which permits direct access to storage when possible.  This
+accessor is called <code class="docutils literal"><span class="pre">materializeForSet</span></code>.</p>
+<p><code class="docutils literal"><span class="pre">materializeForSet</span></code> receives an extra argument, which is an
+uninitialized buffer of the value type, and it returns a pointer and a
+flag.  When it can provide direct access to storage for the entity, it
+constructs a pointer to the storage and returns false.  When it can&#8217;t,
+it performs a full-value load into the buffer and returns true.  The
+caller performs the modification in-place on the returned pointer and
+then, if the flag is true, passes the value to the setter.</p>
+<p>The overall effect is to enable direct storage access as a dynamic
+optimization when it&#8217;s impossible as a static optimization.</p>
+<p>For now, <code class="docutils literal"><span class="pre">materializeForSet</span></code> is always automatically generated based
+on whether the entity is implemented with a computed setter.  It is
+possible to imagine data structures that would benefit from having
+this lifted to a user-definable feature; for example, a data structure
+which sometimes holds its elements in memory but sometimes does not.</p>
+<p><code class="docutils literal"><span class="pre">materializeForSet</span></code> can provide direct access whenever an address
+for the storage can be derived.  This includes when the storage is
+implemented with a <code class="docutils literal"><span class="pre">mutableAddress</span></code> accessor, as covered below.
+Observing accessors currently prevent <code class="docutils literal"><span class="pre">materializeForSet</span></code> from
+offering direct access; that&#8217;s fixable for <code class="docutils literal"><span class="pre">didSet</span></code> using a slightly
+different code pattern, but <code class="docutils literal"><span class="pre">willSet</span></code> is an inherent obstacle.</p>
+<p>Independent of any of the other optimizations discussed in this
+whitepaper, <code class="docutils literal"><span class="pre">materializeForSet</span></code> had the potential to immediately
+optimize the extremely important case of mutations to COW values in
+un-devirtualized class properties, with fairly minimal risk.
+Therefore, <code class="docutils literal"><span class="pre">materializeForSet</span></code> was implemented first, and it shipped
+in Xcode 6.1.</p>
+</div>
+<div class="section" id="direct-access-at-computed-addresses">
+<h2>Direct access at computed addresses<a class="headerlink" href="#direct-access-at-computed-addresses" title="Permalink to this headline">¶</a></h2>
+<p>What entities can be directly accessed in memory?  Non-computed
+variables make up an extremely important set of cases; Swift has
+enough built-in knowledge to know that it can provide direct access to
+them.  But there are a number of other important cases where the
+address of an entity is not built-in to the compiler, but where direct
+access is nonetheless possible.  For example, elements of a simple
+array always have independent storage in memory.  Most benchmarks on
+arrays would profit from being able to modify array elements in-place.</p>
+<p>There&#8217;s a long chain of proposals in this area, many of which are
+refinement on previous proposals.  None of these proposals has yet
+shipped in Xcode.</p>
+<div class="section" id="addressors">
+<h3>Addressors<a class="headerlink" href="#addressors" title="Permalink to this headline">¶</a></h3>
+<p>For something like a simple array (or any similar structure, like a
+deque) which is always backed by a buffer, it makes sense for the
+implementor to simply define accessors which return the address of
+the element.  Such accessors are called <em>addressors</em>, and there are
+two: <code class="docutils literal"><span class="pre">address</span></code> and <code class="docutils literal"><span class="pre">mutableAddress</span></code>.</p>
+<p>The conservative access pattern can be generated very easily from
+this: the getter calls <code class="docutils literal"><span class="pre">address</span></code> and loads from it, the setter calls
+<code class="docutils literal"><span class="pre">mutableAddress</span></code> and stores to it, and <code class="docutils literal"><span class="pre">materializeForSet</span></code>
+provides direct access to the address returned from
+<code class="docutils literal"><span class="pre">mutableAddress</span></code>.</p>
+<p>If the entity has type <code class="docutils literal"><span class="pre">T</span></code>, then <code class="docutils literal"><span class="pre">address</span></code> returns an
+<code class="docutils literal"><span class="pre">UnsafePointer&lt;T&gt;</span></code> and <code class="docutils literal"><span class="pre">mutableAddress</span></code> returns an
+<code class="docutils literal"><span class="pre">UnsafeMutablePointer&lt;T&gt;</span></code>.  This means that the formal type of the
+entity must exactly match the formal type of the storage.  Thus, the
+standard subscript on <code class="docutils literal"><span class="pre">Dictionary&lt;K,V&gt;</span></code> cannot be implemented using
+addressors, because the formal type of the entity is <code class="docutils literal"><span class="pre">V?</span></code>, but the
+backing storage holds a <code class="docutils literal"><span class="pre">V</span></code>.  (And this is in keeping with user
+expectations about the data structure: assigning <code class="docutils literal"><span class="pre">nil</span></code> at a key is
+supposed to erase any existing entry there, not create a new entry to
+hold <code class="docutils literal"><span class="pre">nil</span></code>.)</p>
+<p>This simple addressor proposal was the first prong of our efforts to
+optimize array element access.  Unfortunately, while it is useful for
+several other types (such as <code class="docutils literal"><span class="pre">ContiguousArray</span></code> and
+<code class="docutils literal"><span class="pre">UnsafeMutablePointer</span></code>), it is not flexible enough for the <code class="docutils literal"><span class="pre">Array</span></code>
+type.</p>
+</div>
+<div class="section" id="mixed-addressors">
+<h3>Mixed addressors<a class="headerlink" href="#mixed-addressors" title="Permalink to this headline">¶</a></h3>
+<p>Swift&#8217;s chief <code class="docutils literal"><span class="pre">Array</span></code> type is only a simple array when it is not
+interacting with Objective-C.  Type bridging requires <code class="docutils literal"><span class="pre">Array</span></code> to be
+able to store an immutable <code class="docutils literal"><span class="pre">NSArray</span></code> instance, and the <code class="docutils literal"><span class="pre">NSArray</span></code>
+interface does not expose the details of how it stores elements.  An
+<code class="docutils literal"><span class="pre">NSArray</span></code> is even permitted to dynamically generate its values in
+its <code class="docutils literal"><span class="pre">objectAtIndex:</span></code> method.  And it would be absurd for <code class="docutils literal"><span class="pre">Array</span></code>
+to perform a structural copy during a load just to make non-mutating
+accesses more efficient!  So the load access pattern for <code class="docutils literal"><span class="pre">Array</span></code>&#8216;s
+subscript declaration must use a getter.</p>
+<p>Fortunately, this requirement does not preclude using an addressor for
+mutating accesses.  Mutations to <code class="docutils literal"><span class="pre">Array</span></code> always transition the array
+to a unique contiguous buffer representation as their first step.
+This means that the subscript operator can sensibly return an address
+when it&#8217;s used for the purposes of mutation: in other words, exactly
+when <code class="docutils literal"><span class="pre">mutableAddress</span></code> would be invoked.</p>
+<p>Therefore, the second prong of our efforts to optimize array element
+access was to allow entities to be implemented with the combination of
+a <code class="docutils literal"><span class="pre">get</span></code> accessor and a <code class="docutils literal"><span class="pre">mutableAddress</span></code> accessor.  This is
+straightforward in the user model, where it simply means lifting a
+restriction.  It&#8217;s more complex behind the scenes because it broke
+what was previously a clean conceptual division between &#8220;physical&#8221; and
+&#8220;logical&#8221; l-values.</p>
+<p>Mixed addressors have now been adopted by <code class="docutils literal"><span class="pre">Array</span></code> to great success.
+As expected, they substantially improved performance mutating COW
+array elements.  But they also fix an important instance of subobject
+clobbering, because modifications to different subobjects (notably,
+different elements of the same array) can occur simultaneously by
+simply projecting out their addresses in the unique buffer.  For
+example, this means that it&#8217;s possible to simply swap two elements
+of an array directly:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">swap</span><span class="p">(</span><span class="o">&amp;</span><span class="n">array</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="o">&amp;</span><span class="n">array</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+
+<span class="c1">// Expanded:</span>
+<span class="n">array</span><span class="p">.</span><span class="n">transitionToUniquelyReferenced</span><span class="p">()</span>
+<span class="kd">let </span><span class="nv">address_i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">array</span><span class="p">.</span><span class="n">buffer</span><span class="p">.</span><span class="n">storage</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i</span>
+<span class="n">array</span><span class="p">.</span><span class="n">transitionToUniquelyReferenced</span><span class="p">()</span>
+<span class="kd">let </span><span class="nv">address_j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">array</span><span class="p">.</span><span class="n">buffer</span><span class="p">.</span><span class="n">storage</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span>
+<span class="n">swap</span><span class="p">(</span><span class="n">address_i</span><span class="p">,</span><span class="w"> </span><span class="n">address_j</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Mixed addressors weren&#8217;t completely implemented until very close to
+the Xcode 6.1 deadline, and they changed code-generation patterns
+enough to break a number of important array-specific optimizations.
+Therefore, the team sensibly decided that they were too risky for that
+release, and that there wasn&#8217;t enough benefit from other applications
+to justify including any of the addressor work.</p>
+<p>In a way, that was a fortunate decision, because the naive version of
+addressors implemented so far in Swift creates a safety hole which
+would otherwise have been exposed to users.</p>
+</div>
+<div class="section" id="memory-unsafety-of-addressors">
+<h3>Memory unsafety of addressors<a class="headerlink" href="#memory-unsafety-of-addressors" title="Permalink to this headline">¶</a></h3>
+<p>The semantics and memory safety of operations on COW types rely on a
+pair of simple rules:</p>
+<ul class="simple">
+<li>A non-mutating operation must own a reference to the buffer for
+the full course of the read.</li>
+<li>A mutating operation must own a unique reference to the buffer
+for the full course of the mutation.</li>
+</ul>
+<p>Both rules tend to be naturally satisfied by the way that operations
+are organized into methods.  A value must own a reference to its
+buffer at the moment that a method is invoked on it.  A mutating
+operation immediately transitions the buffer to a unique reference,
+performing a structural copy if necessary.  This reference will remain
+valid for the rest of the method as long as the method is <em>atomic</em>: as
+long as it does not synchronously invoke arbitrary user code.</p>
+<p>(This is a single-threaded notion of atomicity.  A second thread which
+modifies the value simultaneously can clearly invalidate the
+assumption.  But that would necessarily be a data race, and the
+language design team is willing to say that such races have fully
+undefined behavior, and arbitrary consequences like memory corruption
+and crashes are acceptable in their wake.)</p>
+<p>However, addressors are not atomic in this way: they return an address
+to the caller, which may then interleave arbitrary code before
+completing the operation.  This can present the opportunity for
+corruption if the interleaved code modifies the original value.
+Consider the following code:</p>
+<div class="highlight-swift"><div class="highlight"><pre>func operate(inout value: Int, count: Int) { ... }
+
+var array: [Int] = [1,2,3,4]
+operate(&amp;array[0], { array = []; return 0 }())
+</pre></div>
+</div>
+<p>The dynamic sequence of operations performed here will expand like so:</p>
+<div class="highlight-swift"><div class="highlight"><pre>var array: [Int] = [1,2,3,4]
+let address = array.subscript.mutableAddress(0)
+array = []
+operate(address, 0)
+</pre></div>
+</div>
+<p>The assignment to <code class="docutils literal"><span class="pre">array</span></code> within the closure will release the buffer
+containing <code class="docutils literal"><span class="pre">address</span></code>, thus passing <code class="docutils literal"><span class="pre">operate</span></code> a dangling pointer.</p>
+<p>Nor can this be fixed with a purely local analysis; consider:</p>
+<div class="highlight-swift"><div class="highlight"><pre>class C { var array: [Int] }
+let global_C = C()
+
+func assign(inout value: Int) {
+  C.array = []
+  value = 0
+}
+
+assign(&amp;global_C.array[0])
+</pre></div>
+</div>
+</div>
+<div class="section" id="fixing-the-memory-safety-hole">
+<h3>Fixing the memory safety hole<a class="headerlink" href="#fixing-the-memory-safety-hole" title="Permalink to this headline">¶</a></h3>
+<p>Conceptually, the correct fix is to guarantee that the rules are
+satisfied by ensuring that the buffer is retained for the duration of
+the operation.  Any interleaving modifications will then see a
+non-uniquely-referenced buffer and perform a structural copy:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="c1">// Project the array element.</span>
+<span class="kd">let </span><span class="nv">address</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">array</span><span class="p">.</span><span class="n">subscript</span><span class="p">.</span><span class="n">mutableAddress</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="c1">// Remember the new buffer value and keep it retained.</span>
+<span class="kd">let </span><span class="nv">newArrayBuffer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">array</span><span class="p">.</span><span class="n">buffer</span>
+<span class="n">retain</span><span class="p">(</span><span class="n">newArrayBuffer</span><span class="p">)</span>
+
+<span class="c1">// Reassign the variable.</span>
+<span class="n">release</span><span class="p">(</span><span class="n">array</span><span class="p">.</span><span class="n">buffer</span><span class="p">)</span>
+<span class="n">array</span><span class="p">.</span><span class="n">buffer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">..</span><span class="p">.</span>
+
+<span class="c1">// Perform the mutation.  These changes will be silently lost, but</span>
+<span class="c1">// they at least won&#39;t be using deallocated memory.</span>
+<span class="n">operate</span><span class="p">(</span><span class="n">address</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span>
+
+<span class="c1">// Release the &quot;new&quot; buffer.</span>
+<span class="n">release</span><span class="p">(</span><span class="n">newArrayBuffer</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Note that this still leaves a semantic hole if the original value is
+copied in interleaving code before the modification, because the
+subsequent modification will be reflected in the copy:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="c1">// Project the array element.</span>
+<span class="kd">let </span><span class="nv">address</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">array</span><span class="p">.</span><span class="n">subscript</span><span class="p">.</span><span class="n">mutableAddress</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="c1">// Remember the new buffer value and keep it retained.</span>
+<span class="kd">let </span><span class="nv">newArrayBuffer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">array</span><span class="p">.</span><span class="n">buffer</span>
+<span class="n">retain</span><span class="p">(</span><span class="n">newArrayBuffer</span><span class="p">)</span>
+
+<span class="c1">// Copy the value.  Note that arrayCopy uses the same buffer that</span>
+<span class="c1">// &#39;address&#39; points into.</span>
+<span class="kd">let </span><span class="nv">arrayCopy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">array</span>
+<span class="n">retain</span><span class="p">(</span><span class="n">arrayCopy</span><span class="p">.</span><span class="n">buffer</span><span class="p">)</span>
+
+<span class="c1">// Perform the mutation.</span>
+<span class="n">operate</span><span class="p">(</span><span class="n">address</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span>
+
+<span class="c1">// Release the &quot;new&quot; buffer.</span>
+<span class="n">release</span><span class="p">(</span><span class="n">newArrayBuffer</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This might be unexpected behavior, but the language team is willing to
+accept unexpected behavior for this code.  What&#8217;s non-negotiable is
+breaking memory safety.</p>
+<p>Unfortunately, applying this fix naively reintroduces the problem of
+subobject clobbering: since a modification of one subobject
+immediately retains a buffer that&#8217;s global to the entire value, an
+interleaved modification of a different subobject will see a
+non-unique buffer reference and therefore perform a structural copy.
+The modifications to the first subobject will therefore be silently
+lost.</p>
+<p>Unlike the interleaving copy case, this is seen as unacceptable.
+Notably, it breaks swapping two array elements:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="c1">// Original:</span>
+<span class="n">swap</span><span class="p">(</span><span class="o">&amp;</span><span class="n">array</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="o">&amp;</span><span class="n">array</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+
+<span class="c1">// Expanded:</span>
+
+<span class="c1">// Project array[i].</span>
+<span class="n">array</span><span class="p">.</span><span class="n">transitionToUniquelyReferenced</span><span class="p">()</span>
+<span class="kd">let </span><span class="nv">address_i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">array</span><span class="p">.</span><span class="n">buffer</span><span class="p">.</span><span class="n">storage</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i</span>
+<span class="kd">let </span><span class="nv">newArrayBuffer_i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">array</span><span class="p">.</span><span class="n">buffer</span>
+<span class="n">retain</span><span class="p">(</span><span class="n">newArrayBuffer_i</span><span class="p">)</span>
+
+<span class="c1">// Project array[j].  Note that this transition is guaranteed</span>
+<span class="c1">// to have to do a structural copy.</span>
+<span class="n">array</span><span class="p">.</span><span class="n">transitionToUniquelyReferenced</span><span class="p">()</span>
+<span class="kd">let </span><span class="nv">address_j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">array</span><span class="p">.</span><span class="n">buffer</span><span class="p">.</span><span class="n">storage</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span>
+<span class="kd">let </span><span class="nv">newArrayBuffer_j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">array</span><span class="p">.</span><span class="n">buffer</span>
+<span class="n">retain</span><span class="p">(</span><span class="n">newArrayBuffer_j</span><span class="p">)</span>
+
+<span class="c1">// Perform the mutations.</span>
+<span class="n">swap</span><span class="p">(</span><span class="n">address_i</span><span class="p">,</span><span class="w"> </span><span class="n">address_j</span><span class="p">)</span>
+
+<span class="c1">// Balance out the retains.</span>
+<span class="n">release</span><span class="p">(</span><span class="n">newArrayBuffer_j</span><span class="p">)</span>
+<span class="n">release</span><span class="p">(</span><span class="n">newArrayBuffer_i</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="acceptability">
+<h2>Acceptability<a class="headerlink" href="#acceptability" title="Permalink to this headline">¶</a></h2>
+<p>This whitepaper has mentioned several times that the language team is
+prepared to accept such-and-such behavior but not prepared to accept
+some other kind of behavior.  Clearly, there is a policy at work.
+What is it?</p>
+<div class="section" id="general-philosophy">
+<h3>General philosophy<a class="headerlink" href="#general-philosophy" title="Permalink to this headline">¶</a></h3>
+<p>For any given language problem, a perfect solution would be one which:</p>
+<ul class="simple">
+<li>guarantees that all operations complete without crashing or
+corrupting the program state,</li>
+<li>guarantees that all operations produce results according to
+consistent, reliable, and intuitive rules,</li>
+<li>does not limit or require complex interactions with the remainder
+of the language, and</li>
+<li>imposes no performance cost.</li>
+</ul>
+<p>These goals are, however, not all simultaneously achievable, and
+different languages reach different balances.  Swift&#8217;s particular
+philosophy is as follows:</p>
+<ul>
+<li><p class="first">The language should be as dynamically safe as possible.
+Straightforward uses of ordinary language features may cause
+dynamic failure, but the should never corrupt the program state.
+Any unsafe language or library features (other than simply calling
+into C code) should be explicitly labeled as unsafe.</p>
+<p>A dynamic failure should mean that the program reliably halts,
+ideally with a message clearly describing the source of the
+failure.  In the future, the language may allow for emergency
+recovery from such failures.</p>
+</li>
+<li><p class="first">The language should sit on top of C, relying only on a relatively
+unobtrusive runtime.  Accordingly, the language&#8217;s interactions
+with C-based technologies should be efficient and obvious.</p>
+</li>
+<li><p class="first">The language should allow a static compiler to produce efficient
+code without dynamic instrumentation.  Accordingly, static
+analysis should only be blocked by incomplete information when
+the code uses an obviously abstract language feature (such as
+calling a class method or an unknown function), and the language
+should provide tools to allow programmers to limit such cases.</p>
+<p>(Dynamic instrumentation can, of course, still help, but it
+shouldn&#8217;t be required for excellent performance.)</p>
+</li>
+</ul>
+</div>
+<div class="section" id="general-solutions">
+<h3>General solutions<a class="headerlink" href="#general-solutions" title="Permalink to this headline">¶</a></h3>
+<p>A language generally has six tools for dealing with code it considers
+undesirable.  Some of this terminology is taken from existing
+standards, others not.</p>
+<ul class="simple">
+<li>The language may nonetheless take steps to ensure that the code
+executes with a reliable result.  Such code is said to have
+<em>guaranteed behavior</em>.</li>
+<li>The language may report the code as erroneous before it executes.
+Such code is said to be <em>ill formed</em>.</li>
+<li>The language may reliably report the code as having performed an
+illegal operation when it executes.  Such code is said to be
+<em>asserting</em> or <em>aborting</em>.</li>
+<li>The language may allow the code to produce an arbitrary-but-sound
+result.  Such code is said to have <em>unspecified behavior</em> or to
+have produced an <em>unspecified value</em>.</li>
+<li>The language may allow the code to produce an unsound result which
+will result in another of these behaviors, but only if used.
+Such code is said to have produced a <em>trap value</em>.</li>
+<li>The language may declare the code to be completely outside of the
+guarantees of the language.  Such code is said to have
+<em>undefined behavior</em>.</li>
+</ul>
+<p>In keeping with its design philosophy, Swift has generally limited
+itself to the first four solutions, with two significant exceptions.</p>
+<p>The first exception is that Swift provides several explicitly unsafe
+language and library features, such as <code class="docutils literal"><span class="pre">UnsafePointer&lt;T&gt;</span></code> and
+<code class="docutils literal"><span class="pre">unowned(unsafe)</span></code>.  The use of these features is generally subject
+to undefined behavior rules.</p>
+<p>The second exception is that Swift does not make any guarantees about
+programs in the presence of race conditions.  It is extremely
+difficult to make even weak statements about the behavior of a program
+with a race condition without either:</p>
+<ul class="simple">
+<li>heavily restricting shared mutable state on a language level, which
+would require invasive changes to how the language interacts with C;</li>
+<li>forcing implicit synchronization when making any change to
+potentially shared memory, which would cripple performance and
+greatly complicate library implementation; or</li>
+<li>using a garbage collector to manage all accessible memory, which
+would impose a very large burden on almost all of Swift&#8217;s language
+goals.</li>
+</ul>
+<p>Therefore, Swift does surrender safety in the presence of races.</p>
+</div>
+<div class="section" id="acceptability-conditions-for-storage-accesses">
+<h3>Acceptability conditions for storage accesses<a class="headerlink" href="#acceptability-conditions-for-storage-accesses" title="Permalink to this headline">¶</a></h3>
+<p>Storage access involves a tension between four goals:</p>
+<ul class="simple">
+<li>Preserving all changes when making simultaneous modifications to
+distinct subobjects; in other words, avoiding subobject clobbering</li>
+<li>Performing a predictable and intuitive sequence of operations when
+modifying storage that&#8217;s implemented with a getter and setter</li>
+<li>Avoiding unnecessary copies of a value during a modification,
+especially when this forces a structural copy of a COW value</li>
+<li>Avoiding memory safety holes when accessing storage that&#8217;s been
+implemented with memory.</li>
+</ul>
+<p><a class="reference internal" href="#reprojection">Reprojection</a> is good at preserving changes, but it introduces extra
+copies, and it&#8217;s less intuitive about how many times getters and
+setters will be called.  There may be a place for it anyway, if we&#8217;re
+willing to accept the extra conceptual complexity for computed
+storage, but it&#8217;s not a reasonable primary basis for optimizing the
+performance of storage backed by memory.</p>
+<p>Solutions permitting in-place modification are more efficient, but
+they do have the inherent disadvantage of having to vend the address
+of a value before arbitrary interleaving code.  Even if the address
+remains valid, and the solution to that avoids subobject clobbering,
+there&#8217;s an unavoidable issue that the write can be lost because the
+address became dissociated from the storage.  For example, if your
+code passes <code class="docutils literal"><span class="pre">&amp;array[i]</span></code> to a function, you might plausibly argue
+that changes to that argument should show up in the <code class="docutils literal"><span class="pre">i</span></code>th element of
+<code class="docutils literal"><span class="pre">array</span></code> even if you completely reassign <code class="docutils literal"><span class="pre">array</span></code>.  <a class="reference internal" href="#reprojection">Reprojection</a>
+could make this work, but in-place solutions cannot efficiently do so.
+So, for any in-place solution to be acceptable, there does need to be
+some rule specifying when it&#8217;s okay to &#8220;lose track&#8221; of a change.</p>
+<p>Furthermore, the basic behavior of COW means that it&#8217;s possible to
+copy an array with an element under modification and end up sharing
+the same buffer, so that the modification will be reflected in a value
+that was technically copied beforehand.  For example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">var </span><span class="nv">array</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">]</span>
+<span class="kd">var </span><span class="nv">oldArray</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="n">Int</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+
+<span class="c1">// This function copies array before modifying it, but because that</span>
+<span class="c1">// copy is of a value undergoing modification, the copy will use</span>
+<span class="c1">// the same buffer and therefore observe updates to the element.</span>
+<span class="kd">func </span><span class="nf">foo</span><span class="p">(</span><span class="n">inout</span><span class="w"> </span><span class="n">element</span><span class="p">:</span><span class="w"> </span><span class="n">Int</span><span class="p">) {</span>
+<span class="w">  </span><span class="n">oldArray</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">array</span>
+<span class="w">  </span><span class="n">element</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span>
+<span class="p">}</span>
+
+<span class="c1">// Therefore, oldArray[2] will be 4 after this call.</span>
+<span class="n">foo</span><span class="p">(</span><span class="o">&amp;</span><span class="n">array</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>Nor can this be fixed by temporarily moving the modified array aside,
+because that would prevent simultaneous modifications to different
+elements (and, in fact, likely cause them to assert).  So the rule
+will also have to allow this.</p>
+<p>However, both of these possibilities already come up in the design of
+both the library and the optimizer.  The optimizer makes a number of
+assumptions about aliasing; for example, the general rule is that
+storage bound to an <code class="docutils literal"><span class="pre">inout</span></code> parameter cannot be accessed through
+other paths, and while the optimizer is not permitted to compromise
+memory safety, it is permitted to introduce exactly this kind of
+unexpected behavior where aliasing accesses may or may not the storage
+as a consistent entity.</p>
+<div class="section" id="formal-accesses">
+<h4>Formal accesses<a class="headerlink" href="#formal-accesses" title="Permalink to this headline">¶</a></h4>
+<p>That rule leads to an interesting generalization.  Every modification
+of storage occurs during a <em>formal access</em> (FA) to that storage.  An
+FA is also associated with zero or more <em>designated storage names</em>
+(DSNs), which are <code class="docutils literal"><span class="pre">inout</span></code> arguments in particular execution records.
+An FA arises from an l-value expression, and its duration and DSN set
+depend on how the l-value is used:</p>
+<ul>
+<li><p class="first">An l-value which is simply loaded from creates an instantaneous FA
+at the time of the load.  The DSN set is empty.</p>
+<p>Example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">foo</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+<span class="c1">// instantaneous FA reading array</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">An l-value which is assigned to with <code class="docutils literal"><span class="pre">=</span></code> creates an
+instantaneous FA at the time of the primitive assignment.  The DSN
+set is empty.</p>
+<p>Example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">array</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<span class="c1">// instantaneous FA assigning array</span>
+</pre></div>
+</div>
+<p>Note that the primitive assignment strictly follows the evaluation
+of both the l-value and r-value expressions of the assignment.
+For example, the following code:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="c1">// object is a variable of class type</span>
+<span class="n">object</span><span class="p">.</span><span class="n">array</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">object</span><span class="p">.</span><span class="n">array</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>produces this sequence of formal accesses:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="c1">// instantaneous FA reading object (in the left-hand side)</span>
+<span class="c1">// instantaneous FA reading object (in the right-hand side)</span>
+<span class="c1">// instantaneous FA reading object.array (in the right-hand side)</span>
+<span class="c1">// evaluation of [1,2,3]</span>
+<span class="c1">// evaluation of +</span>
+<span class="c1">// instantaneous FA assigning object.array</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">An l-value which is passed as an <code class="docutils literal"><span class="pre">inout</span></code> argument to a call
+creates an FA beginning immediately before the call and ending
+immediately after the call.  (This includes calls where an
+argument is implicitly passed <code class="docutils literal"><span class="pre">inout</span></code>, such as to mutating
+methods or user-defined assignment operators such as <code class="docutils literal"><span class="pre">+=</span></code> or
+<code class="docutils literal"><span class="pre">++</span></code>.) The DSN set contains the <code class="docutils literal"><span class="pre">inout</span></code> argument within the
+call.</p>
+<p>Example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="kd">func </span><span class="nf">swap</span><span class="p">&lt;</span><span class="no">T</span><span class="p">&gt;(</span><span class="n">inout</span><span class="w"> </span><span class="n">lhs</span><span class="p">:</span><span class="w"> </span><span class="n">T</span><span class="p">, </span><span class="n">inout</span><span class="w"> </span><span class="n">rhs</span><span class="p">:</span><span class="w"> </span><span class="n">T</span><span class="p">) {}</span>
+
+<span class="c1">// object is a variable of class type</span>
+<span class="n">swap</span><span class="p">(</span><span class="o">&amp;</span><span class="n">leftObject</span><span class="p">.</span><span class="n">array</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">rightObject</span><span class="p">.</span><span class="n">array</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This results in the following sequence of formal accesses:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="c1">// instantaneous FA reading leftObject</span>
+<span class="c1">// instantaneous FA reading rightObject</span>
+<span class="c1">// begin FA for inout argument leftObject.array (DSN={lhs})</span>
+<span class="c1">// begin FA for inout argument rightObject.array (DSN={rhs})</span>
+<span class="c1">// evaluation of swap</span>
+<span class="c1">// end FA for inout argument rightObject.array</span>
+<span class="c1">// end FA for inout argument leftObject.array</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">An l-value which is used as the base of a member storage access
+begins an FA whose duration is the same as the duration of the FA
+for the subobject l-value.  The DSN set is empty.</p>
+<p>Example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">swap</span><span class="p">(</span><span class="o">&amp;</span><span class="n">leftObject</span><span class="p">.</span><span class="n">array</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="o">&amp;</span><span class="n">rightObject</span><span class="p">.</span><span class="n">array</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>This results in the following sequence of formal accesses:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="c1">// instantaneous FA reading leftObject</span>
+<span class="c1">// instantaneous FA reading i</span>
+<span class="c1">// instantaneous FA reading rightObject</span>
+<span class="c1">// instantaneous FA reading j</span>
+<span class="c1">// begin FA for subobject base leftObject.array (DSN={})</span>
+<span class="c1">// begin FA for inout argument leftObject.array[i] (DSN={lhs})</span>
+<span class="c1">// begin FA for subobject base rightObject.array (DSN={})</span>
+<span class="c1">// begin FA for inout argument rightObject.array[j] (DSN={rhs})</span>
+<span class="c1">// evaluation of swap</span>
+<span class="c1">// end FA for subobject base rightObject.array[j]</span>
+<span class="c1">// end FA for inout argument rightObject.array</span>
+<span class="c1">// end FA for subobject base leftObject.array[i]</span>
+<span class="c1">// end FA for inout argument leftObject.array</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">An l-value which is the base of an ! operator begins an FA whose
+duration is the same the duration of the FA for the resulting
+l-value.  The DSN set is empty.</p>
+<p>Example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="c1">// left is a variable of type T</span>
+<span class="c1">// right is a variable of type T?</span>
+<span class="n">swap</span><span class="p">(</span><span class="o">&amp;</span><span class="n">left</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">right</span><span class="o">!</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This results in the following sequence of formal accesses:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="c1">// begin FA for inout argument left (DSN={lhs})</span>
+<span class="c1">// begin FA for ! operand right (DSN={})</span>
+<span class="c1">// begin FA for inout argument right! (DSN={rhs})</span>
+<span class="c1">// evaluation of swap</span>
+<span class="c1">// end FA for inout argument right!</span>
+<span class="c1">// end FA for ! operand right</span>
+<span class="c1">// end FA for inout argument left</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">An l-value which is the base of a ? operator begins an FA whose
+duration begins during the formal evaluation of the l-value
+and ends either immediately (if the operand was nil) or at the
+end of the duration of the FA for the resulting l-value.
+In either case, the DSN set is empty.</p>
+<p>Example:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="c1">// left is a variable of optional struct type</span>
+<span class="c1">// right is a variable of type Int</span>
+<span class="n">left?</span><span class="p">.</span><span class="n">member</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">right</span>
+</pre></div>
+</div>
+<p>This results in the following sequence of formal accesses, assuming
+that <code class="docutils literal"><span class="pre">left</span></code> contains a value:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="c1">// begin FA for ? operand left (DSN={})</span>
+<span class="c1">// instantaneous FA reading right (DSN={})</span>
+<span class="c1">// begin FA for inout argument left?.member (DSN={lhs})</span>
+<span class="c1">// evaluation of +=</span>
+<span class="c1">// end FA for inout argument left?.member</span>
+<span class="c1">// end FA for ? operand left</span>
+</pre></div>
+</div>
+</li>
+</ul>
+<p>The FAs for all <code class="docutils literal"><span class="pre">inout</span></code> arguments to a call begin simultaneously at
+a point strictly following the evaluation of all the argument
+expressions.  For example, in the call <code class="docutils literal"><span class="pre">foo(&amp;array,</span> <span class="pre">array)</span></code>, the
+evaluation of the second argument produces a defined value, because
+the FA for the first argument does not begin until after all the
+arguments are formally evaluated.  No code should actually be emitted
+during the formal evaluation of <code class="docutils literal"><span class="pre">&amp;array</span></code>, but for an expression like
+<code class="docutils literal"><span class="pre">someClassReference.someArray[i]</span></code>, the class r-value and index
+expressions would be fully evaluated at that time, and then the
+l-value would be kept abstract until the FA begins.  Note that this
+requires changes in SILGen&#8217;s current code generation patterns.</p>
+<p>The FA rule for the chaining operator <code class="docutils literal"><span class="pre">?</span></code> is an exception to the
+otherwise-simple intuition that formal accesses begin immediately
+before the modification begins.  This is necessary because the
+evaluation rules for <code class="docutils literal"><span class="pre">?</span></code> may cause arbitrary computation to be
+short-circuited, and therefore the operand must be accessed during the
+formal evaluation of the l-value.  There were three options here:</p>
+<ul>
+<li><p class="first">Abandon short-circuiting for assignments to optional l-values.  This
+is a very high price; short-circuiting fits into user intuitions
+about the behavior of the chaining operator, and it can actually be
+quite awkward to replicate with explicit accesses.</p>
+</li>
+<li><p class="first">Short-circuit using an instantaneous formal access, then start a
+separate formal access before the actual modification.  In other
+words, evaluation of <code class="docutils literal"><span class="pre">X</span> <span class="pre">+=</span> <span class="pre">Y</span></code> would proceed by first determining
+whether <code class="docutils literal"><span class="pre">X</span></code> exists (capturing the results of any r-value
+components), discarding any projection information derived from
+that, evaluating <code class="docutils literal"><span class="pre">Y</span></code>, reprojecting <code class="docutils literal"><span class="pre">X</span></code> again (using the saved
+r-value components and checking again for whether the l-value
+exists), and finally calling the <code class="docutils literal"><span class="pre">+=</span></code> operator.</p>
+<p>If <code class="docutils literal"><span class="pre">X</span></code> involves any sort of computed storage, the steps required
+to evaluate this might be... counter-intuitive.</p>
+</li>
+<li><p class="first">Allow the formal access to begin during the formal evaluation of the
+l-value. This means that code like the following will have
+unspecified behavior:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">array</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">?</span><span class="p">.</span><span class="n">member</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">deriveNewValueFrom</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+</ul>
+<p>In the end, I&#8217;ve gone with the third option.  The intuitive
+explanation is that <code class="docutils literal"><span class="pre">array</span></code> has to be accessed early in order to
+continue the evaluation of the l-value.  I think that&#8217;s
+comprehensible to users, even if it&#8217;s not immediately obvious.</p>
+</div>
+<div class="section" id="disjoint-and-non-disjoint-formal-accesses">
+<h4>Disjoint and non-disjoint formal accesses<a class="headerlink" href="#disjoint-and-non-disjoint-formal-accesses" title="Permalink to this headline">¶</a></h4>
+<p>I&#8217;m almost ready to state the core rule about formal accesses, but
+first I need to build up a few more definitions.</p>
+<p>An <em>abstract storage location</em> (ASL) is:</p>
+<ul class="simple">
+<li>a global variable declaration;</li>
+<li>an <code class="docutils literal"><span class="pre">inout</span></code> parameter declaration, along with a reference
+to a specific execution record for that function;</li>
+<li>a local variable declaration, along with a reference to a
+specific execution record for that declaration statement;</li>
+<li>a static/class property declaration, along with a type having
+that property;</li>
+<li>a struct/enum instance property declaration, along with an
+ASL for the base;</li>
+<li>a struct/enum subscript declaration, along with a concrete index
+value and an ASL for the base;</li>
+<li>a class instance property declaration, along with an instance of
+that class; or</li>
+<li>a class instance subscript declaration, along with a concrete
+index value and an instance of that class.</li>
+</ul>
+<p>Two abstract storage locations may be said to <em>overlap</em>.  Overlap
+corresponds to the imprecise intuition that a modification of one
+location directly alters the value of another location.  Overlap
+is an &#8220;open&#8221; property of the language: every new declaration may
+introduce its own overlap behavior.  However, the language and
+library make certain assertions about the overlap of some locations:</p>
+<ul>
+<li><p class="first">An <code class="docutils literal"><span class="pre">inout</span></code> parameter declaration overlaps exactly the set
+of ASLs overlapped by the ASL which was passed as an argument.</p>
+</li>
+<li><p class="first">If two ASLs are both implemented with memory, then they overlap
+only if they have the same kind in the above list and the
+corresponding data match:</p>
+<blockquote>
+<div><ul class="simple">
+<li>execution records must represent the same execution</li>
+<li>types must be the same</li>
+<li>class instances must be the same</li>
+<li>ASLs must overlap</li>
+</ul>
+</div></blockquote>
+</li>
+<li><p class="first">For the purposes of the above rule, the subscript of a standard
+library array type is implemented with memory, and the two
+indexes match if they have the same integer value.</p>
+</li>
+<li><p class="first">For the purposes of the above rule, the subscript of a standard
+library dictionary type is implemented with memory, and the two
+indexes match if they compare equal with <code class="docutils literal"><span class="pre">==</span></code>.</p>
+</li>
+</ul>
+<p>Because this definition is open, it is impossible to completely
+statically or dynamically decided it.  However, it would still be
+possible to write a dynamic analysis which decided it for common
+location kinds.  Such a tool would be useful as part of, say, an
+ASan-like dynamic tool to diagnose violations of the
+unspecified-behavior rule below.</p>
+<p>The overlap rule is vague about computed storage partly because
+computed storage can have non-obvious aliasing behavior and partly
+because the subobject clobbering caused by the full-value accesses
+required by computed storage can introduce unexpected results that can
+be reasonably glossed as unspecified values.</p>
+<p>This notion of abstract storage location overlap can be applied to
+formal accesses as well.  Two FAs <code class="docutils literal"><span class="pre">x</span></code> and <code class="docutils literal"><span class="pre">y</span></code> are said to be
+<em>disjoint</em> if:</p>
+<ul class="simple">
+<li>they refer to non-overlapping abstract storage locations or</li>
+<li>they are the base FAs of two disjoint member storage accesses
+<code class="docutils literal"><span class="pre">x.a</span></code> and <code class="docutils literal"><span class="pre">y.b</span></code>.</li>
+</ul>
+<p>Given these definitions, the core unspecified-behavior rule is:</p>
+<blockquote>
+<div>If two non-disjoint FAs have intersecting durations, and neither FA
+is derived from a DSN for the other, then the program has
+unspecified behavior in the following way: if the second FA is a
+load, it yields an unspecified value; otherwise, both FAs store an
+unspecified value in the storage.</div></blockquote>
+<p>Note that you cannot have two loads with intersecting durations,
+because the FAs for loads are instantaneous.</p>
+<p>Non-overlapping subobject accesses make the base accesses disjoint
+because otherwise code like <code class="docutils literal"><span class="pre">swap(&amp;a[0],</span> <span class="pre">&amp;a[1])</span></code> would have
+unspecified behavior, because the two base FAs are to clearly
+overlapping locations and have intersecting durations.</p>
+<p>Note that the optimizer&#8217;s aliasing rule falls out from this rule.  If
+storage has been bound as an <code class="docutils literal"><span class="pre">inout</span></code> argument, accesses to it
+through any path not derived from the <code class="docutils literal"><span class="pre">inout</span></code> argument will start a
+new FA for overlapping storage, the duration of which will necessarily
+intersect duration with that of the FA through which the <code class="docutils literal"><span class="pre">inout</span></code>
+argument was bound, causing unspecified behavior.  If the <code class="docutils literal"><span class="pre">inout</span></code>
+argument is forwarded to another call, that will start a new FA which
+is validly based on a DSN of the first; but an attempt to modify the
+storage through the first <code class="docutils literal"><span class="pre">inout</span></code> argument while the second call is
+active will create a third FA not based on the DSN from the second
+<code class="docutils literal"><span class="pre">inout</span></code> call, causing a conflict there.  Therefore a function may
+assume that it can see all accesses to the storage bound to an
+<code class="docutils literal"><span class="pre">inout</span></code> argument.</p>
+</div>
+<div class="section" id="if-you-didn-t-catch-all-that">
+<h4>If you didn&#8217;t catch all that...<a class="headerlink" href="#if-you-didn-t-catch-all-that" title="Permalink to this headline">¶</a></h4>
+<p>That may have been a somewhat intense description, so here&#8217;s a simple
+summary of the rule being proposed.</p>
+<p>If storage is passed to an <code class="docutils literal"><span class="pre">inout</span></code> argument, then any other
+simultaneous attempt to read or write to that storage, including to
+the storage containing it, will have unspecified behavior.  Reads
+from it may see partially-updated values, or even values which will
+change as modifications are made to the original storage; and writes
+may be clobbered or simply disappear.</p>
+<p>But this only applies during the call with the <code class="docutils literal"><span class="pre">inout</span></code> argument: the
+evaluation of other arguments to the call will not be interfered with,
+and as soon as the call ends, all these modifications will resolve
+back to a quiescent state.</p>
+<p>And this unspecified behavior has limits.  The storage may end up with
+an unexpected value, with only a subset of the writes made to it, and
+copies from it may unexpectedly reflect modifications made after they
+were copied.  However, the program will otherwise remain in a
+consistent and uncorrupted state.  This means that execution will be
+able to continue apace as long as these unexpected values don&#8217;t trip
+up some higher-level invariant.</p>
+</div>
+</div>
+</div>
+<div class="section" id="tracking-formal-accesses">
+<h2>Tracking formal accesses<a class="headerlink" href="#tracking-formal-accesses" title="Permalink to this headline">¶</a></h2>
+<p>Okay, now that I&#8217;ve analyzed this to death, it&#8217;s time to make a
+concrete proposal about the implementation.</p>
+<p>As discussed above, the safety hole with addressors can be fixed by
+always retaining the buffer which keeps the address valid.  Assuming
+that other uses of the buffer follow the general copy-on-write
+pattern, this retain will prevent structural changes to the buffer
+while the address is in use.</p>
+<p>But, as I also discussed above, this introduces two problems:</p>
+<div class="section" id="copies-during-modification">
+<h3>Copies during modification<a class="headerlink" href="#copies-during-modification" title="Permalink to this headline">¶</a></h3>
+<p>Copying a COW aggregate value always shares the same buffer that was
+stored there at the time of the copy; there is no uniqueness check
+done as part of the copy.  Changes to subobjects will then be
+instantly reflected in the &#8220;copy&#8221; as they are made to the original.
+The structure of the copy will stay the same, but the values of
+its subobjects will appear to spontaneously change.</p>
+<p>I want to say that this behavior is acceptable according to the
+formal-access rule I laid out above.  How does that reasoning work?</p>
+<p>First, I need to establish what kind of behavior is at work here.  It
+clearly isn&#8217;t guaranteed behavior: copies of COW values are normally
+expected to be independent.  The code wasn&#8217;t rejected by the compiler,
+nor did it dynamically assert; it simply seems to misbehave.  But
+there are limits to the misbehavior:</p>
+<ul class="simple">
+<li>By general COW rules, there&#8217;s no way to change the structure of an
+existing buffer unless the retain count is 1.  For the purposes of
+this analysis, that means that, as long as the retain count is
+above 1, there&#8217;s no way to invalidate the address returned by the
+addressor.</li>
+<li>The buffer will be retained for as long as the returned address
+is being modified.  This retain is independent of any storage
+which might hold the aggregate value (and thus also retain the buffer).</li>
+<li>Because of this retain, the only way for the retain count to drop
+to 1 is for no storage to continue to refer to the buffer.</li>
+<li>But if no storage refers to the buffer, there is no way to
+initiate an operation which would change the buffer structure.</li>
+</ul>
+<p>Thus the address will remain valid, and there&#8217;s no danger of memory
+corruption.  The only thing is that the program no longer makes useful
+guarantees about the value of the copied aggregate.  In other words,
+the copy yielded an unspecified value.</p>
+<p>The formal-access rule allows loads from storage to yield an
+unspecified value if there&#8217;s another formal access to that storage in
+play and the load is (1) not from an l-value derived from a name in
+the other FA&#8217;s DSN set and (2) not from a non-overlapping subobject.
+Are these conditions true?</p>
+<p>Recall that an addressor is invoked for an l-value of the form:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">base</span><span class="p">.</span><span class="n">memory</span>
+</pre></div>
+</div>
+<p>or:</p>
+<div class="highlight-swift"><div class="highlight"><pre><span class="n">base</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Both cases involve a formal access to the storage <code class="docutils literal"><span class="pre">base</span></code> as the base
+of a subobject formal access.  This kind of formal access always has
+an empty DSN set, regardless of how the subobject is used.  A COW
+mutable addressor will always ensure that the buffer is uniquely
+referenced before returning, so the only way that a value containing
+that buffer can be copied is if the load is a non-subobject access to
+<code class="docutils literal"><span class="pre">base</span></code>.  Therefore, there are two simultaneous formal accesses to
+the same storage, and the load is not from an l-value derived from the
+modification&#8217;s DSN set (which is empty), nor is it for a
+non-overlapping subobject.  So the formal-access rule applies, and
+an unspecified value is an acceptable result.</p>
+<p>The implementation requirement here, then, is simply that the
+addressor must be called, and the buffer retained, within the duration
+of the formal access.  In other words, the addressor must only
+be called immediately prior to the call, rather than at the time
+of the formal evaluation of the l-value expression.</p>
+<p>What would happen if there <em>were</em> a simultaneous load from a
+non-overlapping subobject?  Accessing the subobject might cause a
+brief copy of <code class="docutils literal"><span class="pre">base</span></code>, but only for the duration of copying the
+subobject.  If the subobject does not overlap the subobject which was
+projected out for the addressor, then this is harmless, because the
+addressor will not allow modifications to those subobjects; there
+might be other simultaneous formal accesses which do conflict, but
+these two do not.  If the subobject does overlap, then a recursive
+analysis must be applied; but note that the exception to the
+formal-access rule will only apply if non-overlapping subobjects were
+projected out from <em>both</em> formal accesses.  Otherwise, it will be
+acceptable for the access to the overlapping subobject to yield an
+unspecified value.</p>
+</div>
+<div class="section" id="avoiding-subobject-clobbering-during-parallel-modification">
+<h3>Avoiding subobject clobbering during parallel modification<a class="headerlink" href="#avoiding-subobject-clobbering-during-parallel-modification" title="Permalink to this headline">¶</a></h3>
+<p>The other problem is that the retain will prevent simultaneous changes
+to the same buffer.  The second change will cause a structural copy,
+and the first address will end up modifying a buffer which is no
+longer referenced: in other words, the program will observe subobject
+clobbering.  A similar analysis to the one from the last section
+suggests that this can be described as unspecified behavior.</p>
+<p>Unfortunately, this unspecified behavior is unwanted: it violates the
+guarantees of the formal-access rule as I laid it out above, because
+it occurs even if you have formal accesses to two non-overlapping
+subobjects.  So something does need to be done here.</p>
+<p>One simple answer is to dynamically track whether a COW buffer is
+currently undergoing a non-structural mutation.  I&#8217;ll call this <em>NSM
+tracking</em>, and I&#8217;ll call buffers which are undergoing non-structural
+mutations <em>NSM-active</em>.</p>
+<p>The general rules of COW say that mutating operations must ensure that
+their buffer is uniquely referenced before performing the
+modification.  NSM tracking works by having non-structural mutations
+perform a weaker check: the buffer must be either uniquely referenced
+or be NSM-active.  If the non-structural mutation allows arbitrary
+code to run between the start of the mutation and the end &#8212; as an
+addressor does &#8212; it must both retain the buffer and flag it as
+NSM-active for the entire duration.</p>
+<p>Because the retain still occurs, and because any <em>structural</em> changes
+to the buffer that might invalidate the addresses of subobjects are
+still blocked by that retain, all of the earlier analysis about the
+memory safety of simultaneous accesses still applies.  The only change
+is that simultaneous non-structural modifications, as would be created
+by simultaneous formal accesses to subobjects, will now be able to
+occur on a single buffer.</p>
+<p>A set of simultaneous formal accesses on a single thread follows a
+natural stack protocol, or can be made to do so with straightforward
+SILGen and SIL optimizer consideration.  Therefore, the runtime can
+track whether a buffer is NSM-active on a thread using a single bit,
+which nested modifications can be told not to clear.  Call this the
+<em>NSM bit</em>.  Ignoring multithreading considerations for a moment, since
+the NSM bit is only ever set at the same as a retain and only ever
+cleared at the same time as a release, it makes sense to pack this
+into the strong reference count.  There is no need to support this
+operation on non-Swift objects.  The runtime should provide three new
+functions:</p>
+<ul class="simple">
+<li>A function to test whether an object is either uniquely referenced
+or NSM-active.  Call this <code class="docutils literal"><span class="pre">swift_isUniquelyReferencedForNSM</span></code>.</li>
+<li>A function to perform the above test and, if the test passes and
+the NSM bit is not set, atomically retain the object and set
+the NSM bit.  It should return both the result of the test and an
+object to later set as NSM-inactive.  That object will be nil if
+the test failed or the NSM bit was already set.  Call this
+<code class="docutils literal"><span class="pre">swift_tryRetainForNSM</span></code>.</li>
+<li>A function to atomically clear the NSM bit and release the object.
+Call this <code class="docutils literal"><span class="pre">swift_releaseForNSM</span></code>.</li>
+</ul>
+<p>These operations should also be reflected in SIL.</p>
+<div class="section" id="concurrent-modifications-and-the-non-structural-modification-bit">
+<h4>Concurrent modifications and the non-structural modification bit<a class="headerlink" href="#concurrent-modifications-and-the-non-structural-modification-bit" title="Permalink to this headline">¶</a></h4>
+<p>What about concurrency?  Two concurrent non-structural modifications
+could race to set the NSM bit, and then the winning thread could clear
+it before the other thread&#8217;s modification is complete.  This could
+cause memory-unsafe behavior, since the losing thread would be
+modifying the object through an address while not retaining the value.</p>
+<p>The major question here is whether this is a significant objection.
+It&#8217;s accepted that race conditions have undefined behavior.  Is such
+code inherently racy?</p>
+<p>The answer appears to be &#8220;no&#8221;, and that it is possible to write code
+which concurrently writes to existing non-overlapping elements of a
+COW aggregate without causing races; but that such code is extremely
+fraught, and moreover it is extremely fraught regardless of whether
+NSM-activeness is tracked with a single bit or a wider count.  Consider:</p>
+<ul>
+<li><p class="first">If the shared aggregate value is ever non-uniquely referenced, two
+threads concurrently modifying it will race to unique the array.
+This unavoidably has undefined behavior, because uniquing the
+array requires the previous value to eventually be released, and a
+race may cause an over-release.</p>
+</li>
+<li><p class="first">Assume that it&#8217;s possible to guarantee that the aggregate value&#8217;s
+buffer is uniquely referenced before any threads concurrently
+access it.  Now, all of the threads are performing different
+concurrent accesses.</p>
+<ul>
+<li><p class="first">If any of the accesses is a structural modification, there will
+be a race to re-unique the buffer.</p>
+</li>
+<li><p class="first">If all of the accesses are non-structural modifications, then
+there will be no races as long as the retain-and-set and
+release-and-clear operations are atomic: when starting any
+particular operation, the buffer will always either be uniquely
+referenced or have the bit set.</p>
+</li>
+<li><p class="first">If any of the accesses is a read, and that read does not occur
+during a non-structural modification, then the buffer may
+briefly become non-uniquely referenced and there will be a
+race from concurrent modifications to re-unique it.</p>
+</li>
+<li><p class="first">If any of the accesses is a read, and that read occurs during a
+non-structural modification, and the optimizer does not re-order
+the read&#8217;s retain/release around the retainForNSM/releaseForNSM
+operations, then it matters how NSM-activeness is tracked.</p>
+<p>If there is complete tracking (i.e. a count, not just a single
+bit), the retain for the read will only occur while the buffer
+is flagged as NSM-active, and so it will have no effect.</p>
+<p>If there is incomplete tracking (i.e. just a single NSM bit),
+then there is a potential for undefined behavior.  Suppose two
+threads race to set the NSM bit.  The loser then initiates a
+read and retains the buffer.  Before the loser releases the
+buffer, the winner clears the NSM bit.  Now another thread might
+see that the buffer is non-uniquely referenced and not
+NSM-active, and so it will attempt to unique the buffer.</p>
+<p>It is probably unreasonable to require the optimizer to never
+reorder ordinary retains and releases past retainForNSM and
+releaseForNSM operations.</p>
+</li>
+</ul>
+</li>
+</ul>
+<p>More importantly, the use case here (many threads concurrently
+accessing different elements of a shared data structure) just
+inherently doesn&#8217;t really work well with a COW data structure.  Even
+if the library were able to make enough guarantees to ensure that,
+with the right pattern of accesses, there would never be a structural
+copy of the aggregate, it would still be extremely inefficient,
+because all of the threads would be competing for atomic access to the
+strong reference count.</p>
+<p>In short, I think it&#8217;s reasonable for the library to say that programs
+which want to do this should always use a type with reference
+semantics.  Therefore, it&#8217;s reasonable to ignore concurrent accesses
+when deciding how to best track whether an aggregate is undergoing
+non-structural modification.  This removes the only objection I
+can see to tracking this with a single NSM bit.</p>
+</div>
+</div>
+<div class="section" id="code-generation-patterns">
+<h3>Code generation patterns<a class="headerlink" href="#code-generation-patterns" title="Permalink to this headline">¶</a></h3>
+<p>The signatures and access patterns for addressors will need to change
+in order to ensure memory-safety.</p>
+<p><code class="docutils literal"><span class="pre">mutableAddress</span></code> currently returns an <code class="docutils literal"><span class="pre">UnsafeMutablePointer</span></code>; it
+will need to return <code class="docutils literal"><span class="pre">(Builtin.NativeObject?,</span> <span class="pre">UnsafeMutablePointer)</span></code>.
+The owner pointer must be a native object; we cannot efficiently
+support either uniqueness checking or the NSM bit on non-Swift
+objects.  SILGen will mark that the address depends on the owner
+reference and push a cleanup to <code class="docutils literal"><span class="pre">releaseForNSM</span></code> it.</p>
+<p><code class="docutils literal"><span class="pre">address</span></code> currently returns an <code class="docutils literal"><span class="pre">UnsafePointer</span></code>; it will need to
+return <code class="docutils literal"><span class="pre">(Builtin.NativeObject?,</span> <span class="pre">UnsafePointer)</span></code>.  I do not currently
+see a reason to allow non-Swift owners, but the model doesn&#8217;t depend
+on that.  SILGen will mark that the address depends on the owner
+reference and push a cleanup to <code class="docutils literal"><span class="pre">release</span></code> it.</p>
+<p>In order to support ultimately calling an addressor in the
+conservative access path, <code class="docutils literal"><span class="pre">materializeForSet</span></code> must also return an
+owner reference.  Since <code class="docutils literal"><span class="pre">materializeForSet</span></code> calls <code class="docutils literal"><span class="pre">mutableAddress</span></code>
+in this case, SILGen will follow that pattern for calls.  SILGen will
+also assume that the need to perform a <code class="docutils literal"><span class="pre">releaseForNSM</span></code> is exclusive
+with the need to call the setter.</p>
+<p>Mutating operations on COW types will now have two different paths for
+making a buffer mutable and unique: one for structural mutations and
+another for non-structural mutations.  I expect that this will require
+separate semantics annotations, and the optimizer will have to
+recognize both.</p>
+<p><code class="docutils literal"><span class="pre">releaseForNSM</span></code> operations will not be reorderable unless the
+optimizer can prove that the objects are distinct.</p>
+</div>
+</div>
+<div class="section" id="summary-of-proposal-and-plan">
+<h2>Summary of proposal and plan<a class="headerlink" href="#summary-of-proposal-and-plan" title="Permalink to this headline">¶</a></h2>
+<p>Let me summarize what I&#8217;m proposing:</p>
+<ul>
+<li><p class="first">Swift&#8217;s core approach to optimizing accesses should be based
+around providing direct access to memory, either statically or
+dynamically.  In other words, Swift should adopt addressors on
+core data structures as much as possible.</p>
+</li>
+<li><p class="first">Swift should fix the current memory hole with addressors by
+retaining for the duration of the access and, for modifications,
+flagging the buffer as NSM-active.  The implementation plan
+follows:</p>
+<ul>
+<li><p class="first">The runtime implements the NSM-bit and its entrypoints.</p>
+</li>
+<li><p class="first">SIL provides operations for manipulating and querying the NSM
+bit.  IRGen implements these operations using the runtime
+functions.  Builtins are exposed.</p>
+</li>
+<li><p class="first">The standard library changes data structures to do different
+uniquing for structural and non-structural modifications.  This
+patch is not yet committed.</p>
+</li>
+<li><p class="first">The optimizer reacts to the above.  When both are settled, they
+can be committed.</p>
+</li>
+<li><p class="first">SILGen changes the emission patterns for l-values so that
+addresses and writebacks are live only during the formal
+access.</p>
+</li>
+<li><p class="first">Sema changes the signature of <code class="docutils literal"><span class="pre">address</span></code>, <code class="docutils literal"><span class="pre">mutableAddress</span></code>,
+and <code class="docutils literal"><span class="pre">materializeForSet</span></code> to return an optional owner reference.
+Sema changes <code class="docutils literal"><span class="pre">materializeForSet</span></code> synthesis to return the
+owner correctly.  SILGen implements the desired code patterns.</p>
+<p>The standard library changes its addressor implementations
+to continue to compile, but for staging purposes, it only uses
+nil owners.</p>
+</li>
+<li><p class="first">The standard library changes addressor implementations to
+use meaningful owners.  This patch is not yet committed.</p>
+</li>
+<li><p class="first">The optimizer reacts to the above.  When both are settled, they
+can be committed.</p>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav" role="navigation" aria-label="bottom navigation">
+      
+        <p>
+        <a class="uplink" href="../contents.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2015, Apple Inc.
+      Last updated on 2015-12-22.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
+    </div>
+  </body>
+</html>
